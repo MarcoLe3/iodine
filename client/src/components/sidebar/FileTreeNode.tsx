@@ -180,7 +180,8 @@ export function FileTreeNode({
   const handleClick = () => {
     if (isDir) {
       onToggleExpand(node.path);
-    } else {
+    } else if (!isSymlink) {
+      // We don't want users to edit symbolic link
       onFileClick(node);
     }
   };
@@ -273,7 +274,7 @@ export function FileTreeNode({
           paddingLeft: 8 + depth * 12,
           paddingRight: 8,
           height: 22,
-          cursor: 'pointer',
+          cursor: isSymlink && !isDir ? 'not-allowed' : 'pointer',
           userSelect: 'none',
           background: isActive ? 'var(--color-bg-selected)' : 'transparent',
           color: isActive ? 'var(--color-text-active)' : 'var(--color-text-primary)',
