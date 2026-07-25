@@ -139,6 +139,27 @@ The **Project** menu (visible only when a workspace is open) manages the workspa
 
 The server route is in `server/src/routes/project.ts`, registered at `/api/project` in `server/src/app.ts`. The Project menu is in `client/src/components/layout/MenuBar.tsx`; "Clear Metadata" shows a custom confirm dialog before deleting.
 
+## Tutor Mode
+
+The **Tutor** toggle in the Coding Assistant (left of the Send button) switches the AI into a read-only guidance mode: it walks through the codebase, points to relevant lines, and tells the user what to change without writing any code itself.
+
+| File | Role |
+|------|------|
+| `client/src/components/right/CodingAssistant.tsx` | Owns `isTutorMode` state; renders the **Tutor** toggle button; passes `isTutorMode` to `sendMessage` and `onNavigateToLine` to `useCodingAssistant`. |
+| `client/src/hooks/useCodingAssistant.ts` | `sendMessage` accepts `tutorMode?: boolean`; includes it in the POST body to `/api/agent/chat`; handles the new `open_file` SSE event by calling `onNavigateToLine(filePath, line, endLine)`. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Creates `handleNavigateToLine` which calls `openFile` then (after 100 ms) `editorAreaRef.current?.navigateToLine`. Threads to `RightPanel`. |
+| `client/src/components/layout/RightPanel.tsx` | Accepts and passes `onNavigateToLine` to `CodingAssistant`. |
+| `client/src/components/layout/EditorArea.tsx` | `EditorAreaHandle` now exposes `navigateToLine(filePath, line, endLine?)`. Stores pending navigation in `pendingNavigationRef`; applies it immediately when the editor is already active, or in `onEditorMount` when a new file mounts. Uses `editor.revealLineInCenter` + `editor.deltaDecorations` with CSS classes `tutor-line-highlight` / `tutor-line-gutter`. |
+| `client/src/index.css` | `.tutor-line-highlight` (blue background tint) and `.tutor-line-gutter` (3 px blue left bar) decoration classes. |
+| `server/src/routes/agent.ts` | Extracts `tutorMode` from request body; passes to all three agent loop functions. |
+| `server/src/services/anthropicAgent.ts` | Appends `TUTOR_SYSTEM_ADDENDUM` to system prompt when `tutorMode` is true. |
+| `server/src/services/openaiAgent.ts` | Same tutor mode addendum applied to `buildSystemPrompt`. |
+| `server/src/services/geminiAgent.ts` | Same tutor mode addendum applied to `buildSystemInstruction`. |
+| `server/src/services/fileTools.ts` | Adds `open_file` tool schema (path, line, end_line). |
+| `server/src/services/agentTools.ts` | Handles `open_file` tool by emitting `open_file` SSE event then returning success; no filesystem writes occur. |
+
+**open_file SSE event payload:** `{ path: string, line: number, endLine: number }` — sent before the tool result so the client can navigate while the agent loop continues.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.
