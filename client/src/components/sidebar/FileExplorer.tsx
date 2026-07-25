@@ -16,6 +16,8 @@ interface FileExplorerProps {
   onDirSummary?: (node: FileNode) => void;
   onFileSummary?: (node: FileNode) => void;
   onAddToContext?: (node: FileNode) => void;
+  /** When set, auto-expands all parent folders to reveal this file path. */
+  expandToPath?: string | null;
 }
 
 // Merge two GitFileStatus values into a single representative value for a directory.
@@ -72,6 +74,7 @@ export function FileExplorer({
   onDirSummary,
   onFileSummary,
   onAddToContext,
+  expandToPath,
 }: FileExplorerProps) {
   const { tree, expandedPaths, toggleExpand, loading, error, refetch } = useFileTree(workspacePath, localTree);
   const rawGitStatus = useGitStatus(workspacePath);
@@ -96,6 +99,21 @@ export function FileExplorer({
       inputRef.current.select();
     }
   }, [creatingType]);
+
+  // Auto-expand parent folders when the active file path changes.
+  // We intentionally exclude expandedPaths from the deps so that the user
+  // can manually collapse a folder without it immediately re-opening.
+  useEffect(() => {
+    if (!expandToPath || !tree) return;
+
+    const pathParts = expandToPath.split('/');
+    for (let i = 1; i < pathParts.length - 1; i++) {
+      const parentPath = pathParts.slice(0, i + 1).join('/');
+      // toggleExpand is a no-op if already expanded (checked inside useFileTree)
+      toggleExpand(parentPath, true /* forceExpand */);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandToPath, tree]);
 
   const handleCreate = async (dirPath: string, name: string, type: 'file' | 'directory') => {
     await createNode(`${dirPath}/${name}`, type); // throws on error (e.g. 409 already exists)

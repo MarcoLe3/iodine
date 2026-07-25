@@ -52,10 +52,12 @@ export function useFileTree(workspacePath: string | null, localTree?: FileNode |
 
   const tree = localTree ?? serverTree;
 
-  const toggleExpand = useCallback((nodePath: string) => {
+  const toggleExpand = useCallback((nodePath: string, forceExpand?: boolean) => {
     setExpandedPaths(prev => {
       const next = new Set(prev);
-      if (next.has(nodePath)) {
+      if (forceExpand) {
+        next.add(nodePath);
+      } else if (next.has(nodePath)) {
         next.delete(nodePath);
       } else {
         next.add(nodePath);

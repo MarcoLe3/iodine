@@ -89,6 +89,8 @@ export function WorkbenchLayout() {
   const handleNavigateToLine = useCallback((filePath: string, line: number, endLine?: number) => {
     const name = filePath.split('/').pop() ?? filePath;
     openFile({ path: filePath, name, type: 'file', children: null });
+    // Signal the FileExplorer to auto-expand parent folders
+    setExpandToPath(filePath);
     // Delay slightly so the tab activates and the editor mounts before we apply the highlight
     setTimeout(() => {
       editorAreaRef.current?.navigateToLine(filePath, line, endLine);
@@ -287,6 +289,7 @@ export function WorkbenchLayout() {
             onDirSummary={handleDirSummary}
             onFileSummary={handleFileSummary}
             onAddToContext={handleAddToContext}
+            expandToPath={activeFilePath}
           />
 
           <ResizeDivider

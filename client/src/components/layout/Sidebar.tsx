@@ -14,6 +14,8 @@ interface SidebarProps {
   onDirSummary?: (node: FileNode) => void;
   onFileSummary?: (node: FileNode) => void;
   onAddToContext?: (node: FileNode) => void;
+  /** When set, auto-expands all parent folders to reveal this file path. */
+  expandToPath?: string | null;
 }
 
 export function Sidebar({
@@ -28,6 +30,7 @@ export function Sidebar({
   onDirSummary,
   onFileSummary,
   onAddToContext,
+  expandToPath,
 }: SidebarProps) {
   // Helper to open a file given only its absolute path (from SCM panel)
   const handleOpenByPath = (absPath: string) => {
@@ -58,6 +61,7 @@ export function Sidebar({
           onDirSummary={onDirSummary}
           onFileSummary={onFileSummary}
           onAddToContext={onAddToContext}
+          expandToPath={expandToPath}
         />
       ) : (
         <SourceControlPanel workspacePath={workspacePath} onFileOpen={handleOpenByPath} />
