@@ -323,11 +323,13 @@ interface CodingAssistantProps {
   contextNodes: FileNode[];
   onRemoveContextNode: (path: string) => void;
   onClearContextNodes: () => void;
+  onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
 }
 
-export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes }: CodingAssistantProps) {
-  const { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval } = useCodingAssistant(provider, model);
+export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine }: CodingAssistantProps) {
+  const { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval } = useCodingAssistant(provider, model, onNavigateToLine);
   const [input, setInput] = useState('');
+  const [isTutorMode, setIsTutorMode] = useState(false);
   const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({});
   const [showHelp, setShowHelp] = useState(false);
   const apiConfigured = providerStatus[provider.id] ?? null;
@@ -378,7 +380,7 @@ export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen
       return n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path;
     });
     onClearContextNodes();
-    sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined);
+    sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -730,7 +732,25 @@ export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen
             boxSizing: 'border-box',
           }}
         />
-        <div style={{ alignSelf: 'flex-end', display: 'flex', gap: 6 }}>
+        <div style={{ alignSelf: 'flex-end', display: 'flex', gap: 6, alignItems: 'center' }}>
+          {/* Tutor Mode toggle */}
+          <button
+            onClick={() => setIsTutorMode(v => !v)}
+            title={isTutorMode ? 'Tutor Mode on — AI will guide without editing' : 'Enable Tutor Mode'}
+            style={{
+              background: isTutorMode ? '#1e4d2e' : 'none',
+              border: `1px solid ${isTutorMode ? '#4ec9b060' : 'var(--color-border)'}`,
+              borderRadius: 3,
+              color: isTutorMode ? '#4ec9b0' : 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              fontSize: 11,
+              padding: '4px 8px',
+              fontWeight: isTutorMode ? 600 : 400,
+            }}
+          >
+            Tutor
+          </button>
+
           {isLoading && (
             <button
               onClick={stopExecution}

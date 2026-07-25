@@ -85,6 +85,16 @@ export function WorkbenchLayout() {
 
   useFileWatcher(workspacePath, refreshFile);
 
+  /** Open a file and navigate the Monaco editor to a specific line range (used by Tutor Mode). */
+  const handleNavigateToLine = useCallback((filePath: string, line: number, endLine?: number) => {
+    const name = filePath.split('/').pop() ?? filePath;
+    openFile({ path: filePath, name, type: 'file', children: null });
+    // Delay slightly so the tab activates and the editor mounts before we apply the highlight
+    setTimeout(() => {
+      editorAreaRef.current?.navigateToLine(filePath, line, endLine);
+    }, 100);
+  }, [openFile]);
+
   /** Open a file and request the editor to display its AI summary. */
   const handleFileSummary = useCallback((node: FileNode) => {
     openFile(node);
@@ -324,6 +334,7 @@ export function WorkbenchLayout() {
             contextNodes={contextNodes}
             onRemoveContextNode={handleRemoveContextNode}
             onClearContextNodes={handleClearContextNodes}
+            onNavigateToLine={handleNavigateToLine}
           />
         </div>
 

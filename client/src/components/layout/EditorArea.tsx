@@ -34,6 +34,7 @@ interface EditorAreaProps {
 export interface EditorAreaHandle {
   save: () => void;
   getVisibleContext: () => string | null;
+  navigateToLine: (filePath: string, line: number, endLine?: number) => void;
 }
 
 function isPreviewable(path: string) {
@@ -82,6 +83,11 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const [summaryError,     setSummaryError]     = useState<string | null>(null);
     const [hasCachedSummary, setHasCachedSummary] = useState(false);
 
+    // Pending navigation request: open a file at a line and highlight a range.
+    // Stored in a ref so it can be applied when the Monaco editor mounts for the target file.
+    const pendingNavigationRef = useRef<{ filePath: string; line: number; endLine: number } | null>(null);
+    const decorationIdsRef = useRef<string[]>([]);
+
     // Reset view & summary when switching files; directories go straight to summary view
     useEffect(() => {
       setEditorView(activeFile?.isDirectory ? 'summary' : 'source');
@@ -118,8 +124,29 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [summaryRequestPath, activeFile?.path]);
 
+    /** Apply a stored navigation request to the given Monaco editor instance. */
+    const applyNavigation = useCallback((editor: MonacoEditorAPI.IStandaloneCodeEditor, line: number, endLine: number) => {
+      const model = editor.getModel();
+      if (!model) return;
+      editor.revealLineInCenter(line);
+      const maxCol = model.getLineMaxColumn(endLine);
+      decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, [{
+        range: { startLineNumber: line, startColumn: 1, endLineNumber: endLine, endColumn: maxCol },
+        options: { isWholeLine: true, className: 'tutor-line-highlight', linesDecorationsClassName: 'tutor-line-gutter' },
+      }]);
+    }, []);
+
     useImperativeHandle(ref, () => ({
       save: () => {},
+      navigateToLine: (filePath: string, line: number, endLine?: number) => {
+        const resolvedEndLine = endLine ?? line;
+        pendingNavigationRef.current = { filePath, line, endLine: resolvedEndLine };
+        // If the target file is already active and Monaco is mounted, apply immediately
+        if (monacoEditorRef.current && activeFilePath === filePath) {
+          applyNavigation(monacoEditorRef.current, line, resolvedEndLine);
+          pendingNavigationRef.current = null;
+        }
+      },
       getVisibleContext: () => {
         const editor = monacoEditorRef.current;
         if (!editor) return null;
@@ -151,7 +178,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         }
         return `File: ${fileName} (visible lines ${startLine}-${endLine})\n${lines.join('\n')}`;
       },
-    }));
+    }), [applyNavigation, activeFilePath, activeFile]);
 
     const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && isPreviewable(activeFile.path);
     const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !!workspacePath && !activeFile.path.endsWith('.md');
@@ -430,7 +457,15 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                 file={activeFile}
                 onContentChange={onContentChange}
                 diffData={diffData}
-                onEditorMount={editor => { monacoEditorRef.current = editor; }}
+                onEditorMount={editor => {
+                  monacoEditorRef.current = editor;
+                  // Apply any pending navigation for this file
+                  const nav = pendingNavigationRef.current;
+                  if (nav && nav.filePath === activeFile.path) {
+                    pendingNavigationRef.current = null;
+                    applyNavigation(editor, nav.line, nav.endLine);
+                  }
+                }}
                 onAfterRevert={() => {
                   // Monaco's onChange fires synchronously from executeEdits, so
                   // content state updates in the same microtask batch. A short

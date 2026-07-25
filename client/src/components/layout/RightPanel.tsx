@@ -21,9 +21,10 @@ interface RightPanelProps {
   contextNodes: FileNode[];
   onRemoveContextNode: (path: string) => void;
   onClearContextNodes: () => void;
+  onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
 }
 
-export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes }: RightPanelProps) {
+export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
 
   const getModelLabel = (modelId: string): string => {
@@ -130,7 +131,8 @@ export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOp
       <div style={{ flex: 1, display: activeTab === 'assistant' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
         <CodingAssistant workspacePath={workspacePath} activeFilePath={activeFilePath} onWorkspaceOpen={onWorkspaceOpen}
           provider={provider} model={model} setProvider={setProvider} setModel={setModel} getEditorContext={getEditorContext}
-          contextNodes={contextNodes} onRemoveContextNode={onRemoveContextNode} onClearContextNodes={onClearContextNodes} />
+          contextNodes={contextNodes} onRemoveContextNode={onRemoveContextNode} onClearContextNodes={onClearContextNodes}
+          onNavigateToLine={onNavigateToLine} />
       </div>
     </div>
   );

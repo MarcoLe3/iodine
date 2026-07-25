@@ -48,16 +48,25 @@ function writeSSE(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function buildSystemInstruction(activeFile: string | null): string {
+const TUTOR_SYSTEM_ADDENDUM = `
+
+You are currently in TUTOR MODE. Your role is to guide the user through the codebase without making any changes yourself. Do not use write_file or run_terminal_command. Instead:
+- Read files to understand the code.
+- Use open_file to navigate the editor to relevant sections and highlight lines for the user.
+- Explain what you found and what the user should do to fix or improve the code.
+- Walk through the codebase step by step, pointing to specific locations.`;
+
+function buildSystemInstruction(activeFile: string | null, tutorMode?: boolean): string {
   const workspaceInfo = rootPath ? `Workspace: ${rootPath}` : 'No workspace is currently open.';
   const activeFileInfo = activeFile ? `The user currently has this file open in the editor: ${activeFile}` : '';
-  return `You are a coding assistant with access to the user's project files.
+  const base = `You are a coding assistant with access to the user's project files.
 ${workspaceInfo}
 ${activeFileInfo}
 
 You can read, write, list, and search files, and run terminal commands. When modifying files, read them first.
 Be concise in your explanations. When writing files with write_file, ALWAYS write the complete file content — never truncate, abbreviate, or use placeholder comments like "// rest of file unchanged" or "// ...". The file on disk will be exactly what you pass to write_file, so partial content means a broken file.
 When the user's message contains a **Relevant paths hint**, read or list those exact paths first using read_file or list_directory before reaching for search_files or broader directory scans. Only fall back to searching if the provided paths don't contain what you need.`;
+  return tutorMode ? base + TUTOR_SYSTEM_ADDENDUM : base;
 }
 
 // Permissive part type so thought parts (with thoughtSignature) are preserved verbatim.
@@ -74,6 +83,7 @@ export async function runGeminiAgentLoop(
   abortSignal: { aborted: boolean },
   activeFile: string | null = null,
   customSystemPrompt?: string,
+  tutorMode?: boolean,
 ) {
   const apiKey = await loadGeminiKey();
   const ai = new GoogleGenAI({ apiKey });
@@ -94,7 +104,7 @@ export async function runGeminiAgentLoop(
       model,
       contents: history,
       config: {
-        systemInstruction: customSystemPrompt ?? buildSystemInstruction(activeFile),
+        systemInstruction: customSystemPrompt ?? buildSystemInstruction(activeFile, tutorMode),
         tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
         ...(supportsThinking ? { thinkingConfig: { thinkingBudget: 8000 } } : {}),
       },

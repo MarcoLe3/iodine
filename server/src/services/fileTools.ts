@@ -129,4 +129,16 @@ export const TOOL_SCHEMAS = {
       required: ['command', 'reason'],
     },
   },
+  open_file: {
+    description: 'Open a file in the editor and highlight a range of lines to draw the user\'s attention to specific code. Use this to walk through the codebase, point out relevant sections, or guide the user to where changes should be made without making the changes yourself.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        path: { type: 'string', description: 'Absolute path to the file to open' },
+        line: { type: 'integer', description: 'Line number to scroll to and start highlighting (1-based)' },
+        end_line: { type: 'integer', description: 'Last line of the highlighted range (inclusive, defaults to line if omitted)' },
+      },
+      required: ['path', 'line'],
+    },
+  },
 } as const;

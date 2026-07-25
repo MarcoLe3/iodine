@@ -14,7 +14,11 @@ function uid() {
 // Non-streaming endpoints (/api/files/*, /api/agent/status) still go through the proxy.
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
-export function useCodingAssistant(provider: Provider, model: string) {
+export function useCodingAssistant(
+  provider: Provider,
+  model: string,
+  onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void,
+) {
   const [uiMessages, setUiMessages] = useState<UIMessage[]>([]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -59,7 +63,7 @@ export function useCodingAssistant(provider: Provider, model: string) {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[]) => {
+  const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[], tutorMode?: boolean) => {
     if (!text.trim() || isLoading) return;
 
     const userMsg: UIMessage = { id: uid(), role: 'user', content: text };
@@ -85,7 +89,7 @@ export function useCodingAssistant(provider: Provider, model: string) {
       const response = await fetch(`${API_BASE}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newHistory, model, provider: provider.id, activeFile: activeFilePath ?? null }),
+        body: JSON.stringify({ messages: newHistory, model, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false }),
         signal: controller.signal,
       });
 
@@ -167,7 +171,14 @@ export function useCodingAssistant(provider: Provider, model: string) {
             continue;
           }
 
-          if (eventName === 'text_delta') {
+          if (eventName === 'open_file') {
+            const filePath = payload.path as string;
+            const line = payload.line as number;
+            const endLine = payload.endLine as number | undefined;
+            if (filePath && onNavigateToLine) {
+              onNavigateToLine(filePath, line, endLine);
+            }
+          } else if (eventName === 'text_delta') {
             // Buffer and render at most once per animation frame (~60 fps)
             textBufRef.current += payload.text as string;
             if (rafRef.current === null) rafRef.current = requestAnimationFrame(flushBufs);

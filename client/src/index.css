@@ -132,6 +132,10 @@ input {
 .git-added-line   { background: rgba(46, 160, 67, 0.12) !important; }
 .git-modified-line { background: rgba(233, 180, 76, 0.12) !important; }
 
+/* Tutor mode line highlight */
+.tutor-line-highlight { background: rgba(79, 193, 255, 0.12) !important; }
+.tutor-line-gutter    { background: #4fc1ff !important; width: 3px !important; margin-left: 9px !important; }
+
 .git-added-glyph,
 .git-modified-glyph,
 .git-deleted-glyph,

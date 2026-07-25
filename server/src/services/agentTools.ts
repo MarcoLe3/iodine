@@ -9,6 +9,19 @@ export async function executeAgentTool(
   res: Response,
   abortSignal: { aborted: boolean },
 ) {
+  if (name === 'open_file') {
+    const filePath = typeof input.path === 'string' ? input.path : '';
+    const line = typeof input.line === 'number' ? input.line : 1;
+    const endLine = typeof input.end_line === 'number' ? input.end_line : line;
+    if (!filePath) {
+      return { content: 'path is required', preview: 'path is required', error: true };
+    }
+    if (!abortSignal.aborted) {
+      res.write(`event: open_file\ndata: ${JSON.stringify({ path: filePath, line, endLine })}\n\n`);
+    }
+    return { content: `Opened ${filePath} at line ${line}`, preview: `Opened ${filePath}:${line}`, error: false };
+  }
+
   if (name !== 'run_terminal_command') return executeTool(name, input);
 
   const command = typeof input.command === 'string' ? input.command.trim() : '';

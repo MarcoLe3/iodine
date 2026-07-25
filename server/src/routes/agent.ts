@@ -17,11 +17,12 @@ router.get('/agent/status', async (_req, res) => {
 });
 
 router.post('/agent/chat', async (req, res) => {
-  const { messages, model, provider, activeFile } = req.body as {
+  const { messages, model, provider, activeFile, tutorMode } = req.body as {
     messages?: { role: 'user' | 'assistant'; content: string }[];
     model?: string;
     provider?: string;
     activeFile?: string | null;
+    tutorMode?: boolean;
   };
 
   if (!messages || !Array.isArray(messages)) {
@@ -47,12 +48,12 @@ router.post('/agent/chat', async (req, res) => {
 
   try {
     if (selectedProvider === 'openai') {
-      await runOpenAIAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null);
+      await runOpenAIAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode);
     } else if (selectedProvider === 'google') {
-      await runGeminiAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null);
+      await runGeminiAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode);
     } else {
       const history: Anthropic.MessageParam[] = messages.map(m => ({ role: m.role, content: m.content }));
-      await runAgentLoop(history, selectedModel, res, abortSignal, activeFile ?? null);
+      await runAgentLoop(history, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode);
     }
   } catch (err: unknown) {
     if (!abortSignal.aborted) {
