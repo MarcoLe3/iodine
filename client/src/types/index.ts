@@ -17,6 +17,8 @@ export interface OpenFile {
   isImage?: boolean;
   isPdf?: boolean;
   isDirectory?: boolean;
+  isUrl?: boolean;
+  url?: string;
 }
 
 export type SidebarView = 'explorer' | 'scm';

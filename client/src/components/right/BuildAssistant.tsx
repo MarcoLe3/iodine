@@ -16,6 +16,7 @@ interface BuildAssistantProps {
   provider: Provider;
   model: string;
   runCommandInTerminal: (cmd: string) => void;
+  onOpenUrl?: (url: string) => void;
 }
 
 const SECTION_META: Array<{ key: SectionKey; label: string; icon: string; placeholder: string }> = [
@@ -132,7 +133,7 @@ function empty(): SectionState {
   return { command: '', generating: false, error: null };
 }
 
-export function BuildAssistant({ workspacePath, provider, model, runCommandInTerminal }: BuildAssistantProps) {
+export function BuildAssistant({ workspacePath, provider, model, runCommandInTerminal, onOpenUrl }: BuildAssistantProps) {
   const [sections, setSections] = useState<Record<SectionKey, SectionState>>({
     test:  empty(),
     build: empty(),
@@ -140,6 +141,7 @@ export function BuildAssistant({ workspacePath, provider, model, runCommandInTer
   });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [urlInput, setUrlInput] = useState('');
 
   // Load saved config when workspace changes
   useEffect(() => {
@@ -231,6 +233,13 @@ export function BuildAssistant({ workspacePath, provider, model, runCommandInTer
     runCommandInTerminal(cmd);
   }, [sections, runCommandInTerminal]);
 
+  const handleOpenUrl = useCallback(() => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    onOpenUrl?.(url);
+  }, [urlInput, onOpenUrl]);
+
   const save = useCallback(async () => {
     setSaving(true);
     setSaveMsg(null);
@@ -303,6 +312,35 @@ export function BuildAssistant({ workspacePath, provider, model, runCommandInTer
             onExecute={() => execute(meta.key)}
           />
         ))}
+
+        {/* URL opener */}
+        <div style={sectionStyle}>
+          <span style={labelStyle}>Open URL</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              style={{ ...inputStyle, flex: 1 }}
+              type="text"
+              value={urlInput}
+              onChange={e => setUrlInput(e.target.value)}
+              placeholder="https://example.com"
+              onKeyDown={e => { if (e.key === 'Enter') handleOpenUrl(); }}
+              spellCheck={false}
+            />
+            <button
+              onClick={handleOpenUrl}
+              disabled={!urlInput.trim()}
+              style={{
+                ...btnBase,
+                background: urlInput.trim() ? '#0e639c' : 'var(--color-bg-subtle)',
+                color: urlInput.trim() ? '#fff' : 'var(--color-text-secondary)',
+                border: urlInput.trim() ? 'none' : '1px solid var(--color-border)',
+                padding: '5px 12px',
+              }}
+            >
+              Open
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Save button */}

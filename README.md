@@ -49,6 +49,9 @@ For a visual demonstration of Iodine IDE in action, check out our demo videos on
 ![Iodine IDE - Tutorial Mode](images/screenshot_3.png)
 *Figure 3: Tutorial mode guiding the user where to edit*
 
+![Iodine IDE - Preview Mode](images/screenshot_4.png)
+*Figure 4: Preview mode showing live website in action*
+
 ## Features
 
 - 🖥️ **VS Code-like IDE shell** — Activity bar, file explorer sidebar, Monaco-powered code editor, and resizable panels

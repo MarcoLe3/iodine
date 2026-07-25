@@ -72,7 +72,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
   function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
-      activeFile?.isImage ? null : (activeFile?.path ?? null),
+      (activeFile?.isImage || activeFile?.isUrl) ? null : (activeFile?.path ?? null),
       activeFile?.content ?? '',
     );
     const monacoEditorRef = useRef<MonacoEditorAPI.IStandaloneCodeEditor | null>(null);
@@ -180,8 +180,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       },
     }), [applyNavigation, activeFilePath, activeFile]);
 
-    const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && isPreviewable(activeFile.path);
-    const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !!workspacePath && !activeFile.path.endsWith('.md');
+    const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
+    const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && !!workspacePath && !activeFile.path.endsWith('.md');
 
     /** Convert an absolute file path to a workspace-relative path. */
     const toRelPath = (abs: string) =>
@@ -349,6 +349,14 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
             ) : activeFile.isPdf ? (
               <PdfViewer path={activeFile.path} name={activeFile.name} />
+
+            ) : activeFile.isUrl ? (
+              <iframe
+                src={activeFile.url}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title={activeFile.name}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+              />
 
             ) : editorView === 'summary' ? (
               /* AI Summary view */

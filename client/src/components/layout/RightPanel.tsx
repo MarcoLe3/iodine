@@ -22,9 +22,10 @@ interface RightPanelProps {
   onRemoveContextNode: (path: string) => void;
   onClearContextNodes: () => void;
   onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
+  onOpenUrl?: (url: string) => void;
 }
 
-export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine }: RightPanelProps) {
+export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
 
   const getModelLabel = (modelId: string): string => {
@@ -125,7 +126,7 @@ export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOp
       </div>
 
       <div style={{ flex: 1, display: activeTab === 'build' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
-        <BuildAssistant workspacePath={workspacePath} provider={provider} model={model} runCommandInTerminal={runCommandInTerminal} />
+        <BuildAssistant workspacePath={workspacePath} provider={provider} model={model} runCommandInTerminal={runCommandInTerminal} onOpenUrl={onOpenUrl} />
       </div>
 
       <div style={{ flex: 1, display: activeTab === 'assistant' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>

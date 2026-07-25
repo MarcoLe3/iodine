@@ -73,6 +73,7 @@ export function WorkbenchLayout() {
     setActiveFilePath,
     openFile,
     openDirectory,
+    openUrl,
     updateContent,
     saveFile,
     closeFile,
@@ -84,6 +85,11 @@ export function WorkbenchLayout() {
   } = useOpenFiles();
 
   useFileWatcher(workspacePath, refreshFile);
+
+  /** Open a URL as an iframe tab in the editor area. */
+  const handleOpenUrl = useCallback((url: string) => {
+    openUrl(url);
+  }, [openUrl]);
 
   /** Open a file and navigate the Monaco editor to a specific line range (used by Tutor Mode). */
   const handleNavigateToLine = useCallback((filePath: string, line: number, endLine?: number) => {
@@ -336,6 +342,7 @@ export function WorkbenchLayout() {
             onRemoveContextNode={handleRemoveContextNode}
             onClearContextNodes={handleClearContextNodes}
             onNavigateToLine={handleNavigateToLine}
+            onOpenUrl={handleOpenUrl}
           />
         </div>
 

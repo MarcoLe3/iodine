@@ -79,18 +79,31 @@ The content hash means the cache auto-invalidates when the file/directory struct
 
 ## Build Assistant
 
-The **Build** tab in the right panel provides three sections — **Test**, **Build**, and **Build & Run** — each with an editable command field, an AI **Generate** button, and an **Execute** button. A **Save** button at the bottom persists all three commands to disk and reloads them automatically on the next workspace open.
+The **Build** tab in the right panel provides three sections — **Test**, **Build**, and **Build & Run** — each with an editable command field, an AI **Generate** button, and an **Execute** button. A **Save** button at the bottom persists all three commands to disk and reloads them automatically on the next workspace open. An **Open URL** section at the bottom of the scrollable area lets the user open any URL as an iframe tab in the editor.
 
 | File | Role |
 |------|------|
-| `client/src/components/right/BuildAssistant.tsx` | UI component. Loads saved config from `GET /api/build-config` on workspace change. Streams AI-generated commands via `POST /api/build-config/generate`. Execute calls `runCommandInTerminal(cmd)` which opens a new terminal tab pre-loaded with the command. |
+| `client/src/components/right/BuildAssistant.tsx` | UI component. Loads saved config from `GET /api/build-config` on workspace change. Streams AI-generated commands via `POST /api/build-config/generate`. Execute calls `runCommandInTerminal(cmd)` which opens a new terminal tab pre-loaded with the command. Accepts `onOpenUrl?(url)` prop; the "Open URL" section normalises the input (prepends `https://` if no protocol), then calls `onOpenUrl`. |
 | `server/src/routes/buildConfig.ts` | `GET /api/build-config` reads `~/.iodine/{md5}/build-config.json`. `PUT /api/build-config` writes it. `POST /api/build-config/generate` probes the workspace for project type (package.json scripts, Makefile targets, Cargo.toml, etc.) and streams a single shell command from the selected LLM. |
 | `client/src/components/bottom/TerminalPanel.tsx` | Converted to `forwardRef`. Exposes `TerminalPanelHandle.runCommand(cmd)` which creates a new tab with `ws://localhost:3001/terminal?cwd=…&cmd=…` — the server spawns the shell with `-c cmd` automatically. The tab label shows the command's first token. |
 | `client/src/components/bottom/BottomTray.tsx` | Converted to `forwardRef`. Exposes `BottomTrayHandle.runCommand(cmd)` which activates the Terminal tab then delegates to `TerminalPanel`. |
-| `client/src/components/layout/WorkbenchLayout.tsx` | Holds `bottomTrayRef` and creates `runCommandInTerminal` callback, threading it to `RightPanel`. |
-| `client/src/components/layout/RightPanel.tsx` | Adds "Build" tab between Coding Assistant and System View. Passes `runCommandInTerminal` to `BuildAssistant`. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Holds `bottomTrayRef` and creates `runCommandInTerminal` callback, threading it to `RightPanel`. Also creates `handleOpenUrl` which calls `openUrl(url)` from `useOpenFiles`. |
+| `client/src/components/layout/RightPanel.tsx` | Adds "Build" tab between Coding Assistant and System View. Passes `runCommandInTerminal` and `onOpenUrl` to `BuildAssistant`. |
 
 **Persistence path:** `~/.iodine/{MD5(workspacePath)}/build-config.json`
+
+## URL Iframe Tabs
+
+Any URL can be opened as a tab in the editor area, rendering an `<iframe>` instead of source code. This is useful for viewing local dev servers, documentation, or any web content alongside the code.
+
+| File | Role |
+|------|------|
+| `client/src/types/index.ts` | `OpenFile` gains `isUrl?: boolean` and `url?: string` fields. |
+| `client/src/hooks/useOpenFiles.ts` | `openUrl(url)` creates an `OpenFile` entry with `isUrl: true`, using `__url__:<url>` as the unique path key and the URL's hostname as the display name. No content fetch. `refreshFile` skips URL tabs. Exposed in the hook's return value. |
+| `client/src/components/layout/EditorArea.tsx` | After the PDF branch, checks `activeFile.isUrl` and renders `<iframe src={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups …">`. URL tabs are excluded from the AI summary button, the preview button, and the diff hook. |
+| `client/src/components/editor/EditorTabs.tsx` | Renders a 🌐 globe icon before the tab name when `file.isUrl` is true. |
+
+**Tab key:** URL tabs use `__url__:<url>` as their `path` to avoid collisions with real file paths. Opening the same URL twice activates the existing tab rather than creating a duplicate.
 
 ## User Visual Context in Coding Assistant
 
@@ -164,6 +177,19 @@ The **Tutor** toggle in the Coding Assistant (left of the Send button) switches 
 1. Turn 1 — AI reads files silently, presents a numbered plan, asks "Ready to start?"
 2. Turn 2+ — on each user reply, opens exactly ONE file, highlights the relevant lines, explains, then stops.
 Never more than one `open_file` call per response turn.
+
+## File Explorer Auto-Expand
+
+When a file becomes active in the editor (opened by click, Tutor Mode navigation, or any other means), the file explorer automatically expands all ancestor folders so the file is visible in the tree.
+
+| File | Role |
+|------|------|
+| `client/src/components/layout/WorkbenchLayout.tsx` | Passes `activeFilePath` directly as the `expandToPath` prop to `Sidebar` — no separate state needed. |
+| `client/src/components/layout/Sidebar.tsx` | Threads `expandToPath` through to `FileExplorer`. |
+| `client/src/components/sidebar/FileExplorer.tsx` | A `useEffect` keyed on `[expandToPath, tree]` (not `expandedPaths`) splits the path into segments and calls `toggleExpand(parentPath, true)` for each ancestor. `expandedPaths` is intentionally absent from the deps so the effect does not re-run when the user manually collapses a folder. |
+| `client/src/hooks/useFileTree.ts` | `toggleExpand(nodePath, forceExpand?)` — when `forceExpand` is `true` the node is always added to `expandedPaths` regardless of its current state, preventing accidental re-collapse. |
+
+**Key design:** Passing `activeFilePath` as `expandToPath` means every tab switch triggers a one-way expand (never collapse). The `forceExpand` flag in `toggleExpand` ensures the expand effect is idempotent and cannot fight user-initiated collapses.
 
 ## Implementation Notes
 

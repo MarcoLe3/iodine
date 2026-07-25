@@ -204,10 +204,32 @@ export function useOpenFiles() {
     });
   }, []);
 
+  const openUrl = useCallback((url: string) => {
+    const path = `__url__:${url}`;
+    if (openFilesRef.current.some(f => f.path === path)) {
+      setActiveFilePath(path);
+      return;
+    }
+    let name = url;
+    try { name = new URL(url).hostname || url; } catch { /* use raw url */ }
+    const entry: OpenFile = {
+      path,
+      name,
+      content: '',
+      savedContent: '',
+      isDirty: false,
+      language: 'plaintext',
+      isUrl: true,
+      url,
+    };
+    setOpenFiles(prev => [...prev, entry]);
+    setActiveFilePath(path);
+  }, []);
+
   /** Re-fetches a file from disk if it's open and not dirty (called by file watcher). */
   const refreshFile = useCallback((absPath: string) => {
     const file = openFilesRef.current.find(f => f.path === absPath);
-    if (!file || file.isDirty || file.isImage || file.isPdf || localFileMapRef.current?.has(absPath)) return;
+    if (!file || file.isDirty || file.isImage || file.isPdf || file.isUrl || localFileMapRef.current?.has(absPath)) return;
     fetchFileContent(absPath)
       .then(content => {
         setOpenFiles(prev =>
@@ -293,6 +315,7 @@ export function useOpenFiles() {
     setActiveFilePath,
     openFile,
     openDirectory,
+    openUrl,
     updateContent,
     saveFile,
     closeFile,

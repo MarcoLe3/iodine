@@ -116,6 +116,9 @@ export function EditorTabs({ openFiles, activeFilePath, onTabClick, onTabClose, 
             {file.isDirectory && (
               <span style={{ fontSize: 12, flexShrink: 0 }}>📁</span>
             )}
+            {file.isUrl && (
+              <span style={{ fontSize: 12, flexShrink: 0 }}>🌐</span>
+            )}
             <span
               style={{
                 fontSize: 13,
