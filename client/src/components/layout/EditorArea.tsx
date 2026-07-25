@@ -308,6 +308,54 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
           onTabClose={onTabClose}
           onTabReorder={onTabReorder}
         />
+
+        {/* ── Breadcrumb ── */}
+        {activeFile && (() => {
+          let segments: string[];
+          if (activeFile.isUrl) {
+            segments = [activeFile.url ?? activeFile.name];
+          } else {
+            const displayPath = workspacePath && activeFile.path.startsWith(workspacePath + '/')
+              ? activeFile.path.slice(workspacePath.length + 1)
+              : activeFile.path;
+            segments = displayPath.split('/').filter(Boolean);
+          }
+          return (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 12px',
+              height: 24,
+              flexShrink: 0,
+              background: 'var(--color-bg-editor)',
+              borderBottom: '1px solid var(--color-border)',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              scrollbarWidth: 'none',
+              whiteSpace: 'nowrap',
+              gap: 4,
+              fontSize: 12,
+              fontFamily: "'Cascadia Code', 'Fira Code', Menlo, monospace",
+            }}>
+              {segments.map((seg, i) => (
+                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  {i > 0 && (
+                    <span style={{ color: 'var(--color-text-secondary)', opacity: 0.4, userSelect: 'none' }}>›</span>
+                  )}
+                  <span style={{
+                    color: i === segments.length - 1
+                      ? 'var(--color-text-primary)'
+                      : 'var(--color-text-secondary)',
+                    fontWeight: i === segments.length - 1 ? 500 : 400,
+                  }}>
+                    {seg}
+                  </span>
+                </span>
+              ))}
+            </div>
+          );
+        })()}
+
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
 
           {/* ── Floating button group (bottom-right) ── */}
