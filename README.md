@@ -45,12 +45,15 @@ For a visual demonstration of Iodine IDE in action, check out our demo videos on
 ![Iodine IDE — System View](images/screenshot_2.png)
 *Figure 2: System View depicting the interactive architecture graph generation feature.*
 
+![Iodine IDE - Tutorial Mode](images/screenshot_3.png)
+*Figure 3: Tutorial mode guiding the user where to edit*
+
 ## Features
 
 - 🖥️ **VS Code-like IDE shell** — Activity bar, file explorer sidebar, Monaco-powered code editor, and resizable panels
 - 📑 **Editor tabs** — Open files appear as tabs above the editor. **Drag any tab left or right to reorder** it, and when tabs overflow the strip you can scroll horizontally (drag the scrollbar or use the mouse wheel — vertical wheel scrolling is translated into horizontal movement). Hover a tab to reveal its close button; a dot marks unsaved changes.
 - 📁 **File & folder management** — Hover any folder to reveal a **+** button (New File / New Folder); double-click any name to rename it inline; hover any item to reveal a trash icon to delete it. All three operations error out if the target name already exists.
-- 🤖 **AI Coding Assistant** — Your coding partner in the right panel: streaming chat with full tool use (read, write, search files, run terminal commands) backed by Claude, GPT, or Gemini. Describe what you want, and it figures out the edits.
+- 🤖 **AI Coding Assistant** — Your coding partner in the right panel: streaming chat with full tool use (read, write, search files, run terminal commands) backed by Claude, GPT, or Gemini. Describe what you want, and it figures out the edits, or suggest to you like a tutor.
 - 👁️ **User Visual Context** — The Coding Assistant automatically appends the lines currently visible in the Monaco editor (or your active selection) to every message, so the AI always knows what you're looking at without you having to paste code.
 - 📖 **AI Summary** — A tutor and walking encyclopedia baked into the editor. Click **🤖 Summary** on any open file and get a comprehensive, tutorial-style explanation — framework history, architecture role, API breakdown, data flow diagrams, and gotchas. Summaries are cached locally (keyed to the file's content hash) so repeat opens are instant and token costs stay flat as the codebase grows.
 - 🔨 **Build Assistant** — One-click test, build, and run. Click **✨ Generate** and the AI inspects your project (package.json scripts, Makefile targets, Cargo.toml, go.mod, etc.) and fills in the right command. Hit **▶ Execute** to open a dedicated terminal tab and run it instantly. Commands are saved per-workspace and restored automatically.
