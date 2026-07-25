@@ -1,7 +1,9 @@
 import { randomUUID } from 'crypto';
+import path from 'path';
 import { Response } from 'express';
 import { executeTool } from './fileTools';
 import { requestTerminalApproval, runTerminalCommand } from './terminalCommands';
+import { rootPath } from '../state';
 
 export async function executeAgentTool(
   name: string,
@@ -10,12 +12,22 @@ export async function executeAgentTool(
   abortSignal: { aborted: boolean },
 ) {
   if (name === 'open_file') {
-    const filePath = typeof input.path === 'string' ? input.path : '';
-    const line = typeof input.line === 'number' ? input.line : 1;
-    const endLine = typeof input.end_line === 'number' ? input.end_line : line;
+    let filePath = typeof input.path === 'string' ? input.path.trim() : '';
     if (!filePath) {
       return { content: 'path is required', preview: 'path is required', error: true };
     }
+    // Some models (e.g. Gemini) may return a workspace-relative path; resolve to absolute.
+    if (!path.isAbsolute(filePath) && rootPath) {
+      filePath = path.join(rootPath, filePath);
+    }
+    // Models sometimes return integer args as strings; accept both.
+    const toInt = (v: unknown, fallback: number): number => {
+      if (typeof v === 'number') return Math.floor(v);
+      if (typeof v === 'string') { const n = parseInt(v, 10); return isNaN(n) ? fallback : n; }
+      return fallback;
+    };
+    const line = toInt(input.line, 1);
+    const endLine = toInt(input.end_line, line);
     if (!abortSignal.aborted) {
       res.write(`event: open_file\ndata: ${JSON.stringify({ path: filePath, line, endLine })}\n\n`);
     }
