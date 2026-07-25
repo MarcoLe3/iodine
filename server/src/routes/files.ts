@@ -528,6 +528,40 @@ router.post('/git/commit', async (req, res) => {
   }
 });
 
+router.post('/git/pull', async (req, res) => {
+  if (!rootPath) return res.status(400).json({ error: 'No workspace open' });
+
+  // Check for unstaged changes (ignore untracked files)
+  try {
+    const { stdout } = await execFileAsync('git', ['status', '--porcelain'], { cwd: rootPath });
+    const unstagedChanges = stdout
+      .split('\n')
+      .filter(line => line.trim() && !line.startsWith('??')); // Filter out untracked files
+    
+    if (unstagedChanges.length > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot pull with unstaged changes. Please commit or stash them first.',
+        status: 'unstaged_changes'
+      });
+    }
+
+    // Execute git pull --rebase
+    await execFileAsync('git', ['pull', '--rebase'], { cwd: rootPath });
+    return res.json({ 
+      ok: true, 
+      status: 'success',
+      message: 'Successfully pulled latest changes with rebase'
+    });
+  } catch (err: unknown) {
+    const e = err as { stderr?: string; message: string };
+    return res.status(500).json({ 
+      ok: false,
+      status: 'pull_failed',
+      error: e.stderr ?? e.message 
+    });
+  }
+});
+
 // --- Git remote URL for opening on GitHub ---
 
 router.get('/git/remote-url', async (_req, res) => {

@@ -477,6 +477,15 @@ export function SourceControlPanel({ workspacePath, onFileOpen }: { workspacePat
     : sc.pushStatus === 'error' ? '#f44747'
     : 'var(--color-text-secondary)';
 
+  const pullIcon = sc.pullStatus === 'pulling' ? '…'
+    : sc.pullStatus === 'success' ? '✓'
+    : sc.pullStatus === 'error' ? '!'
+    : '↓';
+
+  const pullColor = sc.pullStatus === 'success' ? '#73c991'
+    : sc.pullStatus === 'error' ? '#f44747'
+    : 'var(--color-text-secondary)';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
       <ConfirmDialogOverlay dialog={sc.confirmDialog} />
@@ -499,6 +508,19 @@ export function SourceControlPanel({ workspacePath, onFileOpen }: { workspacePat
               <BranchSvg />
               {sc.branch}
             </span>
+            <IconButton
+              onClick={() => sc.pull()}
+              title={
+                sc.pullStatus === 'error' ? `Pull failed: ${sc.pullError}`
+                : sc.pullStatus === 'success' ? 'Pulled successfully!'
+                : hasChanges ? 'Pull from remote (workspace must be clean)'
+                : 'Pull from remote (origin HEAD)'
+              }
+              disabled={sc.pullStatus === 'pulling' || hasChanges}
+              style={{ color: pullColor, fontSize: 15, width: 22, height: 22 }}
+            >
+              {pullIcon}
+            </IconButton>
             <IconButton
               onClick={() => sc.push()}
               title={

@@ -15,7 +15,7 @@ import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL } from '../../providers';
 import type { Provider } from '../../providers';
 import type { FileNode, SidebarView } from '../../types';
 
-const SIDEBAR_DEFAULT = 240;
+const SIDEBAR_DEFAULT = 320;
 const RIGHT_PANEL_DEFAULT = 400;
 const SIDEBAR_MIN = 140;
 const SIDEBAR_MAX = 600;

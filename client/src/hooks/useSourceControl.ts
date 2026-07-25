@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   fetchGitChanges, fetchGitLog, fetchGitBranches,
   stageFile, unstageFile, stageAll, discardFile, commitChanges,
-  checkoutBranch, stashChanges, pushBranch,
+  checkoutBranch, stashChanges, pushBranch, pullBranch
 } from '../api/files';
 import type { GitChange, GitCommit, GitBranchInfo, GitBranches } from '../api/files';
 
@@ -28,6 +28,8 @@ export function useSourceControl(workspacePath: string | null) {
   const [commitMessage, setCommitMessage] = useState('');
   const [pushStatus, setPushStatus] = useState<null | 'pushing' | 'success' | 'error'>(null);
   const [pushError, setPushError] = useState('');
+  const [pullStatus, setPullStatus] = useState<null | 'pulling' | 'success' | 'error'>(null);
+  const [pullError, setPullError] = useState('');
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog>({ type: null, label: '', message: '', onConfirm: async () => {}, onCancel: () => {} });
 
   const refresh = useCallback(async () => {

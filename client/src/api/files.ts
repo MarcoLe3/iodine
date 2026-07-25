@@ -193,6 +193,10 @@ export async function pushBranch(): Promise<void> {
   await request('/api/git/push', { method: 'POST' });
 }
 
+export async function pullBranch(): Promise<{ ok: boolean; status: string; message?: string; error?: string }> {
+  return request<{ ok: boolean; status: string; message?: string; error?: string }>('/api/git/pull', { method: 'POST' });
+}
+
 export interface RefGithubUrl {
   githubUrl: string | null;
   refName: string | null;
