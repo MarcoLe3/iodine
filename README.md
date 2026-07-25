@@ -12,7 +12,7 @@ Fork it to build a domain-specific dev tool, a learning environment, an AI-assis
 
 VS Code is a multi-million-line codebase. Iodine is a few thousand. That difference matters more than it sounds:
 
-- **Vibe-coding friendly** — at ~9,200 lines / ~85K tokens, the entire codebase fits in a single AI context window with room to spare (Claude: 200K, GPT-4o: 128K, Gemini 2.5: 1M). You can describe a feature and apply it in one shot, without hitting token limits or losing coherence across files.
+- **Vibe-coding friendly** — at ~11,300 lines / ~100K tokens, the entire codebase fits in a single AI context window with room to spare (Claude: 200K, GPT-4o: 128K, Gemini 2.5: 1M). You can describe a feature and apply it in one shot, without hitting token limits or losing coherence across files.
 - **You own the shell** — VS Code's extension API lets you add functionality inside a sandbox. Iodine lets you change the layout, panels, and behaviour of the IDE itself.
 - **Web-native** — ships as a local web app with no Electron or desktop packaging required. Embed it, proxy it, or deploy it however you like.
 - **Readable stack** — React + Express + TypeScript with no framework magic. Every file does one thing and is easy to follow.
@@ -21,7 +21,7 @@ VS Code is a multi-million-line codebase. Iodine is a few thousand. That differe
 
 **Iodine commits to keeping the entire source under 100K tokens — permanently.**
 
-GPT-4o, our most constrained supported model, has a 128K context window. At 100K tokens the source fits with 28K to spare for conversation history and output. That headroom is intentional. The current codebase sits at ~85K tokens, leaving ~15K headroom against the 100K ceiling and ~43K against GPT-4o's hard limit.
+GPT-4o, our most constrained supported model, has a 128K context window. At 100K tokens the source fits with 28K to spare for conversation history and output. That headroom is intentional. The current codebase sits at ~100K tokens, right at the 100K ceiling and ~28K against GPT-4o's hard limit.
 
 This is not just a current snapshot — it is a design constraint. If a feature would push the source past 100K tokens it is a signal to prune or split first, not to quietly let the project grow. The point is to stay small enough that you can always hand the whole codebase to an AI and ask it to make a change in one shot, forever — not just today.
 
@@ -57,15 +57,17 @@ For a visual demonstration of Iodine IDE in action, check out our demo videos on
 - 🖥️ **VS Code-like IDE shell** — Activity bar, file explorer sidebar, Monaco-powered code editor, and resizable panels
 - 📑 **Editor tabs** — Open files appear as tabs above the editor. **Drag any tab left or right to reorder** it, and when tabs overflow the strip you can scroll horizontally (drag the scrollbar or use the mouse wheel — vertical wheel scrolling is translated into horizontal movement). Hover a tab to reveal its close button; a dot marks unsaved changes.
 - 📁 **File & folder management** — Hover any folder to reveal a **+** button (New File / New Folder); double-click any name to rename it inline; hover any item to reveal a trash icon to delete it. All three operations error out if the target name already exists.
-- 🤖 **AI Coding Assistant** — Your coding partner in the right panel: streaming chat with full tool use (read, write, search files, run terminal commands) backed by Claude, GPT, or Gemini. Describe what you want, and it figures out the edits, or suggest to you like a tutor.
+- 🤖 **AI Coding Assistant** — Your coding partner in the right panel: streaming chat with full tool use (read, write, search files, run terminal commands) backed by Claude, GPT, or Gemini. Describe what you want, and it figures out the edits.
+- 🎓 **Tutor Mode** — Toggle **Tutor** in the Coding Assistant to switch the AI into a read-only guide. Turn 1: it reads the codebase silently and presents a numbered walk-through plan. Each subsequent reply opens exactly one file in the editor, highlights the relevant lines, and explains what to look at — then waits. The AI never writes code in this mode.
 - 👁️ **User Visual Context** — The Coding Assistant automatically appends the lines currently visible in the Monaco editor (or your active selection) to every message, so the AI always knows what you're looking at without you having to paste code.
 - 📖 **AI Summary** — A tutor and walking encyclopedia baked into the editor. Click **🤖 Summary** on any open file and get a comprehensive, tutorial-style explanation — framework history, architecture role, API breakdown, data flow diagrams, and gotchas. Summaries are cached locally (keyed to the file's content hash) so repeat opens are instant and token costs stay flat as the codebase grows.
-- 🔨 **Build Assistant** — One-click test, build, and run. Click **✨ Generate** and the AI inspects your project (package.json scripts, Makefile targets, Cargo.toml, go.mod, etc.) and fills in the right command. Hit **▶ Execute** to open a dedicated terminal tab and run it instantly. Commands are saved per-workspace and restored automatically.
+- 🔨 **Build Assistant** — One-click test, build, and run. Click **✨ Generate** and the AI inspects your project (package.json scripts, Makefile targets, Cargo.toml, go.mod, etc.) and fills in the right command. Hit **▶ Execute** to open a dedicated terminal tab and run it instantly. Commands are saved per-workspace and restored automatically. The **Open URL** section lets you open any URL as an iframe tab in the editor.
 - 🌿 **Source Control panel** — View Git status, stage/unstage files, discard changes, and commit — all from the UI
-- 📂 **File preview** — Render `.md` (with GitHub Flavored Markdown) and `.html` files inline
+- 📂 **File preview** — Render `.md` (with GitHub Flavored Markdown) and `.html` files inline; view images and PDFs in dedicated viewers directly in the editor tab
+- 🌐 **URL iframe tabs** — Type any URL in the Build tab's "Open URL" field and open it as a browser tab inside the editor, useful for viewing local dev servers or documentation alongside the code
 - 💾 **Workspace persistence** — The last opened folder is remembered across server restarts; use **File → Close Project** to clear it and return to the clean-slate welcome screen
 - 🖥️ **Integrated terminal** — A resizable bottom tray with a real pseudo-terminal (xterm.js + node-pty) running your shell at the workspace root. Open multiple sessions with **+**, close any with **✕**.
-- 🌐 **System View** — Interactive SVG graph editor for system architecture diagrams. Hit **⚡ Generate** and the AI explores your workspace with file tools, reads key files, and builds a graph from what it actually finds — no prompt needed. Nodes are draggable; pan and zoom with mouse. Diagram data is auto-saved to `~/.iodine/<workspace-hash>/system-graph.json`.
+- 🗺️ **System View** — Interactive SVG graph editor for system architecture diagrams. Hit **⚡ Generate** and the AI explores your workspace with file tools, reads key files, and builds a graph from what it actually finds — no prompt needed. Nodes are draggable; pan and zoom with mouse. Diagram data is auto-saved to `~/.iodine/<workspace-hash>/system-graph.json`.
 
 ## System View 📈
 
@@ -103,9 +105,10 @@ Additional capabilities:
 2. Browse and edit files in the Monaco-powered editor. Git status, diffs, and per-hunk revert appear automatically.
 3. Open any file and click **🤖 Summary** to get an AI-generated tutorial explaining the file — cached locally so the second open is instant.
 4. Use the **Coding Assistant** tab to chat with an AI that can read, write, search, and run commands in your workspace. The AI automatically sees your currently visible editor lines as context.
-5. Switch to the **Build** tab, click **✨ Generate** next to Test / Build / Build & Run, and the AI fills in the right command for your project. Click **▶ Execute** to run it in a new terminal tab.
-6. Switch to the **System View** tab and click **⚡ Generate** — the AI reads your actual files and builds an interactive architecture graph.
-7. Use the integrated terminal to run commands directly in your workspace.
+5. Toggle **Tutor** in the Coding Assistant to enter Tutor Mode — the AI walks you through the codebase one file at a time, highlighting relevant lines, without making any changes.
+6. Switch to the **Build** tab, click **✨ Generate** next to Test / Build / Build & Run, and the AI fills in the right command for your project. Click **▶ Execute** to run it in a new terminal tab. Use the **Open URL** field to open any URL (e.g. your dev server) as an iframe tab in the editor.
+7. Switch to the **System View** tab and click **⚡ Generate** — the AI reads your actual files and builds an interactive architecture graph.
+8. Use the integrated terminal to run commands directly in your workspace.
 
 ## Editor Tabs 📑
 
@@ -300,6 +303,7 @@ All three providers share the same tool layer and can perform:
 | `list_directory` | Browse the directory tree (depth 3) |
 | `search_files` | Grep-like text search across workspace files |
 | `run_terminal_command` | Propose a shell command — pauses for your approval, then runs it and streams stdout/stderr live into the chat |
+| `open_file` | *(Tutor Mode only)* Open a file in the editor and highlight a line range — used by the AI to guide you through the codebase one file at a time |
 
 When the AI wants to run a terminal command, it presents an approval card with the exact command, the reason it needs it, and whether it's expected to keep running (e.g. a dev server). Click **Approve** to execute or **Reject** to decline — the AI cannot run anything without your explicit confirmation. Output streams live into the chat, and the result (exit code, captured output, detected localhost URLs) is fed back to the model so it can interpret and continue.
 
