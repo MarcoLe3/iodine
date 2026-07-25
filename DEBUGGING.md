@@ -393,3 +393,124 @@ const cwd = cwdCandidates.find(c => existsSync(c)) ?? os.homedir();
 Also made the WebSocket URL in `TerminalPanel.tsx` dynamic (protocol + host derived from
 `window.location`) instead of hardcoded to `ws://localhost:3001`, so terminals work
 correctly in production builds served from non-localhost origins.
+
+---
+
+## File Explorer Auto-Expand Not Working
+
+### Symptom
+
+Switching to a file in the editor did not expand or reveal it in the file explorer sidebar, even though an `expandToPath` prop existed on `FileExplorer`.
+
+### Root Cause 1 — Dead state, never updated
+
+`WorkbenchLayout` had:
+
+```typescript
+const [expandToPath, setExpandToPath] = useState<string | null>(null);
+```
+
+This state was passed to `<Sidebar expandToPath={expandToPath} />` but was never set anywhere, so the file explorer always received `null`.
+
+### Fix 1
+
+Remove the state and pass `activeFilePath` directly:
+
+```tsx
+<Sidebar expandToPath={activeFilePath} ... />
+```
+
+### Root Cause 2 — Auto-expand effect fought manual user collapses
+
+The `useEffect` in `FileExplorer` that expands parent directories had `expandedPaths` in its dependency array:
+
+```typescript
+useEffect(() => {
+  // ...
+  parentsToExpand.forEach(parentPath => {
+    if (!expandedPaths.has(parentPath)) toggleExpand(parentPath);
+  });
+}, [expandToPath, tree, expandedPaths, toggleExpand]); // ← expandedPaths triggers re-run
+```
+
+Every call to `toggleExpand` changed `expandedPaths`, which re-triggered the effect. More importantly, if the user manually collapsed a parent folder, the effect would immediately re-expand it on the next state update.
+
+### Fix 2
+
+Remove `expandedPaths` from the dependency array and add a `forceExpand` flag to `toggleExpand` so it only opens (never toggles closed):
+
+```typescript
+// useFileTree.ts
+const toggleExpand = useCallback((nodePath: string, forceExpand?: boolean) => {
+  setExpandedPaths(prev => {
+    const next = new Set(prev);
+    if (forceExpand) {
+      next.add(nodePath);
+    } else if (next.has(nodePath)) {
+      next.delete(nodePath);
+    } else {
+      next.add(nodePath);
+    }
+    return next;
+  });
+}, []);
+
+// FileExplorer.tsx — auto-expand effect
+useEffect(() => {
+  if (!expandToPath || !tree) return;
+  const pathParts = expandToPath.split('/');
+  for (let i = 1; i < pathParts.length - 1; i++) {
+    const parentPath = pathParts.slice(0, i + 1).join('/');
+    toggleExpand(parentPath, true /* forceExpand */);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [expandToPath, tree]); // expandedPaths intentionally excluded
+```
+
+### Root Cause 3 — Stale `setExpandToPath` reference after state removal
+
+After removing the `expandToPath` state, a `setExpandToPath(filePath)` call left inside `handleNavigateToLine` (in `WorkbenchLayout`) caused a runtime error:
+
+```
+Error: setExpandToPath is not defined
+```
+
+### Fix 3
+
+Delete the leftover `setExpandToPath(filePath)` call. The expansion is now driven automatically by `activeFilePath` changing (via `openFile`), so no explicit setter call is needed.
+
+---
+
+## Tutor Mode `open_file` Tool Not Navigating Editor
+
+### Symptom
+
+The AI called `open_file` and the tool block appeared in the UI, but the editor did not switch to the file or highlight the lines.
+
+### Root Cause — Stale closure capturing `undefined` callback
+
+`useCodingAssistant` receives `onNavigateToLine` as a hook parameter and uses it inside `sendMessage`. `sendMessage` is wrapped in `useCallback` with the dependency array `[history, isLoading, model, provider]` — `onNavigateToLine` was not listed. React therefore created the callback once (on first render, when `onNavigateToLine` was still `undefined`) and never recreated it:
+
+```typescript
+// onNavigateToLine is undefined at first render — captured and frozen forever
+const sendMessage = useCallback(async (...) => {
+  // ...
+  if (filePath && onNavigateToLine) {  // always false
+    onNavigateToLine(filePath, line, endLine);
+  }
+}, [history, isLoading, model, provider]); // missing onNavigateToLine
+```
+
+### Fix
+
+Mirror the callback into a ref that is updated on every render, then read from the ref inside `sendMessage`:
+
+```typescript
+const onNavigateToLineRef = useRef(onNavigateToLine);
+onNavigateToLineRef.current = onNavigateToLine; // always current
+
+// Inside sendMessage's open_file handler:
+onNavigateToLineRef.current?.(filePath, line, endLine);
+```
+
+This is the same pattern used for `filePathRef`/`contentRef` in `useFileDiff.ts` — stable callbacks that always read the latest value without being in the `useCallback` dependency array.
