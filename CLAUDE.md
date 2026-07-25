@@ -160,6 +160,11 @@ The **Tutor** toggle in the Coding Assistant (left of the Send button) switches 
 
 **open_file SSE event payload:** `{ path: string, line: number, endLine: number }` — sent before the tool result so the client can navigate while the agent loop continues.
 
+**Tutor protocol (enforced by system prompt):**
+1. Turn 1 — AI reads files silently, presents a numbered plan, asks "Ready to start?"
+2. Turn 2+ — on each user reply, opens exactly ONE file, highlights the relevant lines, explains, then stops.
+Never more than one `open_file` call per response turn.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.
