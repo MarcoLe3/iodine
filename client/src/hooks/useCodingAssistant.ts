@@ -23,6 +23,11 @@ export function useCodingAssistant(
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Keep a ref to the latest callback so sendMessage's useCallback closure
+  // never goes stale (onNavigateToLine is not in the dependency array).
+  const onNavigateToLineRef = useRef(onNavigateToLine);
+  onNavigateToLineRef.current = onNavigateToLine;
+
   // Refs that accumulate text/thought tokens between animation frames.
   // Prevents per-token re-renders when providers like OpenAI stream very fast.
   const textBufRef = useRef('');
@@ -175,8 +180,8 @@ export function useCodingAssistant(
             const filePath = payload.path as string;
             const line = payload.line as number;
             const endLine = payload.endLine as number | undefined;
-            if (filePath && onNavigateToLine) {
-              onNavigateToLine(filePath, line, endLine);
+            if (filePath) {
+              onNavigateToLineRef.current?.(filePath, line, endLine);
             }
           } else if (eventName === 'text_delta') {
             // Buffer and render at most once per animation frame (~60 fps)
