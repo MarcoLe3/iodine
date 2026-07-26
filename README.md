@@ -4,28 +4,16 @@
 
 ## About
 
-**Iodine** is an open-source, web-based IDE shell you can fork and build on. It gives you a VS Code-style editing experience in the browser — file explorer, Monaco editor, git integration, integrated terminal, and an AI coding assistant — all wired together and ready to extend.
+**Iodine** is an open-source, web-based IDE. It gives you a VS Code-style editing experience in the browser — file explorer, Monaco editor, git integration, integrated terminal, and a full AI coding assistant with Tutor Mode, AI Summary, Build Assistant, and System View — all built in, not bolted on.
 
-Fork it to build a domain-specific dev tool, a learning environment, an AI-assisted editor, or anything else that benefits from a real IDE running in the browser.
+Use it as-is, or fork it to build your own domain-specific developer tool.
 
 ### Why Iodine instead of forking VS Code?
 
-VS Code is a multi-million-line codebase. Iodine is a few thousand. That difference matters more than it sounds:
-
-- **Vibe-coding friendly** — at ~11,300 lines / ~100K tokens, the entire codebase fits in a single AI context window with room to spare (Claude: 200K, GPT-4o: 128K, Gemini 2.5: 1M). You can describe a feature and apply it in one shot, without hitting token limits or losing coherence across files.
 - **You own the shell** — VS Code's extension API lets you add functionality inside a sandbox. Iodine lets you change the layout, panels, and behaviour of the IDE itself.
 - **Web-native** — ships as a local web app with no Electron or desktop packaging required. Embed it, proxy it, or deploy it however you like.
 - **Readable stack** — React + Express + TypeScript with no framework magic. Every file does one thing and is easy to follow.
-
-### Context window guarantee
-
-**Iodine commits to keeping the entire source under 100K tokens — permanently.**
-
-GPT-4o, our most constrained supported model, has a 128K context window. At 100K tokens the source fits with 28K to spare for conversation history and output. That headroom is intentional. The current codebase sits at ~100K tokens, right at the 100K ceiling and ~28K against GPT-4o's hard limit.
-
-This is not just a current snapshot — it is a design constraint. If a feature would push the source past 100K tokens it is a signal to prune or split first, not to quietly let the project grow. The point is to stay small enough that you can always hand the whole codebase to an AI and ask it to make a change in one shot, forever — not just today.
-
-> **Caveat:** "fits in the context window" and "the model reasons perfectly across all of it" are not the same thing. Long-context degradation is real — models pay less attention to content deep in a large prompt. For large cross-cutting changes, being explicit about which files are relevant helps. For typical feature work (add a component, extend an API, fix a bug), 67K tokens is well within the range where one-shot application genuinely works.
+- **AI-first** — the Coding Assistant, Tutor Mode, AI Summary, and Build Assistant are built in, not bolted on. Extend them or replace them with your own.
 
 ### Self-hosting milestone
 
@@ -93,11 +81,10 @@ Additional capabilities:
 
 ## Use Cases
 
-* **Fork as an IDE starter kit** — All the hard parts (editor, file tree, git, terminal, AI) are already wired up. Add your own panels and tools on top.
-* **Vibe-code your own IDE** — The codebase fits in a single AI context window. Describe a feature, get working code. No fighting a million-line codebase or hitting token limits.
+* **Fork as an IDE** — All the hard parts (editor, file tree, git, terminal, AI) are already wired up. Add your own panels, tools, and workflows on top.
 * **AI-assisted development tools** — Use the built-in agent infrastructure to build specialised coding assistants for your team or domain.
 * **Learning / teaching** — A real, readable codebase showing how to integrate Monaco, xterm.js, git, and AI providers in a single app.
-* **Internal developer tools** — Run it locally as a lightweight web IDE for any project.
+* **Internal developer tools** — Run it locally as a web IDE for any project, or deploy it for your team.
 
 ## How It Works
 
