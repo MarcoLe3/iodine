@@ -191,6 +191,22 @@ When a file becomes active in the editor (opened by click, Tutor Mode navigation
 
 **Key design:** Passing `activeFilePath` as `expandToPath` means every tab switch triggers a one-way expand (never collapse). The `forceExpand` flag in `toggleExpand` ensures the expand effect is idempotent and cannot fight user-initiated collapses.
 
+## System View — Node/Edge Click → File References
+
+Clicking a node or edge in the System View graph highlights it and opens a bottom drawer listing the source files associated with that element. Clicking a file entry navigates the editor to the specified line (same mechanism as Tutor Mode's `open_file`).
+
+| File | Role |
+|------|------|
+| `client/src/api/files.ts` | `GraphFileRef` interface (`path`, `line?`, `endLine?`, `label?`). `GraphNode` and `GraphEdge` both gain an optional `files?: GraphFileRef[]` field. |
+| `client/src/components/right/SystemView.tsx` | `Selected` type (`{ type: 'node'; id }` or `{ type: 'edge'; idx }`). Tracks `selected` state. `nodePressRef` / `panPressRef` refs record mouse-down position to distinguish a click (< 5 px movement) from a drag. `EdgeSvg` adds a transparent `strokeWidth={12}` hit-area path with `onMouseDown={stopPropagation}` + `onClick` to toggle edge selection; a selection highlight path (accent colour, opacity 0.35) renders behind the main path. `NodeSvg` adds a selection ring rect (accent stroke, opacity 0.8) when `isSelected`. File-references drawer renders below the SVG as a flex sibling; shows the item label, a close button, and scrollable clickable file rows. |
+| `client/src/components/layout/RightPanel.tsx` | Passes `onNavigateToLine` to `SystemView` (already present in `RightPanelProps`, now threaded through). |
+| `client/src/components/layout/WorkbenchLayout.tsx` | `handleNavigateToLine` (used for Tutor Mode) also serves the System View drawer — no changes needed. |
+| `server/src/routes/agent.ts` | Updated `graphSystemPrompt` to instruct the AI to populate `files` arrays on nodes and edges with workspace-relative paths and line ranges from files it actually read. |
+
+**File reference path resolution:** If `f.path` starts with `/` it is used as-is; otherwise `workspacePath + '/' + f.path` is prepended so the navigator receives an absolute path.
+
+**Click-vs-drag:** A `Math.hypot` check at `mouseUp` ensures moves of ≥ 5 CSS pixels are treated as drags, not clicks. The SVG `onMouseLeave` fires `handleMouseUp` (which also clears refs) so stale press refs are never left behind.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.

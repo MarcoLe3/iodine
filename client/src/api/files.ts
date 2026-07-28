@@ -206,6 +206,13 @@ export async function fetchRefGithubUrl(ref: string): Promise<RefGithubUrl> {
   return request<RefGithubUrl>(`/api/git/ref-url?ref=${encodeURIComponent(ref)}`);
 }
 
+export interface GraphFileRef {
+  path: string;       // workspace-relative or absolute path
+  line?: number;      // 1-based start line
+  endLine?: number;   // 1-based end line (inclusive)
+  label?: string;     // short description shown in the drawer
+}
+
 export interface GraphNode {
   id: string;
   name: string;
@@ -214,6 +221,7 @@ export interface GraphNode {
   layer?: number;  // 0=clients, 1=gateways, 2=services, 3=data, 4=external
   x?: number;
   y?: number;
+  files?: GraphFileRef[];
 }
 
 export interface GraphEdge {
@@ -221,6 +229,7 @@ export interface GraphEdge {
   target: string;
   type: 'directed' | 'bidirectional' | 'undirected';
   label?: string;
+  files?: GraphFileRef[];
 }
 
 export interface SystemGraph {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, MouseEvent as RMouseEvent, WheelEvent as RWheelEvent } from 'react';
 import Editor from '@monaco-editor/react';
 import { useSystemGraph } from '../../hooks/useSystemGraph';
-import type { SystemGraph, GraphNode, GraphEdge } from '../../api/files';
+import type { SystemGraph, GraphNode, GraphEdge, GraphFileRef } from '../../api/files';
 import type { Provider } from '../../providers';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
@@ -97,7 +97,11 @@ function ensurePositions(g: SystemGraph): SystemGraph {
 
 type PosMap = Record<string, { x: number; y: number }>;
 
-function EdgeSvg({ edge, posMap }: { edge: GraphEdge; posMap: PosMap }) {
+function EdgeSvg({ edge, posMap, isSelected, onClick }: {
+  edge: GraphEdge; posMap: PosMap;
+  isSelected?: boolean;
+  onClick?: () => void;
+}) {
   const src = posMap[edge.source], tgt = posMap[edge.target];
   if (!src || !tgt || edge.source === edge.target) return null;
 
@@ -132,6 +136,11 @@ function EdgeSvg({ edge, posMap }: { edge: GraphEdge; posMap: PosMap }) {
 
   return (
     <g>
+      {/* Selection highlight rendered behind the main path */}
+      {isSelected && (
+        <path d={pathD} fill="none" stroke="var(--color-accent)" strokeWidth={5} opacity={0.35}
+          strokeLinejoin="miter" style={{ pointerEvents: 'none' }} />
+      )}
       <path
         d={pathD}
         fill="none"
@@ -156,15 +165,26 @@ function EdgeSvg({ edge, posMap }: { edge: GraphEdge; posMap: PosMap }) {
           </>
         );
       })()}
+      {/* Transparent wide hit area for easy clicking */}
+      <path
+        d={pathD}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={12}
+        strokeLinejoin="miter"
+        style={{ cursor: 'pointer' }}
+        onMouseDown={e => e.stopPropagation()}
+        onClick={onClick}
+      />
     </g>
   );
 }
 
 function NodeSvg({
-  node, pos, isDragging,
+  node, pos, isDragging, isSelected,
   onMouseDown,
 }: {
-  node: GraphNode; pos: { x: number; y: number }; isDragging: boolean;
+  node: GraphNode; pos: { x: number; y: number }; isDragging: boolean; isSelected?: boolean;
   onMouseDown: (e: RMouseEvent<SVGGElement>) => void;
 }) {
   const fill = node.color ?? '#1e4e6e';
@@ -176,6 +196,12 @@ function NodeSvg({
       onMouseDown={onMouseDown}
       style={{ cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
     >
+      {/* Selection ring */}
+      {isSelected && (
+        <rect x={x - 3} y={y - 3} width={NW + 6} height={NH + 6} rx={8}
+          fill="none" stroke="var(--color-accent)" strokeWidth={2} opacity={0.8}
+          style={{ pointerEvents: 'none' }} />
+      )}
       <rect x={x} y={y} width={NW} height={NH} rx={6}
         fill={fill} stroke="#ffffff28" strokeWidth={1}
         filter={isDragging ? 'drop-shadow(0 2px 6px #0007)' : undefined}
@@ -220,9 +246,14 @@ interface SystemViewProps {
   workspacePath: string | null;
   provider: Provider;
   model: string;
+  onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
 }
 
-export function SystemView({ workspacePath, provider, model }: SystemViewProps) {
+type Selected = { type: 'node'; id: string } | { type: 'edge'; idx: number } | null;
+
+const fileBasename = (p: string) => p.split('/').pop() ?? p;
+
+export function SystemView({ workspacePath, provider, model, onNavigateToLine }: SystemViewProps) {
   const { graph: savedGraph, loaded, saving, saveError, save } = useSystemGraph(workspacePath);
 
   const [localGraph, setLocalGraph] = useState<SystemGraph>({ nodes: [], edges: [] });
@@ -230,6 +261,7 @@ export function SystemView({ workspacePath, provider, model }: SystemViewProps) 
   const [jsonText, setJsonText]     = useState(SAMPLE_JSON);
   const [jsonError, setJsonError]   = useState<string | null>(null);
   const [dirty, setDirty]           = useState(false);
+  const [selected, setSelected]     = useState<Selected>(null);
 
   // Generate state
   const [generating, setGenerating] = useState(false);
@@ -244,6 +276,10 @@ export function SystemView({ workspacePath, provider, model }: SystemViewProps) 
   type PanState  = { px: number; py: number; mx: number; my: number };
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [panState,  setPanState]  = useState<PanState | null>(null);
+
+  // Click-vs-drag detection refs
+  const nodePressRef = useRef<{ id: string; sx: number; sy: number } | null>(null);
+  const panPressRef  = useRef<{ sx: number; sy: number } | null>(null);
 
   // ── Initialise from server ─────────────────────────────────────────────────
   useEffect(() => {
@@ -298,13 +334,8 @@ export function SystemView({ workspacePath, provider, model }: SystemViewProps) 
   }, [localGraph, view, jsonText, save]);
 
   // ── SVG mouse events ───────────────────────────────────────────────────────
-  const svgCoord = useCallback((clientX: number, clientY: number) => {
-    if (!svgRef.current) return { x: 0, y: 0 };
-    const r = svgRef.current.getBoundingClientRect();
-    return { x: (clientX - r.left - pan.x) / scale, y: (clientY - r.top - pan.y) / scale };
-  }, [pan, scale]);
-
   const handleSvgMouseDown = (e: RMouseEvent<SVGSVGElement>) => {
+    panPressRef.current = { sx: e.clientX, sy: e.clientY };
     setPanState({ px: pan.x, py: pan.y, mx: e.clientX, my: e.clientY });
   };
 
@@ -312,6 +343,7 @@ export function SystemView({ workspacePath, provider, model }: SystemViewProps) 
     e.stopPropagation();
     const node = localGraph.nodes.find(n => n.id === id);
     if (!node) return;
+    nodePressRef.current = { id, sx: e.clientX, sy: e.clientY };
     setDragState({ id, mx: e.clientX, my: e.clientY, nx: node.x ?? 0, ny: node.y ?? 0 });
   };
 
@@ -331,7 +363,24 @@ export function SystemView({ workspacePath, provider, model }: SystemViewProps) 
     }
   };
 
-  const handleMouseUp = () => { setDragState(null); setPanState(null); };
+  const handleMouseUp = (e: RMouseEvent<SVGSVGElement>) => {
+    // Node click detection: if movement < 5 px it's a click, not a drag
+    if (nodePressRef.current) {
+      const { id, sx, sy } = nodePressRef.current;
+      if (Math.hypot(e.clientX - sx, e.clientY - sy) < 5) {
+        setSelected(sel => sel?.type === 'node' && sel.id === id ? null : { type: 'node', id });
+      }
+      nodePressRef.current = null;
+    }
+    // Background click: deselect
+    if (panPressRef.current) {
+      const { sx, sy } = panPressRef.current;
+      if (Math.hypot(e.clientX - sx, e.clientY - sy) < 5) setSelected(null);
+      panPressRef.current = null;
+    }
+    setDragState(null);
+    setPanState(null);
+  };
 
   const handleWheel = (e: RWheelEvent<SVGSVGElement>) => {
     e.preventDefault();
@@ -422,9 +471,32 @@ export function SystemView({ workspacePath, provider, model }: SystemViewProps) 
     }
   }, [generating, workspacePath, model, provider]);
 
+  // ── File reference navigation ──────────────────────────────────────────────
+  const handleFileRefClick = useCallback((f: GraphFileRef) => {
+    if (!onNavigateToLine) return;
+    const filePath = f.path.startsWith('/') ? f.path : `${workspacePath ?? ''}/${f.path}`;
+    onNavigateToLine(filePath, f.line ?? 1, f.endLine);
+  }, [onNavigateToLine, workspacePath]);
+
   // ── Build posMap for rendering ─────────────────────────────────────────────
   const posMap: PosMap = {};
   for (const n of localGraph.nodes) posMap[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
+
+  // ── Selected item info for the file-references drawer ─────────────────────
+  const selectedItem: GraphNode | GraphEdge | null = selected === null ? null
+    : selected.type === 'node'
+      ? (localGraph.nodes.find(n => n.id === selected.id) ?? null)
+      : (localGraph.edges[selected.idx] ?? null);
+
+  const selectedFiles: GraphFileRef[] = selectedItem?.files ?? [];
+
+  const selectedLabel = selected === null ? ''
+    : selected.type === 'node'
+      ? ((selectedItem as GraphNode | null)?.name ?? selected.id)
+      : (() => {
+          const e = selectedItem as GraphEdge | null;
+          return e ? `${e.source} → ${e.target}` : '';
+        })();
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const btnBase: React.CSSProperties = {
@@ -456,7 +528,7 @@ export function SystemView({ workspacePath, provider, model }: SystemViewProps) 
         <div style={{ flex: 1 }} />
 
         {view === 'graph' && (
-          <button style={btnBase} onClick={doAutoLayout} title="Re-run hierarchical layout">
+          <button style={btnBase} onClick={doAutoLayout} title="Re-run force-directed layout">
             ↺ Layout
           </button>
         )}
@@ -529,76 +601,160 @@ export function SystemView({ workspacePath, provider, model }: SystemViewProps) 
           />
         </div>
       ) : (
-        /* ── SVG graph canvas ─────────────────────────────────────────────── */
-        <svg
-          ref={svgRef}
-          style={{ flex: 1, background: 'var(--color-bg-canvas)', cursor: panState ? 'grabbing' : 'default' }}
-          onMouseDown={handleSvgMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
-        >
-          <defs>
-            {/* Forward arrowhead for directed edges */}
-            <marker id="arrow-dir" viewBox="0 0 10 10" refX="10" refY="5"
-              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 Z" fill={COL_DIRECTED} />
-            </marker>
-            {/* Forward arrowhead for bidirectional edges */}
-            <marker id="arrow-bidi" viewBox="0 0 10 10" refX="10" refY="5"
-              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 Z" fill={COL_BIDI} />
-            </marker>
-            {/* Reverse arrowhead (marker-start) for bidirectional edges.
-                orient="auto" keeps the body aligned along the line toward the target,
-                so the tip sits at the source node boundary pointing inward. */}
-            <marker id="arrow-bidi-rev" viewBox="0 0 10 10" refX="0" refY="5"
-              markerWidth="6" markerHeight="6" orient="auto">
-              <path d="M 10 0 L 0 5 L 10 10 Z" fill={COL_BIDI} />
-            </marker>
-          </defs>
+        /* ── SVG graph canvas + file-references drawer ────────────────────── */
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <svg
+            ref={svgRef}
+            style={{ flex: 1, background: 'var(--color-bg-canvas)', cursor: panState ? 'grabbing' : 'default' }}
+            onMouseDown={handleSvgMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+          >
+            <defs>
+              {/* Forward arrowhead for directed edges */}
+              <marker id="arrow-dir" viewBox="0 0 10 10" refX="10" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 Z" fill={COL_DIRECTED} />
+              </marker>
+              {/* Forward arrowhead for bidirectional edges */}
+              <marker id="arrow-bidi" viewBox="0 0 10 10" refX="10" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 Z" fill={COL_BIDI} />
+              </marker>
+              {/* Reverse arrowhead (marker-start) for bidirectional edges.
+                  orient="auto" keeps the body aligned along the line toward the target,
+                  so the tip sits at the source node boundary pointing inward. */}
+              <marker id="arrow-bidi-rev" viewBox="0 0 10 10" refX="0" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M 10 0 L 0 5 L 10 10 Z" fill={COL_BIDI} />
+              </marker>
+            </defs>
 
-          <g transform={`translate(${pan.x},${pan.y}) scale(${scale})`}>
-            {/* Edges first so nodes render on top */}
-            {localGraph.edges.map((e, i) => (
-              <EdgeSvg key={i} edge={e} posMap={posMap} />
-            ))}
-            {localGraph.nodes.map(n => (
-              <NodeSvg
-                key={n.id}
-                node={n}
-                pos={posMap[n.id] ?? { x: 0, y: 0 }}
-                isDragging={dragState?.id === n.id}
-                onMouseDown={ev => handleNodeMouseDown(ev, n.id)}
-              />
-            ))}
-          </g>
-
-          {/* Empty state overlay */}
-          {localGraph.nodes.length === 0 && (
-            <g transform="translate(0,0)">
-              <foreignObject x="0" y="0" width="100%" height="100%">
-                <div style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  justifyContent: 'center', height: '100%', gap: 10,
-                  color: 'var(--color-text-secondary)', textAlign: 'center', padding: '0 20px',
-                } as React.CSSProperties}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    strokeWidth="1.2" style={{ opacity: 0.35 }}>
-                    <circle cx="5"  cy="12" r="3" /><circle cx="19" cy="5"  r="3" />
-                    <circle cx="19" cy="19" r="3" />
-                    <line x1="8" y1="11" x2="16" y2="7" /><line x1="8" y1="13" x2="16" y2="17" />
-                  </svg>
-                  <div style={{ fontSize: 12 }}>No nodes yet</div>
-                  <div style={{ fontSize: 11, opacity: 0.7 }}>
-                    Switch to JSON view to add nodes and edges.
-                  </div>
-                </div>
-              </foreignObject>
+            <g transform={`translate(${pan.x},${pan.y}) scale(${scale})`}>
+              {/* Edges first so nodes render on top */}
+              {localGraph.edges.map((e, i) => (
+                <EdgeSvg key={i} edge={e} posMap={posMap}
+                  isSelected={selected?.type === 'edge' && selected.idx === i}
+                  onClick={() => setSelected(sel =>
+                    sel?.type === 'edge' && sel.idx === i ? null : { type: 'edge', idx: i }
+                  )}
+                />
+              ))}
+              {localGraph.nodes.map(n => (
+                <NodeSvg
+                  key={n.id}
+                  node={n}
+                  pos={posMap[n.id] ?? { x: 0, y: 0 }}
+                  isDragging={dragState?.id === n.id}
+                  isSelected={selected?.type === 'node' && selected.id === n.id}
+                  onMouseDown={ev => handleNodeMouseDown(ev, n.id)}
+                />
+              ))}
             </g>
+
+            {/* Empty state overlay */}
+            {localGraph.nodes.length === 0 && (
+              <g transform="translate(0,0)">
+                <foreignObject x="0" y="0" width="100%" height="100%">
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    justifyContent: 'center', height: '100%', gap: 10,
+                    color: 'var(--color-text-secondary)', textAlign: 'center', padding: '0 20px',
+                  } as React.CSSProperties}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="1.2" style={{ opacity: 0.35 }}>
+                      <circle cx="5"  cy="12" r="3" /><circle cx="19" cy="5"  r="3" />
+                      <circle cx="19" cy="19" r="3" />
+                      <line x1="8" y1="11" x2="16" y2="7" /><line x1="8" y1="13" x2="16" y2="17" />
+                    </svg>
+                    <div style={{ fontSize: 12 }}>No nodes yet</div>
+                    <div style={{ fontSize: 11, opacity: 0.7 }}>
+                      Switch to JSON view to add nodes and edges.
+                    </div>
+                  </div>
+                </foreignObject>
+              </g>
+            )}
+          </svg>
+
+          {/* ── File-references drawer ───────────────────────────────────── */}
+          {selected && selectedItem && (
+            <div style={{
+              borderTop: '1px solid var(--color-border)',
+              background: 'var(--color-bg-right-panel)',
+              flexShrink: 0,
+              maxHeight: 160,
+              display: 'flex',
+              flexDirection: 'column',
+            }}>
+              {/* Drawer header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '5px 10px',
+                borderBottom: selectedFiles.length ? '1px solid var(--color-border)' : 'none',
+                flexShrink: 0,
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-primary)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 6 }}>
+                  {selectedLabel}
+                </span>
+                <button
+                  onClick={() => setSelected(null)}
+                  title="Close"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--color-text-secondary)', fontSize: 14, lineHeight: 1,
+                    padding: '0 2px', flexShrink: 0 }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* File list */}
+              {selectedFiles.length === 0 ? (
+                <div style={{ padding: '6px 10px', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                  No file references
+                </div>
+              ) : (
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {selectedFiles.map((f, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleFileRefClick(f)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        width: '100%', padding: '4px 10px',
+                        background: 'none', border: 'none',
+                        cursor: onNavigateToLine ? 'pointer' : 'default',
+                        textAlign: 'left', fontSize: 11,
+                        color: 'var(--color-text-primary)',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                    >
+                      <span style={{ opacity: 0.6, fontSize: 12, flexShrink: 0 }}>📄</span>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', flex: 1,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {fileBasename(f.path)}
+                        {f.line != null && (
+                          <span style={{ color: 'var(--color-text-secondary)' }}>:{f.line}</span>
+                        )}
+                      </span>
+                      {f.label && (
+                        <span style={{ color: 'var(--color-text-secondary)', flexShrink: 0, fontSize: 10 }}>
+                          {f.label}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
-        </svg>
+        </div>
       )}
     </div>
   );

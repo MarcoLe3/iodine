@@ -122,7 +122,7 @@ export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOp
 
       {/* Tab content - keep all components mounted to preserve state */}
       <div style={{ flex: 1, display: activeTab === 'system' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
-        <SystemView workspacePath={workspacePath} provider={provider} model={model} />
+        <SystemView workspacePath={workspacePath} provider={provider} model={model} onNavigateToLine={onNavigateToLine} />
       </div>
 
       <div style={{ flex: 1, display: activeTab === 'build' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>

@@ -99,19 +99,35 @@ When you have finished exploring, your ENTIRE response must be a single raw JSON
 JSON schema (do not include x/y coordinates):
 {
   "nodes": [
-    { "id": "lowercase-id", "name": "Display Name", "subname": "optional subtitle", "color": "#rrggbb", "layer": 0 }
+    {
+      "id": "lowercase-id",
+      "name": "Display Name",
+      "subname": "optional subtitle",
+      "color": "#rrggbb",
+      "files": [
+        { "path": "relative/path/to/file.ts", "line": 1, "endLine": 50, "label": "entry point" }
+      ]
+    }
   ],
   "edges": [
-    { "source": "node-id", "target": "node-id", "type": "directed|bidirectional|undirected", "label": "optional" }
+    {
+      "source": "node-id",
+      "target": "node-id",
+      "type": "directed|bidirectional|undirected",
+      "label": "optional",
+      "files": [
+        { "path": "relative/path/to/file.ts", "line": 12, "endLine": 30, "label": "route handler" }
+      ]
+    }
   ]
 }
 
-Layer assignment (required — controls the vertical tier in the diagram):
-  0 — Clients / Frontend / Browser / Mobile app
-  1 — Gateways / Load balancers / CDN / Reverse proxy
-  2 — Application services / APIs / Backends
-  3 — Data stores / Databases / Caches / Message queues
-  4 — External services / Third-party APIs / Infrastructure
+File references (files array):
+  Each node and edge should include a "files" array listing the actual source files you read that implement or define that component or connection.
+  Use workspace-relative paths (e.g. "server/src/routes/api.ts", not absolute paths).
+  Include the most relevant line range if known (line = start line, endLine = end line, both 1-based).
+  Include a short "label" describing what that file section does.
+  Omit "files" only if no relevant file was found.
 
 Group every component into the tier that best matches its role.
 Edges should generally point downward (smaller layer → larger layer number).
