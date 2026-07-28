@@ -15,92 +15,70 @@ const COL_DIRECTED   = '#7ab0cc';
 const COL_BIDI       = '#c8a870';
 const COL_UNDIRECTED = '#6a7a8a';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Returns the point on the boundary of the rectangle centered at (tx,ty) that
- *  lies on the line from (fx,fy) → (tx,ty), offset inward by `pad` pixels. */
-function rectEdgePt(fx: number, fy: number, tx: number, ty: number, pad = 5) {
-  const hw = NW / 2 + pad, hh = NH / 2 + pad;
-  const dx = tx - fx, dy = ty - fy;
-  if (Math.abs(dx) + Math.abs(dy) < 0.1) return { x: tx, y: ty };
-  const cands: number[] = [];
-  if (Math.abs(dx) > 0.01) { cands.push((tx - hw - fx) / dx); cands.push((tx + hw - fx) / dx); }
-  if (Math.abs(dy) > 0.01) { cands.push((ty - hh - fy) / dy); cands.push((ty + hh - fy) / dy); }
-  let best = 1;
-  for (const t of cands) {
-    if (t <= 0 || t >= best) continue;
-    const x = fx + t * dx, y = fy + t * dy;
-    if (x >= tx - hw - 1 && x <= tx + hw + 1 && y >= ty - hh - 1 && y <= ty + hh + 1) best = t;
-  }
-  return { x: fx + best * dx, y: fy + best * dy };
-}
-
-/** Hierarchical layout. Groups nodes by their `layer` field (0=clients … 4=external).
- *  For nodes without an explicit layer, infers depth via BFS on directed edges.
- *  Each layer occupies a horizontal row; nodes within a row are evenly spread. */
+/** Force-directed layout (Fruchterman-Reingold).
+ *  Nodes repel each other; edges act as springs. Runs 400 iterations with
+ *  a cooling schedule and gentle gravity toward the canvas centre.
+ *  Naturally reduces edge crossings without imposing a rigid hierarchy. */
 function autoLayout(nodes: GraphNode[], edges: GraphEdge[]): Record<string, { x: number; y: number }> {
   if (!nodes.length) return {};
 
-  const layerMap = new Map<string, number>();
+  const CW = 900, CH = 640;   // virtual canvas size
+  const IDEAL = 230;           // ideal spring length (~1.7× node width)
+  const ITERS = 400;
 
-  // 1. Use explicit layer values where provided
-  for (const n of nodes) {
-    if (n.layer != null) layerMap.set(n.id, n.layer);
-  }
+  // Initialise in a circle so the simulation starts from a reasonable spread
+  const pos: Record<string, { x: number; y: number }> = {};
+  nodes.forEach((n, i) => {
+    const angle = (2 * Math.PI * i) / nodes.length;
+    const r = Math.min(CW, CH) * 0.30;
+    pos[n.id] = { x: CW / 2 + r * Math.cos(angle), y: CH / 2 + r * Math.sin(angle) };
+  });
 
-  // 2. Infer layers for remaining nodes via longest-path BFS on directed edges
-  const unplaced = nodes.filter(n => !layerMap.has(n.id));
-  if (unplaced.length) {
-    const ids = new Set(unplaced.map(n => n.id));
-    const dirEdges = edges.filter(e => e.type === 'directed' && ids.has(e.source) && ids.has(e.target));
-    const inDeg = new Map<string, number>();
-    for (const n of unplaced) inDeg.set(n.id, 0);
-    for (const e of dirEdges) inDeg.set(e.target, (inDeg.get(e.target) ?? 0) + 1);
+  for (let iter = 0; iter < ITERS; iter++) {
+    const temp = IDEAL * Math.max(0.02, 1 - iter / ITERS);
+    const disp: Record<string, { x: number; y: number }> = {};
+    for (const n of nodes) disp[n.id] = { x: 0, y: 0 };
 
-    const queue: string[] = [];
-    for (const [id, deg] of inDeg) {
-      if (deg === 0) { queue.push(id); layerMap.set(id, 0); }
-    }
-    while (queue.length) {
-      const id = queue.shift()!;
-      const cur = layerMap.get(id) ?? 0;
-      for (const e of dirEdges) {
-        if (e.source !== id) continue;
-        const next = cur + 1;
-        if (next > (layerMap.get(e.target) ?? -1)) {
-          layerMap.set(e.target, next);
-          queue.push(e.target);
-        }
+    // Repulsion between every pair of nodes
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i].id, b = nodes[j].id;
+        const dx = pos[b].x - pos[a].x, dy = pos[b].y - pos[a].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const f = (IDEAL * IDEAL) / dist;
+        disp[a].x -= f * dx / dist;  disp[a].y -= f * dy / dist;
+        disp[b].x += f * dx / dist;  disp[b].y += f * dy / dist;
       }
     }
-    // Any remaining (cycles, isolated) land on layer 0
-    for (const n of unplaced) {
-      if (!layerMap.has(n.id)) layerMap.set(n.id, 0);
+
+    // Attraction along edges (both directed and undirected)
+    for (const e of edges) {
+      const a = e.source, b = e.target;
+      if (!pos[a] || !pos[b]) continue;
+      const dx = pos[b].x - pos[a].x, dy = pos[b].y - pos[a].y;
+      const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+      const f = (dist * dist) / IDEAL;
+      disp[a].x += f * dx / dist;  disp[a].y += f * dy / dist;
+      disp[b].x -= f * dx / dist;  disp[b].y -= f * dy / dist;
+    }
+
+    // Apply displacement with temperature cap + weak gravity toward centre
+    for (const n of nodes) {
+      const fx = disp[n.id].x + (CW / 2 - pos[n.id].x) * 0.008;
+      const fy = disp[n.id].y + (CH / 2 - pos[n.id].y) * 0.008;
+      const mag = Math.sqrt(fx * fx + fy * fy);
+      if (mag > 0) {
+        const move = Math.min(mag, temp);
+        pos[n.id].x += (fx / mag) * move;
+        pos[n.id].y += (fy / mag) * move;
+      }
+      // Keep within canvas bounds
+      pos[n.id].x = Math.max(NW / 2 + 24, Math.min(CW - NW / 2 - 24, pos[n.id].x));
+      pos[n.id].y = Math.max(NH / 2 + 24, Math.min(CH - NH / 2 - 24, pos[n.id].y));
     }
   }
 
-  // 3. Group ids by layer and compute positions
-  const byLayer = new Map<number, string[]>();
-  for (const [id, layer] of layerMap) {
-    const arr = byLayer.get(layer) ?? [];
-    arr.push(id);
-    byLayer.set(layer, arr);
-  }
-
-  const layers = [...byLayer.keys()].sort((a, b) => a - b);
-  const LAYER_H = 150;  // vertical gap between layer centres
-  const NODE_W  = 210;  // horizontal gap between node centres
-  const CX      = 400;  // horizontal centre of canvas
-
-  const result: Record<string, { x: number; y: number }> = {};
-  layers.forEach((layer, li) => {
-    const ids = byLayer.get(layer)!;
-    const totalW = (ids.length - 1) * NODE_W;
-    ids.forEach((id, i) => {
-      result[id] = { x: CX - totalW / 2 + i * NODE_W, y: 100 + li * LAYER_H };
-    });
-  });
-  return result;
+  return pos;
 }
 
 /** Merge auto-layout positions into graph nodes. */
@@ -123,21 +101,43 @@ function EdgeSvg({ edge, posMap }: { edge: GraphEdge; posMap: PosMap }) {
   const src = posMap[edge.source], tgt = posMap[edge.target];
   if (!src || !tgt || edge.source === edge.target) return null;
 
-  const p1 = rectEdgePt(tgt.x, tgt.y, src.x, src.y);  // point on source boundary
-  const p2 = rectEdgePt(src.x, src.y, tgt.x, tgt.y);  // point on target boundary
-  const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
-
   const isUnd  = edge.type === 'undirected';
   const isBidi = edge.type === 'bidirectional';
   const isDir  = !isUnd && !isBidi;
   const color  = isBidi ? COL_BIDI : isUnd ? COL_UNDIRECTED : COL_DIRECTED;
   const markId = isBidi ? 'arrow-bidi' : 'arrow-dir';
 
+  // Orthogonal elbow routing: choose horizontal or vertical exit based on
+  // which axis has the greater separation between the two node centres.
+  const dx = tgt.x - src.x, dy = tgt.y - src.y;
+  const useHoriz = Math.abs(dx) >= Math.abs(dy);
+
+  let p1: { x: number; y: number }, p2: { x: number; y: number }, pathD: string;
+
+  if (useHoriz) {
+    const sign = dx >= 0 ? 1 : -1;
+    p1 = { x: src.x + sign * NW / 2, y: src.y };
+    p2 = { x: tgt.x - sign * NW / 2, y: tgt.y };
+    const midX = (p1.x + p2.x) / 2;
+    pathD = `M ${p1.x},${p1.y} H ${midX} V ${p2.y} H ${p2.x}`;
+  } else {
+    const sign = dy >= 0 ? 1 : -1;
+    p1 = { x: src.x, y: src.y + sign * NH / 2 };
+    p2 = { x: tgt.x, y: tgt.y - sign * NH / 2 };
+    const midY = (p1.y + p2.y) / 2;
+    pathD = `M ${p1.x},${p1.y} V ${midY} H ${p2.x} V ${p2.y}`;
+  }
+
+  const lx = (p1.x + p2.x) / 2, ly = (p1.y + p2.y) / 2;
+
   return (
     <g>
-      <line
-        x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-        stroke={color} strokeWidth={1.5}
+      <path
+        d={pathD}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="miter"
         strokeDasharray={isUnd ? '6,4' : isDir ? '12,8' : undefined}
         style={isDir ? { animation: 'edge-flow 0.7s linear infinite' } : undefined}
         markerEnd={!isUnd ? `url(#${markId})` : undefined}
@@ -147,9 +147,9 @@ function EdgeSvg({ edge, posMap }: { edge: GraphEdge; posMap: PosMap }) {
         const labelW = edge.label.length * 6.2 + 8;
         return (
           <>
-            <rect x={mx - labelW / 2} y={my - 8} width={labelW} height={15}
+            <rect x={lx - labelW / 2} y={ly - 8} width={labelW} height={15}
               fill="var(--color-bg-editor)" rx={3} opacity={0.85} />
-            <text x={mx} y={my + 3.5} textAnchor="middle" fill={color}
+            <text x={lx} y={ly + 3.5} textAnchor="middle" fill={color}
               fontSize={9} fontFamily="monospace" style={{ pointerEvents: 'none' }}>
               {edge.label}
             </text>
@@ -206,9 +206,9 @@ function NodeSvg({
 
 const SAMPLE_JSON = JSON.stringify({
   nodes: [
-    { id: 'client', name: 'Client',   subname: 'Browser',      color: '#1e5e2e', layer: 0 },
-    { id: 'api',    name: 'API',      subname: 'Express/3001', color: '#1e4e6e', layer: 1 },
-    { id: 'db',     name: 'Database', subname: 'PostgreSQL',   color: '#5e2e2e', layer: 2 },
+    { id: 'client', name: 'Client',   subname: 'Browser',      color: '#1e5e2e' },
+    { id: 'api',    name: 'API',      subname: 'Express/3001', color: '#1e4e6e' },
+    { id: 'db',     name: 'Database', subname: 'PostgreSQL',   color: '#5e2e2e' },
   ],
   edges: [
     { source: 'client', target: 'api', type: 'bidirectional', label: 'HTTP' },
