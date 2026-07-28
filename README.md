@@ -27,7 +27,7 @@ Iodine has reached the point where you can open its own repository inside Iodine
 
 ## Demo
 
-![Iodine IDE demo](images/demo.gif)
+<img src="images/demo.gif" alt="Iodine IDE demo" width="100%" />
 
 More demos on YouTube: [Demo 1](https://youtube.com/watch?v=4uRyc2Wuvy4) · [Demo 2](https://www.youtube.com/watch?v=SjOQjkT9GJM) · [Demo 3](https://www.youtube.com/watch?v=F2WjFGl0UhA)
 
