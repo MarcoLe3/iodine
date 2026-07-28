@@ -247,20 +247,27 @@ export function FileExplorer({
           flexShrink: 0,
         }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            color: 'var(--color-text-primary)',
-            textTransform: 'uppercase',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {workspacePath ? tree?.name ?? 'Explorer' : 'Explorer'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', minWidth: 0 }}>
+          <img
+            src="/logo.png"
+            alt=""
+            style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 2, flexShrink: 0 }}
+          />
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              color: 'var(--color-text-primary)',
+              textTransform: 'uppercase',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {workspacePath ? tree?.name ?? 'Explorer' : 'Explorer'}
+          </span>
+        </div>
         <div style={{ display: (workspacePath || localTree) && tree ? 'flex' : 'none', alignItems: 'center', gap: 2 }}>
           {/* New file / folder */}
           <div style={{ position: 'relative', display: 'flex' }}>
