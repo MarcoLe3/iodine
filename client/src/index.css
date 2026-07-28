@@ -136,6 +136,12 @@ input {
 .tutor-line-highlight { background: rgba(79, 193, 255, 0.12) !important; }
 .tutor-line-gutter    { background: #4fc1ff !important; width: 3px !important; margin-left: 9px !important; }
 
+/* System view — directed edge flow animation */
+@keyframes edge-flow {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -20; }
+}
+
 .git-added-glyph,
 .git-modified-glyph,
 .git-deleted-glyph,

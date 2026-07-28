@@ -25,26 +25,22 @@ Use it as-is, or fork it to build your own domain-specific developer tool.
 
 Iodine has reached the point where you can open its own repository inside Iodine and use the built-in Coding Assistant to continue developing it. Ask it to add a panel, wire a new API route, or refactor a component and it can read the relevant files, write the changes, run the build, and interpret the output — all without leaving the browser tab.
 
-## Demo Video
+## Demo
 
-For a visual demonstration of Iodine IDE in action, check out our demo videos on YouTube:
-- [Demo 1](https://youtube.com/watch?v=4uRyc2Wuvy4)
-- [Demo 2](https://www.youtube.com/watch?v=SjOQjkT9GJM)
-- [Demo 3](https://www.youtube.com/watch?v=F2WjFGl0UhA)
+![Iodine IDE demo](images/demo.gif)
+
+More demos on YouTube: [Demo 1](https://youtube.com/watch?v=4uRyc2Wuvy4) · [Demo 2](https://www.youtube.com/watch?v=SjOQjkT9GJM) · [Demo 3](https://www.youtube.com/watch?v=F2WjFGl0UhA)
 
 ## Screenshots
 
 ![Iodine IDE — Editor and Coding Assistant](images/screenshot_1.png)
-*Figure 1: Iodine IDE showcasing the main editor interface along with the AI-powered Coding Assistant in action.*
-
-![Iodine IDE — System View](images/screenshot_2.png)
-*Figure 2: System View depicting the interactive architecture graph generation feature.*
+*Iodine IDE showcasing the main editor interface along with the AI-powered Coding Assistant.*
 
 ![Iodine IDE - Tutorial Mode](images/screenshot_3.png)
-*Figure 3: Tutorial mode guiding the user where to edit*
+*Tutor mode guiding the user where to edit.*
 
 ![Iodine IDE - Preview Mode](images/screenshot_4.png)
-*Figure 4: Preview mode showing live website in action*
+*Preview mode showing live website in action.*
 
 ## Features
 

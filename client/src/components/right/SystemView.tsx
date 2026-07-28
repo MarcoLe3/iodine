@@ -129,6 +129,7 @@ function EdgeSvg({ edge, posMap }: { edge: GraphEdge; posMap: PosMap }) {
 
   const isUnd  = edge.type === 'undirected';
   const isBidi = edge.type === 'bidirectional';
+  const isDir  = !isUnd && !isBidi;
   const color  = isBidi ? COL_BIDI : isUnd ? COL_UNDIRECTED : COL_DIRECTED;
   const markId = isBidi ? 'arrow-bidi' : 'arrow-dir';
 
@@ -137,7 +138,8 @@ function EdgeSvg({ edge, posMap }: { edge: GraphEdge; posMap: PosMap }) {
       <line
         x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
         stroke={color} strokeWidth={1.5}
-        strokeDasharray={isUnd ? '6,4' : undefined}
+        strokeDasharray={isUnd ? '6,4' : isDir ? '12,8' : undefined}
+        style={isDir ? { animation: 'edge-flow 0.7s linear infinite' } : undefined}
         markerEnd={!isUnd ? `url(#${markId})` : undefined}
         markerStart={isBidi ? `url(#${markId}-rev)` : undefined}
       />
