@@ -1,6 +1,12 @@
-# Iodine — Few Drops of IDE Essentials
+<p align="center">
+  <img src="images/iodine_logo_2-preview.png" alt="Iodine" width="180" />
+</p>
 
-[Support me on PayPal](https://paypal.me/hwshin)
+<h1 align="center">Iodine — Few Drops of IDE Essentials</h1>
+
+<p align="center">
+  <a href="https://paypal.me/hwshin">Support me on PayPal</a>
+</p>
 
 ## About
 
