@@ -186,11 +186,29 @@ export function useSourceControl(workspacePath: string | null) {
     }
   };
 
+  const pull = async () => {
+    if (pullStatus === 'pulling') return;
+    setPullStatus('pulling');
+    setPullError('');
+    try {
+      await pullBranch();
+      setPullStatus('success');
+      await refresh();
+      setTimeout(() => setPullStatus(prev => prev === 'success' ? null : prev), 3000);
+    } catch (err: unknown) {
+      const msg = (err as Error).message;
+      setPullStatus('error');
+      setPullError(msg);
+      setTimeout(() => setPullStatus(prev => prev === 'error' ? null : prev), 6000);
+    }
+  };
+
   return {
     branch, staged, unstaged, commits, localBranches, remoteBranches,
     loaded, loading, commitMessage, setCommitMessage,
     pushStatus, pushError,
+    pullStatus, pullError,
     confirmDialog,
-    stage, unstage, stageAllChanges, discard, commit, checkout, checkoutCommit, push,
+    stage, unstage, stageAllChanges, discard, commit, checkout, checkoutCommit, push, pull,
   };
 }
