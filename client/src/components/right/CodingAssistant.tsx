@@ -224,10 +224,9 @@ function CommandApprovalBlock({
   );
 }
 
-function MessageBubble({ msg, isLast, providerLabel, sendApproval }: {
+function MessageBubble({ msg, isLast, sendApproval }: {
   msg: UIMessage;
   isLast: boolean;
-  providerLabel: string;
   sendApproval: (id: string, approved: boolean) => void;
 }) {
   if (msg.role === 'user') {
@@ -258,8 +257,9 @@ function MessageBubble({ msg, isLast, providerLabel, sendApproval }: {
 
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 4, fontWeight: 600 }}>
-        {providerLabel}
+      <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 4, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <img src="/logo.png" alt="Iodine" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+        Assistant
       </div>
       <div>
         {msg.blocks.map((block, i) => {
@@ -649,7 +649,7 @@ export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen
           </div>
         )}
         {uiMessages.map((msg, i) => (
-          <MessageBubble key={msg.id} msg={msg} isLast={i === uiMessages.length - 1} providerLabel={provider.label} sendApproval={sendApproval} />
+          <MessageBubble key={msg.id} msg={msg} isLast={i === uiMessages.length - 1} sendApproval={sendApproval} />
         ))}
       </div>
 
