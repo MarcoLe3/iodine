@@ -10,20 +10,27 @@
 
 ## About
 
-**Iodine** is an open-source, web-based IDE. It gives you a VS Code-style editing experience in the browser — file explorer, Monaco editor, git integration, integrated terminal, and a full AI coding assistant with Tutor Mode, AI Summary, Build Assistant, and System View — all built in, not bolted on.
+Most AI coding tools take a text editor and add a chat panel. Iodine asks a different question: **what would a development environment look like if you designed it from scratch, knowing AI exists?**
 
-Use it as-is, or fork it to build your own domain-specific developer tool.
+The answer turns out to be more intuitive than what we have today.
 
-### Why Iodine instead of forking VS Code?
+Open a file — the architecture diagram highlights the node that implements it, automatically. Ask the Coding Assistant a question — it already sees what's on your screen, no copy-paste needed. Hit **Generate** on System View — the AI reads your actual source files and builds a diagram where every node links back to the exact lines that define it. Toggle Tutor Mode — the AI walks through the codebase with you, opening files and highlighting lines, without touching anything. Open any file cold — AI Summary teaches you what it does, how it fits in, and what to watch out for.
 
-- **You own the shell** — VS Code's extension API lets you add functionality inside a sandbox. Iodine lets you change the layout, panels, and behaviour of the IDE itself.
-- **Web-native** — ships as a local web app with no Electron or desktop packaging required. Embed it, proxy it, or deploy it however you like.
-- **Readable stack** — React + Express + TypeScript with no framework magic. Every file does one thing and is easy to follow.
-- **AI-first** — the Coding Assistant, Tutor Mode, AI Summary, and Build Assistant are built in, not bolted on. Extend them or replace them with your own.
+None of these are chatbot features. They're a different way of working — one where the environment understands the code alongside you, rather than waiting to be asked.
 
-### Self-hosting milestone
+The IDE shell (Monaco editor, file explorer, git, terminal, tabs) is solid and familiar. But it's the scaffold, not the product.
 
-Iodine has reached the point where you can open its own repository inside Iodine and use the built-in Coding Assistant to continue developing it. Ask it to add a panel, wire a new API route, or refactor a component and it can read the relevant files, write the changes, run the build, and interpret the output — all without leaving the browser tab.
+### What this unlocks
+
+- **Architecture that follows the cursor** — switch files and System View selects the matching node. The diagram isn't documentation that drifts; it's generated from what's actually on disk.
+- **An AI that sees what you see** — the assistant automatically gets the lines currently visible in your editor as context, so you can say "what does this do?" and point at the screen.
+- **A real agent, not a chatbot** — the Coding Assistant reads files, writes code, searches the workspace, runs terminal commands (with your explicit approval), checks the build output, and continues from there.
+- **Learning built into the environment** — Tutor Mode and AI Summary make any unfamiliar codebase approachable without interrupting whoever wrote it.
+- **You stay in control** — every terminal command surfaces an approval card with the exact command and reason before anything runs.
+
+### Built to be forked
+
+The stack is React + Express + TypeScript with no framework magic. Change the layout, add panels, wire new backend capabilities — you own the IDE, not just an extension sandbox. Iodine has reached the point where its own repository is its own development environment: open it in Iodine, ask the assistant to add a feature, and it reads the files, writes the change, and runs the build without you leaving the tab.
 
 ## Demo
 
