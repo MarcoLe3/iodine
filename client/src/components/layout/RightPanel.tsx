@@ -94,23 +94,24 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
     return (
       <div
         style={{
-          padding: '8px 12px',
-          borderBottom: '1px solid var(--color-border)',
-          backgroundColor: 'var(--color-bg-secondary, #f3f3f3)',
-          fontSize: 12,
-          lineHeight: '1.5',
+          padding: '7px 12px',
+          borderBottom: '1px solid var(--color-border-callout)',
+          borderTop: '1px solid var(--color-border-callout)',
+          backgroundColor: 'var(--color-bg-callout)',
+          fontSize: 11.5,
+          lineHeight: '1.6',
           flexShrink: 0,
         }}
       >
-        <div style={{ color: 'var(--color-text-secondary)' }}>
+        <div style={{ color: 'var(--color-text-callout)' }}>
           <strong>Provider:</strong> {provider.label}
         </div>
-        <div style={{ color: 'var(--color-text-secondary)' }}>
+        <div style={{ color: 'var(--color-text-callout)' }}>
           <strong>Model:</strong> {modelLabel}
           {editableNote && <span dangerouslySetInnerHTML={{ __html: editableNote }} />}
         </div>
         {tabId === 'system' && (
-          <div style={{ marginTop: 4, color: 'var(--color-text-secondary)', fontStyle: 'italic', fontSize: 11 }}>
+          <div style={{ marginTop: 3, color: 'var(--color-text-callout)', opacity: 0.75, fontStyle: 'italic', fontSize: 10.5 }}>
             For best results use Claude Opus+ or GPT 5.5+
           </div>
         )}
