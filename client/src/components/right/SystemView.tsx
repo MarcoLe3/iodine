@@ -243,6 +243,8 @@ const SAMPLE_JSON = JSON.stringify({
 }, null, 2);
 
 export interface SystemViewHandle {
+  /** True when the graph has at least one node or edge. */
+  hasGraph: () => boolean;
   /** Reverse lookup by cursor position: find the best-matching node/edge by file + line.
    *  Score 3 = line within ref range, 2 = within 2 lines, 1 = file-only match.
    *  Returns true if a match was found. */
@@ -499,6 +501,8 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
 
   // ── Reverse lookup: editor position → node/edge ───────────────────────────
   useImperativeHandle(ref, () => ({
+    hasGraph: (): boolean => localGraph.nodes.length > 0 || localGraph.edges.length > 0,
+
     lookupByPosition: (absoluteFilePath: string, currentLine: number): boolean => {
       if (!localGraph.nodes.length && !localGraph.edges.length) return false;
 

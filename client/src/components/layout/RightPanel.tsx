@@ -41,13 +41,16 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
   useImperativeHandle(ref, () => ({
     lookupByPosition: (absoluteFilePath: string, line: number) => {
       const matched = systemViewRef.current?.lookupByPosition(absoluteFilePath, line) ?? false;
-      if (matched) setActiveTab('system');
+      if (matched && activeTab !== 'assistant') setActiveTab('system');
     },
     lookupByPath: (path: string) => {
-      const matched = systemViewRef.current?.lookupByPath(path) ?? false;
-      if (matched) setActiveTab('system');
+      if (!systemViewRef.current?.hasGraph()) return;
+      systemViewRef.current.lookupByPath(path);
+      // Surface System View when a graph exists — but never yank the user
+      // away from the Coding Assistant.
+      if (activeTab !== 'assistant') setActiveTab('system');
     },
-  }), []);
+  }), [activeTab]);
 
   const getModelLabel = (modelId: string): string => {
     for (const p of [provider]) {

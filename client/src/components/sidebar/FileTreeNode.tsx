@@ -613,6 +613,7 @@ export function FileTreeNode({
               onDirSummary={onDirSummary}
               onFileSummary={onFileSummary}
               onAddToContext={onAddToContext}
+              onNodeSelect={onNodeSelect}
             />
           ))}
         </>
