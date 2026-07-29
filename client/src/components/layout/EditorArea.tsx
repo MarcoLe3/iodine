@@ -29,6 +29,8 @@ interface EditorAreaProps {
   summaryRequestPath?: string | null;
   /** Called once the summary request has been consumed. */
   onSummaryHandled?: () => void;
+  /** Called when the user clicks a line in the editor (for reverse System View lookup). */
+  onCursorChange?: (filePath: string, line: number) => void;
 }
 
 export interface EditorAreaHandle {
@@ -69,7 +71,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onCursorChange }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl) ? null : (activeFile?.path ?? null),
@@ -520,6 +522,14 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   if (nav && nav.filePath === activeFile.path) {
                     pendingNavigationRef.current = null;
                     applyNavigation(editor, nav.line, nav.endLine);
+                  }
+                  // Reverse System View lookup: fire on mouse click only (not on every keystroke)
+                  if (onCursorChange && activeFilePath) {
+                    editor.onMouseDown(e => {
+                      if (e.target.position) {
+                        onCursorChange(activeFilePath, e.target.position.lineNumber);
+                      }
+                    });
                   }
                 }}
                 onAfterRevert={() => {

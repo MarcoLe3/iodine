@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, MouseEvent as RMouseEvent, WheelEvent as RWheelEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useImperativeHandle, forwardRef, MouseEvent as RMouseEvent, WheelEvent as RWheelEvent } from 'react';
 import Editor from '@monaco-editor/react';
 import { useSystemGraph } from '../../hooks/useSystemGraph';
 import type { SystemGraph, GraphNode, GraphEdge, GraphFileRef } from '../../api/files';
@@ -242,6 +242,13 @@ const SAMPLE_JSON = JSON.stringify({
   ],
 }, null, 2);
 
+export interface SystemViewHandle {
+  /** Reverse lookup: given an absolute file path and line number, find the best-matching
+   *  node or edge in the system graph, select it, and zoom to it.
+   *  Returns true if a match was found. */
+  lookupByPosition: (absoluteFilePath: string, line: number) => boolean;
+}
+
 interface SystemViewProps {
   workspacePath: string | null;
   provider: Provider;
@@ -253,7 +260,8 @@ type Selected = { type: 'node'; id: string } | { type: 'edge'; idx: number } | n
 
 const fileBasename = (p: string) => p.split('/').pop() ?? p;
 
-export function SystemView({ workspacePath, provider, model, onNavigateToLine }: SystemViewProps) {
+export const SystemView = forwardRef<SystemViewHandle, SystemViewProps>(
+function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
   const { graph: savedGraph, loaded, saving, saveError, save } = useSystemGraph(workspacePath);
 
   const [localGraph, setLocalGraph] = useState<SystemGraph>({ nodes: [], edges: [] });
@@ -478,9 +486,85 @@ export function SystemView({ workspacePath, provider, model, onNavigateToLine }:
     onNavigateToLine(filePath, f.line ?? 1, f.endLine);
   }, [onNavigateToLine, workspacePath]);
 
-  // ── Build posMap for rendering ─────────────────────────────────────────────
-  const posMap: PosMap = {};
-  for (const n of localGraph.nodes) posMap[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
+  // ── Build posMap for rendering (memoised so lookupByPosition can close over it) ──
+  const posMap = useMemo<PosMap>(() => {
+    const m: PosMap = {};
+    for (const n of localGraph.nodes) m[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
+    return m;
+  }, [localGraph.nodes]);
+
+  // ── Reverse lookup: editor position → node/edge ───────────────────────────
+  useImperativeHandle(ref, () => ({
+    lookupByPosition: (absoluteFilePath: string, currentLine: number): boolean => {
+      if (!localGraph.nodes.length && !localGraph.edges.length) return false;
+
+      // Score how well a set of file refs matches the current cursor position.
+      // 3 = line is within the ref's range  (narrowest)
+      // 2 = line is within 2 lines of the ref's start line
+      // 1 = file path matches but no useful line info  (broadest)
+      // 0 = no match
+      const scoreRefs = (files: GraphFileRef[] | undefined): number => {
+        if (!files?.length) return 0;
+        let best = 0;
+        for (const f of files) {
+          const refAbs = f.path.startsWith('/') ? f.path : `${workspacePath ?? ''}/${f.path}`;
+          const pathOk = absoluteFilePath === refAbs || absoluteFilePath.endsWith('/' + f.path);
+          if (!pathOk) continue;
+          if (f.line != null) {
+            const end = f.endLine ?? f.line;
+            if (currentLine >= f.line && currentLine <= end) { best = Math.max(best, 3); continue; }
+            if (Math.abs(currentLine - f.line) <= 2)         { best = Math.max(best, 2); continue; }
+          }
+          best = Math.max(best, 1);
+        }
+        return best;
+      };
+
+      type Hit = { type: 'node'; id: string; score: number } | { type: 'edge'; idx: number; score: number };
+      const hits: Hit[] = [];
+
+      for (const node of localGraph.nodes) {
+        const s = scoreRefs(node.files);
+        if (s > 0) hits.push({ type: 'node', id: node.id, score: s });
+      }
+      for (let i = 0; i < localGraph.edges.length; i++) {
+        const s = scoreRefs(localGraph.edges[i].files);
+        if (s > 0) hits.push({ type: 'edge', idx: i, score: s });
+      }
+
+      if (!hits.length) return false;
+
+      hits.sort((a, b) => b.score - a.score);
+      const best = hits[0];
+      setSelected(best.type === 'node' ? { type: 'node', id: best.id } : { type: 'edge', idx: best.idx });
+
+      // Pan + zoom to the matched item
+      const TARGET_SCALE = 1.2;
+      const svgEl = svgRef.current;
+      const cx = svgEl && svgEl.clientWidth  > 0 ? svgEl.clientWidth  / 2 : 450;
+      const cy = svgEl && svgEl.clientHeight > 0 ? svgEl.clientHeight / 2 : 320;
+
+      if (best.type === 'node') {
+        const pos = posMap[best.id];
+        if (pos) {
+          setScale(TARGET_SCALE);
+          setPan({ x: cx - pos.x * TARGET_SCALE, y: cy - pos.y * TARGET_SCALE });
+        }
+      } else {
+        const edge = localGraph.edges[best.idx];
+        if (edge) {
+          const src = posMap[edge.source], tgt = posMap[edge.target];
+          if (src && tgt) {
+            const mx = (src.x + tgt.x) / 2, my = (src.y + tgt.y) / 2;
+            setScale(TARGET_SCALE);
+            setPan({ x: cx - mx * TARGET_SCALE, y: cy - my * TARGET_SCALE });
+          }
+        }
+      }
+
+      return true;
+    },
+  }), [localGraph, posMap, workspacePath]);
 
   // ── Selected item info for the file-references drawer ─────────────────────
   const selectedItem: GraphNode | GraphEdge | null = selected === null ? null
@@ -758,4 +842,5 @@ export function SystemView({ workspacePath, provider, model, onNavigateToLine }:
       )}
     </div>
   );
-}
+});
+SystemView.displayName = 'SystemView';

@@ -3,7 +3,7 @@ import { ActivityBar } from './ActivityBar';
 import { MenuBar } from './MenuBar';
 import { Sidebar } from './Sidebar';
 import { EditorArea, EditorAreaHandle } from './EditorArea';
-import { RightPanel } from './RightPanel';
+import { RightPanel, RightPanelHandle } from './RightPanel';
 import { ResizeDivider } from './ResizeDivider';
 import { BottomTray, BottomTrayHandle } from '../bottom/BottomTray';
 import { useOpenFiles, sortOpenFilesByStructure } from '../../hooks/useOpenFiles';
@@ -61,6 +61,11 @@ export function WorkbenchLayout() {
 
   const editorAreaRef = useRef<EditorAreaHandle>(null);
   const getEditorContext = useCallback(() => editorAreaRef.current?.getVisibleContext() ?? null, []);
+
+  const rightPanelRef = useRef<RightPanelHandle>(null);
+  const handleCursorChange = useCallback((filePath: string, line: number) => {
+    rightPanelRef.current?.lookupByPosition(filePath, line);
+  }, []);
 
   const bottomTrayRef = useRef<BottomTrayHandle>(null);
   const runCommandInTerminal = useCallback((cmd: string) => {
@@ -317,6 +322,7 @@ export function WorkbenchLayout() {
             model={model}
             summaryRequestPath={summaryRequestPath}
             onSummaryHandled={() => setSummaryRequestPath(null)}
+            onCursorChange={handleCursorChange}
           />
 
           <ResizeDivider
@@ -328,6 +334,7 @@ export function WorkbenchLayout() {
           />
 
           <RightPanel
+            ref={rightPanelRef}
             width={rightPanelWidth}
             workspacePath={workspacePath}
             activeFilePath={activeFilePath}

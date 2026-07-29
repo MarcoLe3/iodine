@@ -1,11 +1,17 @@
-import { useState } from 'react';
+import { useState, useRef, useImperativeHandle, forwardRef } from 'react';
 import { CodingAssistant } from '../right/CodingAssistant';
 import { SystemView } from '../right/SystemView';
+import type { SystemViewHandle } from '../right/SystemView';
 import { BuildAssistant } from '../right/BuildAssistant';
 import type { Provider } from '../../providers';
 import type { FileNode } from '../../types';
 
 type RightTab = 'assistant' | 'build' | 'system';
+
+export interface RightPanelHandle {
+  /** Forward a cursor position to the System View for reverse lookup. */
+  lookupByPosition: (absoluteFilePath: string, line: number) => void;
+}
 
 interface RightPanelProps {
   width: number;
@@ -25,8 +31,17 @@ interface RightPanelProps {
   onOpenUrl?: (url: string) => void;
 }
 
-export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl }: RightPanelProps) {
+export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
+function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
+  const systemViewRef = useRef<SystemViewHandle>(null);
+
+  useImperativeHandle(ref, () => ({
+    lookupByPosition: (absoluteFilePath: string, line: number) => {
+      const matched = systemViewRef.current?.lookupByPosition(absoluteFilePath, line) ?? false;
+      if (matched) setActiveTab('system');
+    },
+  }), []);
 
   const getModelLabel = (modelId: string): string => {
     for (const p of [provider]) {
@@ -122,7 +137,7 @@ export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOp
 
       {/* Tab content - keep all components mounted to preserve state */}
       <div style={{ flex: 1, display: activeTab === 'system' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
-        <SystemView workspacePath={workspacePath} provider={provider} model={model} onNavigateToLine={onNavigateToLine} />
+        <SystemView ref={systemViewRef} workspacePath={workspacePath} provider={provider} model={model} onNavigateToLine={onNavigateToLine} />
       </div>
 
       <div style={{ flex: 1, display: activeTab === 'build' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
@@ -137,4 +152,5 @@ export function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOp
       </div>
     </div>
   );
-}
+});
+RightPanel.displayName = 'RightPanel';

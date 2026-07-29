@@ -191,6 +191,25 @@ When a file becomes active in the editor (opened by click, Tutor Mode navigation
 
 **Key design:** Passing `activeFilePath` as `expandToPath` means every tab switch triggers a one-way expand (never collapse). The `forceExpand` flag in `toggleExpand` ensures the expand effect is idempotent and cannot fight user-initiated collapses.
 
+## System View — Reverse Lookup (Editor → Diagram)
+
+When a system graph is loaded and the user **clicks any line in the editor**, the IDE automatically finds the best-matching node or edge in the diagram, selects it, switches the right panel to the System View tab, and zooms the canvas to centre on the match.
+
+Match priority (narrowest first):
+1. The clicked line falls **within** a file ref's `line`–`endLine` range → score 3
+2. The clicked line is **within 2 lines** of a ref's `line` → score 2
+3. The current **file path matches** a ref but no line info is available → score 1
+If no match at any score, selection is unchanged.
+
+| File | Role |
+|------|------|
+| `client/src/components/right/SystemView.tsx` | Wrapped in `forwardRef`. Exports `SystemViewHandle` with `lookupByPosition(absoluteFilePath, line): boolean`. Path matching normalises workspace-relative ref paths to absolute before comparing. On a successful match, calls `setSelected` then `setPan`/`setScale` (zoom 1.2×) to centre on the node or edge midpoint. Uses `svgRef.current.clientWidth/Height` for the viewport centre; falls back to `450 × 320` if the SVG is off-screen. |
+| `client/src/components/layout/RightPanel.tsx` | Wrapped in `forwardRef`. Exports `RightPanelHandle` with `lookupByPosition`. Holds `systemViewRef`. When SystemView returns `true`, also calls `setActiveTab('system')` to surface the diagram. |
+| `client/src/components/layout/EditorArea.tsx` | Accepts `onCursorChange?(filePath, line)` prop. In `onEditorMount`, registers `editor.onMouseDown` — fires only on mouse clicks (not on every keystroke), avoiding excessive lookups. Listener is automatically disposed when the editor unmounts on file switch (editors are keyed by path). |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Holds `rightPanelRef`. `handleCursorChange(filePath, line)` delegates to `rightPanelRef.current?.lookupByPosition`. Passed to `EditorArea` as `onCursorChange`. |
+
+**Key design:** using `onMouseDown` instead of `onDidChangeCursorPosition` means only intentional clicks trigger the lookup — typing, undo/redo, and arrow-key navigation do not fire it.
+
 ## System View — Node/Edge Click → File References
 
 Clicking a node or edge in the System View graph highlights it and opens a bottom drawer listing the source files associated with that element. Clicking a file entry navigates the editor to the specified line (same mechanism as Tutor Mode's `open_file`).
