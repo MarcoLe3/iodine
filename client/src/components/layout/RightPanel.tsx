@@ -56,7 +56,7 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
   const renderModelInfo = (tabId: RightTab) => {
     const isEditable = tabId === 'assistant';
     const editableNote = isEditable ? ' <i style="color: var(--color-text-secondary);">Set in Coding Assistant</i>' : '';
-    
+
     return (
       <div
         style={{
@@ -75,6 +75,11 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
           <strong>Model:</strong> {modelLabel}
           {editableNote && <span dangerouslySetInnerHTML={{ __html: editableNote }} />}
         </div>
+        {tabId === 'system' && (
+          <div style={{ marginTop: 4, color: 'var(--color-text-secondary)', fontStyle: 'italic', fontSize: 11 }}>
+            For best results use Claude Opus or GPT-4.5+
+          </div>
+        )}
       </div>
     );
   };
