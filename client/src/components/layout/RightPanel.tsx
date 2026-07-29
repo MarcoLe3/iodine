@@ -111,7 +111,7 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
         </div>
         {tabId === 'system' && (
           <div style={{ marginTop: 4, color: 'var(--color-text-secondary)', fontStyle: 'italic', fontSize: 11 }}>
-            For best results use Claude Opus or GPT-4.5+
+            For best results use Claude Opus+ or GPT 5.5+
           </div>
         )}
       </div>
