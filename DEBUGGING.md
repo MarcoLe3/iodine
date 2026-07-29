@@ -350,17 +350,9 @@ function walkDir(root: string, base: string = root): string[] {
 
 ## Terminal `posix_spawnp failed`
 
-### Symptom
+Three separate root causes produced this error, each fixed independently.
 
-Opening the terminal tray showed:
-
-```
-Failed to start terminal: Error: posix_spawnp failed.
-Shell: /bin/zsh
-Cwd: /some/path/that/no/longer/exists
-```
-
-### Root Cause
+### Root Cause 1 — Invalid `cwd` (missing directory)
 
 `terminal.ts` computed the working directory as:
 
@@ -379,10 +371,8 @@ surfaces as `Error: posix_spawnp failed` with no further detail.
 The shell binary itself was irrelevant — the error occurs before the shell is even
 loaded, during the fork/chdir phase.
 
-### Fix
-
-Validate each `cwd` candidate with `existsSync` before using it, falling through to
-the next candidate if unavailable:
+**Fix:** Validate each `cwd` candidate with `existsSync` before using it, falling through
+to the next candidate if unavailable:
 
 ```typescript
 // server/src/terminal.ts
@@ -393,6 +383,60 @@ const cwd = cwdCandidates.find(c => existsSync(c)) ?? os.homedir();
 Also made the WebSocket URL in `TerminalPanel.tsx` dynamic (protocol + host derived from
 `window.location`) instead of hardcoded to `ws://localhost:3001`, so terminals work
 correctly in production builds served from non-localhost origins.
+
+### Root Cause 2 — Orphaned PTY children from `tsx watch` restarts
+
+`tsx watch` monitors server source files and sends SIGTERM to the Node process on each
+file save, then immediately relaunches. When the server process exited without explicitly
+killing its `node-pty` children, those child processes stayed alive and kept their
+pseudoterminal file descriptors open. After several file-save/restart cycles, the
+accumulated leaked fds caused the OS to return `EAGAIN` (too many open files) when
+`posix_spawnp` tried to fork a new PTY — surfaced as `posix_spawnp failed`.
+
+**Fix:** Track all active PTY instances in a module-level `Set` and register
+`SIGTERM`/`SIGINT`/`exit` handlers to SIGKILL them all before the process exits:
+
+```typescript
+const activePtys = new Set<ReturnType<typeof pty.spawn>>();
+
+function killAllPtys() {
+  for (const p of activePtys) {
+    try { p.kill('SIGKILL'); } catch { /* already gone */ }
+  }
+  activePtys.clear();
+}
+
+process.once('SIGTERM', () => { killAllPtys(); process.exit(0); });
+process.once('SIGINT',  () => { killAllPtys(); process.exit(0); });
+process.on('exit',      () => { killAllPtys(); });
+```
+
+PTY instances are also removed from the set in both `ptyProc.onExit` and `ws.on('close')`
+so the set stays accurate regardless of which side closes first.
+
+### Root Cause 3 — Transient `EAGAIN` on spawn (race with restarting server)
+
+Even with the SIGTERM handler in place, there is a brief window during `tsx watch`
+restarts where the old process's fds are not yet fully released and the new process
+tries to spawn a PTY. This produces a transient `posix_spawnp failed` if the user opens
+a terminal tab immediately after a file-save reload.
+
+**Fix:** Wrap the `pty.spawn()` call in a retry helper that waits 250 ms and tries once
+more on any spawn error:
+
+```typescript
+async function spawnWithRetry(shell, args, opts) {
+  try {
+    return pty.spawn(shell, args, opts);
+  } catch {
+    await new Promise(r => setTimeout(r, 250));
+    return pty.spawn(shell, args, opts);
+  }
+}
+```
+
+A `MAX_TERMINALS = 20` cap was also added: if 20 PTYs are already open the WebSocket is
+rejected immediately with a human-readable message, preventing runaway resource use.
 
 ---
 
@@ -514,3 +558,58 @@ onNavigateToLineRef.current?.(filePath, line, endLine);
 ```
 
 This is the same pattern used for `filePathRef`/`contentRef` in `useFileDiff.ts` — stable callbacks that always read the latest value without being in the `useCallback` dependency array.
+
+---
+
+## System View Active-File Chip — Node Not Highlighted After Tab Switch
+
+### Symptom
+
+Clicking the `◎ NodeName` chip in the Coding Assistant input area switched the right
+panel to System View, but no node was visually selected or centred in the diagram.
+
+### Root Cause — `clientWidth` is 0 when the SVG is hidden
+
+`SystemView` is always mounted (to preserve state) but hidden with `display: none` when
+not the active tab. A hidden element returns `clientWidth === 0`.
+
+The chip click called `handleOpenNode` in `RightPanel`, which set the tab and then
+immediately tried to pan the SVG. If the pan ran before the DOM updated:
+
+```typescript
+const viewW = svgRef.current?.clientWidth ?? 900;  // 0 ?? 900  →  0  (not 900!)
+// setPan becomes: { x: -node.x * 1.2, y: -node.y * 1.2 }
+// → node panned off-screen to top-left corner
+```
+
+`??` only substitutes for `null`/`undefined`, not `0`.
+
+### Fix — Two-step select + focus with `flushSync`
+
+Split the operation into two methods on `SystemViewHandle`:
+
+- **`selectByPath(path)`** — updates `selected` state, reads no DOM dimensions, safe
+  to call while SVG is hidden.
+- **`focusSelected()`** — reads live `clientWidth`/`clientHeight` and pans. Only called
+  after the tab is visible.
+
+`RightPanel.handleOpenNode` uses `flushSync` to commit the tab switch synchronously
+before reading dimensions:
+
+```typescript
+const handleOpenNode = useCallback(() => {
+  flushSync(() => setActiveTab('system'));   // DOM updated synchronously
+  systemViewRef.current?.focusSelected();   // clientWidth is now non-zero
+}, []);
+```
+
+**Zero-guard the dimension fallback** (`SystemView.tsx`):
+
+```typescript
+const svgEl = svgRef.current;
+const cx = svgEl && svgEl.clientWidth  > 0 ? svgEl.clientWidth  / 2 : 450;
+const cy = svgEl && svgEl.clientHeight > 0 ? svgEl.clientHeight / 2 : 320;
+```
+
+The passive sync path (`syncActiveFile` → `selectByPath`) never reads dimensions,
+so it is safe to call at any time including while the SVG is hidden.

@@ -243,6 +243,36 @@ Each terminal tab opens a WebSocket to `ws://localhost:3001/terminal?cwd=…&cmd
 
 **Shell selection:** `process.env.SHELL` → `/bin/zsh` → `/bin/bash` → `/bin/sh`, with `existsSync` validation at each step.
 
+## System View — Active File Chip
+
+When a System View graph is loaded, switching editor tabs automatically highlights the matching architecture node in the diagram *and* surfaces a `◎ NodeName` chip at the top of the Coding Assistant input area. Clicking the chip switches to System View and pans to the selected node.
+
+**Flow:**
+```
+activeFilePath changes (editor tab switch)
+  → WorkbenchLayout useEffect → rightPanelRef.current?.syncActiveFile(path)
+  → RightPanel.syncActiveFile → systemViewRef.current?.selectByPath(path)
+      → scores file refs, selects best match, returns node name (or null)
+  → WorkbenchLayout sets activeSystemNode state
+  → activeSystemNode threaded to RightPanel → CodingAssistant
+  → chip renders above textarea when activeSystemNode is non-null
+  → user clicks chip → onOpenNode(activeSystemNode)
+      → RightPanel.handleOpenNode:
+          flushSync(() => setActiveTab('system'))   ← synchronous tab switch
+          systemViewRef.current?.focusSelected()    ← pans with live dimensions
+```
+
+| File | Role |
+|------|------|
+| `client/src/components/right/SystemView.tsx` | `SystemViewHandle.selectByPath` returns `string \| null` (matched node/edge name) so callers know which node matched. `handleGenerate` returns `SystemGraph \| null` (used internally). |
+| `client/src/components/layout/RightPanel.tsx` | `syncActiveFile` returns `string \| null` (forwarded from `selectByPath`). `handleOpenNode` uses `flushSync` + `focusSelected`. `activeSystemNode` prop is threaded to `CodingAssistant`. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | `activeSystemNode: string \| null` state is updated by `syncActiveFile`'s return value on every `activeFilePath` change. Passed to `RightPanel`. |
+| `client/src/components/right/CodingAssistant.tsx` | Accepts `onOpenNode` and `activeSystemNode` props. Shows a `◎ NodeName` chip above the textarea when `activeSystemNode` is non-null. |
+
+**Key design decisions:**
+- **Two-step select+focus:** `selectByPath` (no DOM reads, safe while SVG is `display:none`) + `focusSelected` (reads live `clientWidth`/`clientHeight` after `flushSync` makes the tab visible). Avoids the zero-dimension bug from panning a hidden SVG.
+- `activeSystemNode` flows through component props so the chip appears without touching the message history.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.

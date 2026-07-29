@@ -253,6 +253,13 @@ export interface SystemViewHandle {
    *  Score 2 = exact file match, 1 = file is inside the given folder.
    *  Returns true if a match was found. */
   lookupByPath: (path: string) => boolean;
+  /** Like lookupByPath but only updates the selection — no pan/zoom. Safe to call
+   *  while the SVG is hidden (display:none) since it doesn't read clientWidth.
+   *  Returns the matched node/edge name, or null if nothing matched. */
+  selectByPath: (path: string) => string | null;
+  /** Pan/zoom to the currently selected node using the SVG's live dimensions.
+   *  Must be called while the SVG is visible so clientWidth is non-zero. */
+  focusSelected: () => void;
 }
 
 interface SystemViewProps {
@@ -411,12 +418,13 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
   };
 
   // ── Generate graph by exploring the workspace ─────────────────────────────
-  const handleGenerate = useCallback(async () => {
-    if (generating || !workspacePath) return;
+  const handleGenerate = useCallback(async (): Promise<SystemGraph | null> => {
+    if (generating || !workspacePath) return null;
     setGenerating(true);
     setGenActivity('Starting…');
     setJsonError(null);
     let accumulated = '';
+    let result: SystemGraph | null = null;
 
     try {
       const resp = await fetch(`${API_BASE}/api/system-graph/generate`, {
@@ -469,6 +477,7 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
               setView('graph');
               setDirty(true);
               setJsonError(null);
+              result = g;
             } catch (e) {
               setJsonError(`Generated JSON is invalid: ${(e as Error).message}`);
             }
@@ -483,6 +492,7 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
       setGenerating(false);
       setGenActivity('');
     }
+    return result;
   }, [generating, workspacePath, model, provider]);
 
   // ── File reference navigation ──────────────────────────────────────────────
@@ -627,7 +637,63 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
 
       return true;
     },
-  }), [localGraph, posMap, workspacePath]);
+
+    selectByPath: (path: string): string | null => {
+      if (!localGraph.nodes.length && !localGraph.edges.length) return null;
+      const scoreRefs = (files: GraphFileRef[] | undefined): number => {
+        if (!files?.length) return 0;
+        let best = 0;
+        for (const f of files) {
+          const refAbs = f.path.startsWith('/') ? f.path : `${workspacePath ?? ''}/${f.path}`;
+          if (refAbs === path || path.endsWith('/' + f.path)) { best = Math.max(best, 2); continue; }
+          if (refAbs.startsWith(path + '/'))                  { best = Math.max(best, 1); continue; }
+        }
+        return best;
+      };
+      type Hit = { type: 'node'; id: string; score: number } | { type: 'edge'; idx: number; score: number };
+      const hits: Hit[] = [];
+      for (const node of localGraph.nodes) {
+        const s = scoreRefs(node.files);
+        if (s > 0) hits.push({ type: 'node', id: node.id, score: s });
+      }
+      for (let i = 0; i < localGraph.edges.length; i++) {
+        const s = scoreRefs(localGraph.edges[i].files);
+        if (s > 0) hits.push({ type: 'edge', idx: i, score: s });
+      }
+      if (!hits.length) return null;
+      hits.sort((a, b) => b.score - a.score);
+      const best = hits[0];
+      setSelected(best.type === 'node' ? { type: 'node', id: best.id } : { type: 'edge', idx: best.idx });
+      if (best.type === 'node') {
+        return localGraph.nodes.find(n => n.id === best.id)?.name ?? null;
+      } else {
+        const edge = localGraph.edges[best.idx];
+        return edge?.label || null;
+      }
+    },
+
+    focusSelected: (): void => {
+      if (!selected) return;
+      const svgEl = svgRef.current;
+      const cx = svgEl && svgEl.clientWidth  > 0 ? svgEl.clientWidth  / 2 : 450;
+      const cy = svgEl && svgEl.clientHeight > 0 ? svgEl.clientHeight / 2 : 320;
+      const TARGET_SCALE = 1.2;
+      if (selected.type === 'node') {
+        const pos = posMap[selected.id];
+        if (pos) { setScale(TARGET_SCALE); setPan({ x: cx - pos.x * TARGET_SCALE, y: cy - pos.y * TARGET_SCALE }); }
+      } else {
+        const edge = localGraph.edges[selected.idx];
+        if (edge) {
+          const src = posMap[edge.source], tgt = posMap[edge.target];
+          if (src && tgt) {
+            const mx = (src.x + tgt.x) / 2, my = (src.y + tgt.y) / 2;
+            setScale(TARGET_SCALE); setPan({ x: cx - mx * TARGET_SCALE, y: cy - my * TARGET_SCALE });
+          }
+        }
+      }
+    },
+
+  }), [localGraph, posMap, workspacePath, handleGenerate, selected]);
 
   // ── Selected item info for the file-references drawer ─────────────────────
   const selectedItem: GraphNode | GraphEdge | null = selected === null ? null

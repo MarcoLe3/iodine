@@ -62,6 +62,8 @@ export function WorkbenchLayout() {
   const editorAreaRef = useRef<EditorAreaHandle>(null);
   const getEditorContext = useCallback(() => editorAreaRef.current?.getVisibleContext() ?? null, []);
 
+  const [activeSystemNode, setActiveSystemNode] = useState<string | null>(null);
+
   const rightPanelRef = useRef<RightPanelHandle>(null);
   const handleNodeSelect = useCallback((node: FileNode) => {
     rightPanelRef.current?.lookupByPath(node.path);
@@ -90,6 +92,13 @@ export function WorkbenchLayout() {
   } = useOpenFiles();
 
   useFileWatcher(workspacePath, refreshFile);
+
+  // Keep System View in sync with the active editor file.
+  // Also propagate the matched node name so CodingAssistant can show a navigation chip.
+  useEffect(() => {
+    const matched = rightPanelRef.current?.syncActiveFile(activeFilePath);
+    setActiveSystemNode(matched ?? null);
+  }, [activeFilePath]);
 
   /** Open a URL as an iframe tab in the editor area. */
   const handleOpenUrl = useCallback((url: string) => {
@@ -350,6 +359,7 @@ export function WorkbenchLayout() {
             onClearContextNodes={handleClearContextNodes}
             onNavigateToLine={handleNavigateToLine}
             onOpenUrl={handleOpenUrl}
+            activeSystemNode={activeSystemNode}
           />
         </div>
 

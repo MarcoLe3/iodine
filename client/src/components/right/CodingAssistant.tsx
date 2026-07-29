@@ -324,9 +324,11 @@ interface CodingAssistantProps {
   onRemoveContextNode: (path: string) => void;
   onClearContextNodes: () => void;
   onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
+  onOpenNode?: (nodeName: string, nodeId?: string) => void;
+  activeSystemNode?: string | null;
 }
 
-export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine }: CodingAssistantProps) {
+export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode }: CodingAssistantProps) {
   const { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval } = useCodingAssistant(provider, model, onNavigateToLine);
   const [input, setInput] = useState('');
   const [isTutorMode, setIsTutorMode] = useState(false);
@@ -664,6 +666,27 @@ export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen
           flexShrink: 0,
         }}
       >
+        {/* System View match chip — appears when the active file maps to a graph node */}
+        {activeSystemNode && onOpenNode && (
+          <button
+            onClick={() => onOpenNode(activeSystemNode)}
+            title="Navigate to this node in System View"
+            style={{
+              alignSelf: 'flex-start',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              background: 'transparent',
+              border: '1px solid var(--color-accent, #0e639c)',
+              borderRadius: 10,
+              padding: '2px 8px',
+              fontSize: 11,
+              color: 'var(--color-accent, #0e639c)',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            ◎ {activeSystemNode}
+          </button>
+        )}
         {/* Context chips */}
         {contextNodes.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>

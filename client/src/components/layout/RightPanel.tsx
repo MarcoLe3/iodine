@@ -1,4 +1,5 @@
-import { useState, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useState, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { CodingAssistant } from '../right/CodingAssistant';
 import { SystemView } from '../right/SystemView';
 import type { SystemViewHandle } from '../right/SystemView';
@@ -11,8 +12,11 @@ type RightTab = 'assistant' | 'build' | 'system';
 export interface RightPanelHandle {
   /** Forward a cursor position to the System View for reverse lookup. */
   lookupByPosition: (absoluteFilePath: string, line: number) => void;
-  /** Forward a file/folder path to the System View for reverse lookup. */
+  /** Forward a file/folder path to the System View for reverse lookup (file-explorer click — may switch tab). */
   lookupByPath: (path: string) => void;
+  /** Silently sync the active editor file to System View without switching tabs.
+   *  Returns the matched node/edge name, or null if no graph / no match. */
+  syncActiveFile: (path: string | null) => string | null;
 }
 
 interface RightPanelProps {
@@ -31,12 +35,20 @@ interface RightPanelProps {
   onClearContextNodes: () => void;
   onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
   onOpenUrl?: (url: string) => void;
+  activeSystemNode?: string | null;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl }, ref) {
+function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const systemViewRef = useRef<SystemViewHandle>(null);
+
+  const handleOpenNode = useCallback((_nodeName: string, _nodeId?: string) => {
+    // flushSync commits the tab switch synchronously so the SVG has real
+    // clientWidth/clientHeight before focusSelected reads them.
+    flushSync(() => setActiveTab('system'));
+    systemViewRef.current?.focusSelected();
+  }, []);
 
   useImperativeHandle(ref, () => ({
     lookupByPosition: (absoluteFilePath: string, line: number) => {
@@ -45,10 +57,23 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
     },
     lookupByPath: (path: string) => {
       if (!systemViewRef.current?.hasGraph()) return;
-      systemViewRef.current.lookupByPath(path);
-      // Surface System View when a graph exists — but never yank the user
-      // away from the Coding Assistant.
-      if (activeTab !== 'assistant') setActiveTab('system');
+      if (activeTab === 'system') {
+        // Already visible — select + pan with real dimensions.
+        systemViewRef.current.lookupByPath(path);
+      } else if (activeTab !== 'assistant') {
+        // Hidden but will switch — select now, switch tab (flushSync), then pan.
+        systemViewRef.current.selectByPath(path);
+        flushSync(() => setActiveTab('system'));
+        systemViewRef.current.focusSelected();
+      } else {
+        // On Coding Assistant — just update selection silently, no tab switch.
+        systemViewRef.current.selectByPath(path);
+      }
+    },
+    syncActiveFile: (path: string | null) => {
+      if (!path || !systemViewRef.current?.hasGraph()) return null;
+      // selectByPath only updates the selection — no pan — safe while SVG is hidden.
+      return systemViewRef.current.selectByPath(path);
     },
   }), [activeTab]);
 
@@ -162,7 +187,7 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
         <CodingAssistant workspacePath={workspacePath} activeFilePath={activeFilePath} onWorkspaceOpen={onWorkspaceOpen}
           provider={provider} model={model} setProvider={setProvider} setModel={setModel} getEditorContext={getEditorContext}
           contextNodes={contextNodes} onRemoveContextNode={onRemoveContextNode} onClearContextNodes={onClearContextNodes}
-          onNavigateToLine={onNavigateToLine} />
+          onNavigateToLine={onNavigateToLine} onOpenNode={handleOpenNode} activeSystemNode={activeSystemNode} />
       </div>
     </div>
   );
