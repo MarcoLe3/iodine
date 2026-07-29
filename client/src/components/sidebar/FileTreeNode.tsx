@@ -17,6 +17,8 @@ interface FileTreeNodeProps {
   onDirSummary?: (node: FileNode) => void;
   onFileSummary?: (node: FileNode) => void;
   onAddToContext?: (node: FileNode) => void;
+  /** Fires for every click on a file or folder — used for System View reverse lookup. */
+  onNodeSelect?: (node: FileNode) => void;
 }
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg']);
@@ -104,6 +106,7 @@ export function FileTreeNode({
   onDirSummary,
   onFileSummary,
   onAddToContext,
+  onNodeSelect,
 }: FileTreeNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -180,9 +183,11 @@ export function FileTreeNode({
   const handleClick = () => {
     if (isDir) {
       onToggleExpand(node.path);
+      onNodeSelect?.(node);
     } else if (!isSymlink) {
       // We don't want users to edit symbolic link
       onFileClick(node);
+      onNodeSelect?.(node);
     }
   };
 

@@ -11,6 +11,8 @@ type RightTab = 'assistant' | 'build' | 'system';
 export interface RightPanelHandle {
   /** Forward a cursor position to the System View for reverse lookup. */
   lookupByPosition: (absoluteFilePath: string, line: number) => void;
+  /** Forward a file/folder path to the System View for reverse lookup. */
+  lookupByPath: (path: string) => void;
 }
 
 interface RightPanelProps {
@@ -39,6 +41,10 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
   useImperativeHandle(ref, () => ({
     lookupByPosition: (absoluteFilePath: string, line: number) => {
       const matched = systemViewRef.current?.lookupByPosition(absoluteFilePath, line) ?? false;
+      if (matched) setActiveTab('system');
+    },
+    lookupByPath: (path: string) => {
+      const matched = systemViewRef.current?.lookupByPath(path) ?? false;
       if (matched) setActiveTab('system');
     },
   }), []);

@@ -243,10 +243,14 @@ const SAMPLE_JSON = JSON.stringify({
 }, null, 2);
 
 export interface SystemViewHandle {
-  /** Reverse lookup: given an absolute file path and line number, find the best-matching
-   *  node or edge in the system graph, select it, and zoom to it.
+  /** Reverse lookup by cursor position: find the best-matching node/edge by file + line.
+   *  Score 3 = line within ref range, 2 = within 2 lines, 1 = file-only match.
    *  Returns true if a match was found. */
   lookupByPosition: (absoluteFilePath: string, line: number) => boolean;
+  /** Reverse lookup by path: find the best-matching node/edge by file or folder path.
+   *  Score 2 = exact file match, 1 = file is inside the given folder.
+   *  Returns true if a match was found. */
+  lookupByPath: (path: string) => boolean;
 }
 
 interface SystemViewProps {
@@ -558,6 +562,61 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
             const mx = (src.x + tgt.x) / 2, my = (src.y + tgt.y) / 2;
             setScale(TARGET_SCALE);
             setPan({ x: cx - mx * TARGET_SCALE, y: cy - my * TARGET_SCALE });
+          }
+        }
+      }
+
+      return true;
+    },
+
+    lookupByPath: (path: string): boolean => {
+      if (!localGraph.nodes.length && !localGraph.edges.length) return false;
+
+      // Score 2 = exact file match, 1 = file lives inside the given folder path
+      const scoreRefs = (files: GraphFileRef[] | undefined): number => {
+        if (!files?.length) return 0;
+        let best = 0;
+        for (const f of files) {
+          const refAbs = f.path.startsWith('/') ? f.path : `${workspacePath ?? ''}/${f.path}`;
+          if (refAbs === path || path.endsWith('/' + f.path)) { best = Math.max(best, 2); continue; }
+          if (refAbs.startsWith(path + '/'))                  { best = Math.max(best, 1); continue; }
+        }
+        return best;
+      };
+
+      type Hit = { type: 'node'; id: string; score: number } | { type: 'edge'; idx: number; score: number };
+      const hits: Hit[] = [];
+
+      for (const node of localGraph.nodes) {
+        const s = scoreRefs(node.files);
+        if (s > 0) hits.push({ type: 'node', id: node.id, score: s });
+      }
+      for (let i = 0; i < localGraph.edges.length; i++) {
+        const s = scoreRefs(localGraph.edges[i].files);
+        if (s > 0) hits.push({ type: 'edge', idx: i, score: s });
+      }
+
+      if (!hits.length) return false;
+
+      hits.sort((a, b) => b.score - a.score);
+      const best = hits[0];
+      setSelected(best.type === 'node' ? { type: 'node', id: best.id } : { type: 'edge', idx: best.idx });
+
+      const TARGET_SCALE = 1.2;
+      const svgEl = svgRef.current;
+      const cx = svgEl && svgEl.clientWidth  > 0 ? svgEl.clientWidth  / 2 : 450;
+      const cy = svgEl && svgEl.clientHeight > 0 ? svgEl.clientHeight / 2 : 320;
+
+      if (best.type === 'node') {
+        const pos = posMap[best.id];
+        if (pos) { setScale(TARGET_SCALE); setPan({ x: cx - pos.x * TARGET_SCALE, y: cy - pos.y * TARGET_SCALE }); }
+      } else {
+        const edge = localGraph.edges[best.idx];
+        if (edge) {
+          const src = posMap[edge.source], tgt = posMap[edge.target];
+          if (src && tgt) {
+            setScale(TARGET_SCALE);
+            setPan({ x: cx - (src.x + tgt.x) / 2 * TARGET_SCALE, y: cy - (src.y + tgt.y) / 2 * TARGET_SCALE });
           }
         }
       }

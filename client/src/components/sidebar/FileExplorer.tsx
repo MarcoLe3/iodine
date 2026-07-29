@@ -16,6 +16,7 @@ interface FileExplorerProps {
   onDirSummary?: (node: FileNode) => void;
   onFileSummary?: (node: FileNode) => void;
   onAddToContext?: (node: FileNode) => void;
+  onNodeSelect?: (node: FileNode) => void;
   /** When set, auto-expands all parent folders to reveal this file path. */
   expandToPath?: string | null;
 }
@@ -74,6 +75,7 @@ export function FileExplorer({
   onDirSummary,
   onFileSummary,
   onAddToContext,
+  onNodeSelect,
   expandToPath,
 }: FileExplorerProps) {
   const { tree, expandedPaths, toggleExpand, loading, error, refetch } = useFileTree(workspacePath, localTree);
@@ -451,6 +453,7 @@ export function FileExplorer({
                 onDirSummary={onDirSummary}
                 onFileSummary={onFileSummary}
                 onAddToContext={onAddToContext}
+                onNodeSelect={onNodeSelect}
               />
             ))}
           </div>

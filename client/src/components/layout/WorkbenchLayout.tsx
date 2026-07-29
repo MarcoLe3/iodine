@@ -63,8 +63,8 @@ export function WorkbenchLayout() {
   const getEditorContext = useCallback(() => editorAreaRef.current?.getVisibleContext() ?? null, []);
 
   const rightPanelRef = useRef<RightPanelHandle>(null);
-  const handleCursorChange = useCallback((filePath: string, line: number) => {
-    rightPanelRef.current?.lookupByPosition(filePath, line);
+  const handleNodeSelect = useCallback((node: FileNode) => {
+    rightPanelRef.current?.lookupByPath(node.path);
   }, []);
 
   const bottomTrayRef = useRef<BottomTrayHandle>(null);
@@ -298,6 +298,7 @@ export function WorkbenchLayout() {
             onDirSummary={handleDirSummary}
             onFileSummary={handleFileSummary}
             onAddToContext={handleAddToContext}
+            onNodeSelect={handleNodeSelect}
             expandToPath={activeFilePath}
           />
 
@@ -322,7 +323,6 @@ export function WorkbenchLayout() {
             model={model}
             summaryRequestPath={summaryRequestPath}
             onSummaryHandled={() => setSummaryRequestPath(null)}
-            onCursorChange={handleCursorChange}
           />
 
           <ResizeDivider
