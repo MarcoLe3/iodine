@@ -191,24 +191,29 @@ When a file becomes active in the editor (opened by click, Tutor Mode navigation
 
 **Key design:** Passing `activeFilePath` as `expandToPath` means every tab switch triggers a one-way expand (never collapse). The `forceExpand` flag in `toggleExpand` ensures the expand effect is idempotent and cannot fight user-initiated collapses.
 
-## System View — Reverse Lookup (Editor → Diagram)
+## System View — Reverse Lookup (File Explorer → Diagram)
 
-When a system graph is loaded and the user **clicks any line in the editor**, the IDE automatically finds the best-matching node or edge in the diagram, selects it, switches the right panel to the System View tab, and zooms the canvas to centre on the match.
+When a system graph is loaded, **clicking any file or folder in the file explorer** automatically finds the best-matching node or edge in the diagram, selects it, and (if the user is not on the Coding Assistant tab) switches the right panel to System View and zooms to centre on the match.
 
-Match priority (narrowest first):
-1. The clicked line falls **within** a file ref's `line`–`endLine` range → score 3
-2. The clicked line is **within 2 lines** of a ref's `line` → score 2
-3. The current **file path matches** a ref but no line info is available → score 1
-If no match at any score, selection is unchanged.
+Match priority for `lookupByPath(path)` (file/folder):
+1. A file ref's resolved absolute path **exactly equals** the clicked path → score 2
+2. A file ref's resolved path **starts with** the clicked path (folder contains the file) → score 1
+
+Match priority for `lookupByPosition(absoluteFilePath, line)` (line-level, available for future use):
+1. The line falls **within** a file ref's `line`–`endLine` range → score 3
+2. The line is **within 2 lines** of a ref's `line` → score 2
+3. The file path matches a ref but no line info is available → score 1
 
 | File | Role |
 |------|------|
-| `client/src/components/right/SystemView.tsx` | Wrapped in `forwardRef`. Exports `SystemViewHandle` with `lookupByPosition(absoluteFilePath, line): boolean`. Path matching normalises workspace-relative ref paths to absolute before comparing. On a successful match, calls `setSelected` then `setPan`/`setScale` (zoom 1.2×) to centre on the node or edge midpoint. Uses `svgRef.current.clientWidth/Height` for the viewport centre; falls back to `450 × 320` if the SVG is off-screen. |
-| `client/src/components/layout/RightPanel.tsx` | Wrapped in `forwardRef`. Exports `RightPanelHandle` with `lookupByPosition`. Holds `systemViewRef`. When SystemView returns `true`, also calls `setActiveTab('system')` to surface the diagram. |
-| `client/src/components/layout/EditorArea.tsx` | Accepts `onCursorChange?(filePath, line)` prop. In `onEditorMount`, registers `editor.onMouseDown` — fires only on mouse clicks (not on every keystroke), avoiding excessive lookups. Listener is automatically disposed when the editor unmounts on file switch (editors are keyed by path). |
-| `client/src/components/layout/WorkbenchLayout.tsx` | Holds `rightPanelRef`. `handleCursorChange(filePath, line)` delegates to `rightPanelRef.current?.lookupByPosition`. Passed to `EditorArea` as `onCursorChange`. |
+| `client/src/components/sidebar/FileTreeNode.tsx` | `handleClick` calls `onNodeSelect?.(node)` for both file clicks and folder toggle clicks, threading the selected node up the component tree. Also passes `onNodeSelect` recursively to child `FileTreeNode` renders so nested files work. |
+| `client/src/components/sidebar/FileExplorer.tsx` | Accepts `onNodeSelect` and threads it to each top-level `FileTreeNode`. |
+| `client/src/components/layout/Sidebar.tsx` | Threads `onNodeSelect` to `FileExplorer`. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Holds `rightPanelRef`. `handleNodeSelect(node)` calls `rightPanelRef.current?.lookupByPath(node.path)`. Passed to `Sidebar` as `onNodeSelect`. |
+| `client/src/components/layout/RightPanel.tsx` | `RightPanelHandle.lookupByPath` first checks `hasGraph()` — if no graph is loaded the call is a no-op. Otherwise calls `systemViewRef.current.lookupByPath(path)` and switches to System View **only when `activeTab !== 'assistant'`** so the Coding Assistant is never yanked away. `activeTab` is included in `useImperativeHandle` deps to prevent stale closures. |
+| `client/src/components/right/SystemView.tsx` | `SystemViewHandle` exposes `hasGraph(): boolean`, `lookupByPath(path): boolean`, and `lookupByPosition(absoluteFilePath, line): boolean`. `lookupByPath` iterates all node and edge file refs, resolves each to an absolute path, scores the match, and on the best match calls `setSelected` + `setPan`/`setScale(1.2)` to centre the view. |
 
-**Key design:** using `onMouseDown` instead of `onDidChangeCursorPosition` means only intentional clicks trigger the lookup — typing, undo/redo, and arrow-key navigation do not fire it.
+**Key design:** `hasGraph()` lets `RightPanel` distinguish "no graph loaded" (call is skipped entirely) from "graph loaded but no specific match found" (tab still switches so the user can see the diagram). The Coding Assistant tab guard means exploratory file clicks never disrupt an active chat session.
 
 ## System View — Node/Edge Click → File References
 
@@ -225,6 +230,18 @@ Clicking a node or edge in the System View graph highlights it and opens a botto
 **File reference path resolution:** If `f.path` starts with `/` it is used as-is; otherwise `workspacePath + '/' + f.path` is prepended so the navigator receives an absolute path.
 
 **Click-vs-drag:** A `Math.hypot` check at `mouseUp` ensures moves of ≥ 5 CSS pixels are treated as drags, not clicks. The SVG `onMouseLeave` fires `handleMouseUp` (which also clears refs) so stale press refs are never left behind.
+
+## Terminal (PTY) Lifecycle & Cleanup
+
+Each terminal tab opens a WebSocket to `ws://localhost:3001/terminal?cwd=…&cmd=…`. The server uses **node-pty** to spawn a pseudo-terminal (PTY) for the requested shell. Robust cleanup is critical because `tsx watch` kills and restarts the Node process on every file save, which would otherwise orphan PTY children and leak OS file descriptors until `posix_spawnp` starts failing.
+
+| File | Role |
+|------|------|
+| `server/src/terminal.ts` | All active PTY instances are tracked in a module-level `activePtys: Set`. SIGTERM, SIGINT, and `process.exit` handlers call `killAllPtys()` (sends SIGKILL) so `tsx watch` restarts fully clean up open shells. Spawn uses `spawnWithRetry`: on failure it waits 250 ms and retries once to handle transient `EAGAIN` errors. `MAX_TERMINALS = 20` cap prevents runaway resource use. PTY instances are removed from the set in both `ptyProc.onExit` and `ws.on('close')` to stay accurate regardless of which side closes first. |
+
+**Key failure mode:** `posix_spawnp failed` from node-pty is an OS-level `EAGAIN` or similar, most often triggered by accumulated file descriptors from pty processes that were not killed when the dev server restarted. The fix is the SIGTERM/SIGINT handler — when `tsx watch` sends SIGTERM before relaunching, all PTY children are killed before the process exits.
+
+**Shell selection:** `process.env.SHELL` → `/bin/zsh` → `/bin/bash` → `/bin/sh`, with `existsSync` validation at each step.
 
 ## Implementation Notes
 
