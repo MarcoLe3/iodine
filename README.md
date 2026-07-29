@@ -8,6 +8,12 @@
   <a href="https://paypal.me/hwshin">Support me on PayPal</a>
 </p>
 
+<img src="https://github.com/user-attachments/assets/55a721c6-8990-407f-a343-bdecbdf42b1e" alt="Iodine IDE demo" width="100%" />
+
+<p align="center">
+  More demos on YouTube: <a href="https://www.youtube.com/watch?v=5BlcEDO4Mrg">Demo 1</a> · <a href="https://www.youtube.com/watch?v=SjOQjkT9GJM">Demo 2</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 3</a>
+</p>
+
 ## About
 
 Most AI coding tools take a text editor and add a chat panel. Iodine asks a different question: **what would a development environment look like if you designed it from scratch, knowing AI exists?**
@@ -31,12 +37,6 @@ The IDE shell (Monaco editor, file explorer, git, terminal, tabs) is solid and f
 ### Built to be forked
 
 The stack is React + Express + TypeScript with no framework magic. Change the layout, add panels, wire new backend capabilities — you own the IDE, not just an extension sandbox. Iodine has reached the point where its own repository is its own development environment: open it in Iodine, ask the assistant to add a feature, and it reads the files, writes the change, and runs the build without you leaving the tab.
-
-## Demo
-
-<img src="https://github.com/user-attachments/assets/55a721c6-8990-407f-a343-bdecbdf42b1e" alt="Iodine IDE demo" width="100%" />
-
-More demos on YouTube: [Demo 1](https://www.youtube.com/watch?v=5BlcEDO4Mrg) · [Demo 2](https://www.youtube.com/watch?v=SjOQjkT9GJM) · [Demo 3](https://youtu.be/M6C0rk1DwNs)
 
 ## Screenshots
 
