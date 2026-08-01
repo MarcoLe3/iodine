@@ -1,4 +1,4 @@
-# Iodine — Few Drops of IDE Essentials — Developer Notes
+# Iodine — The IDE That Teaches You — Developer Notes
 
 ## Light / Dark Mode
 

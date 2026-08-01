@@ -1,6 +1,6 @@
 # Contributing to Iodine
 
-Iodine is built to be forked and extended. This guide covers the project structure, common extension points, local development, AI features, and API reference.
+Iodine — the IDE that teaches you — is built to be forked and extended. This guide covers the project structure, common extension points, local development, AI features, and API reference.
 
 ## Project Structure
 
@@ -21,35 +21,25 @@ iodine/
 │           ├── sidebar/      # FileExplorer, FileTreeNode, SourceControlPanel
 │           ├── editor/       # EditorTabs, MonacoEditor, WelcomeScreen
 │           ├── bottom/        # BottomTray, TerminalPanel, TerminalSession
-│           └── right/         # CodingAssistant, BuildAssistant, SystemView
+│           └── right/        # CodingAssistant, BuildAssistant, SystemView
 │
-└── server/                   # Node.js + Express backend — http://localhost:3001
-    └── src/
-        ├── app.ts            # Express app factory (CORS, JSON, routes)
-        ├── state.ts          # Shared mutable state and persisted workspace path
-        ├── terminal.ts       # WebSocket terminal manager
-        ├── routes/            # Files, Git, agent, summary, and build endpoints
-        └── services/          # Filesystem tools and provider-specific AI agents
+├── server/                   # Express + WebSocket backend — http://localhost:3001
+│   └── src/
+│       ├── app.ts            # Express app and route registration
+│       ├── index.ts           # HTTP/WebSocket server startup
+│       ├── state.ts           # Persisted workspace state
+│       ├── terminal.ts        # node-pty terminal sessions
+│       ├── routes/             # files, agent, AI summary, Git, project, build config
+│       └── services/           # AI provider adapters and agent tools
+│
+├── images/                   # Logo, screenshots, and demo video
+├── README.md                 # Product overview and getting started guide
+├── CONTRIBUTING.md           # This document
+├── SOURCE_CONTROL.md         # Git integration reference
+└── DEBUGGING.md              # Debugging notes and known failure modes
 ```
 
-## Forking Guide
-
-The three most common extension points:
-
-**Add a right-panel tab** (for example, a database browser, diff viewer, or docs panel)
-1. Create your component in `client/src/components/right/MyPanel.tsx`.
-2. Add it to the tab strip and content switch in `client/src/components/layout/RightPanel.tsx`.
-
-**Add an API route**
-1. Create `server/src/routes/myroute.ts` with an Express `Router`.
-2. Register it in `server/src/app.ts` with `app.use('/api', myRouter)`.
-
-**Add a sidebar view**
-1. Add its view ID to the `SidebarView` union in `client/src/types/index.ts`.
-2. Add an icon and entry to `NAV_ITEMS` in `client/src/components/layout/ActivityBar.tsx`.
-3. Render it in the `activeView` switch in `client/src/components/layout/Sidebar.tsx`.
-
-## Getting Started
+## Local Development
 
 ### Prerequisites
 
@@ -57,110 +47,88 @@ The three most common extension points:
 - npm 9+
 - At least one AI provider API key
 
-### Installation & Running
+### Install and run
 
 ```bash
-# Install all dependencies (client + server)
 npm install
-
-# Start both client and server in development mode
 npm run dev
 ```
 
-- **Client** (React + Vite): http://localhost:5173
-- **Server** (Express): http://localhost:3001
+The client runs at `http://localhost:5173`; the server runs at `http://localhost:3001`.
 
-Once running, open a project via **File → Open Project** or click **Open Folder** in the left sidebar.
-
-> **Note — Open Project search scope:** The browser's directory picker only gives the app the folder name, not the full path. The server resolves the name by searching your home directory up to 3 levels deep. If your project lives outside your home directory, or is nested more than 3 levels deep, use **Open Folder** and type the absolute path directly.
-
-### Other Scripts
+### Useful commands
 
 ```bash
-npm run build      # Build both client and server for production
-npm run typecheck  # Run TypeScript type checks across the monorepo
+npm run build
+npm run typecheck
 ```
 
-## AI Summary 📖
+## AI Features
 
-AI Summary is a tutor and walking encyclopedia embedded directly in the editor. Click **🤖 Summary** on any open file to get a tutorial-style Markdown document covering its overview, technology context, architecture role, public interface, data flow, patterns, and gotchas.
+Iodine's AI features are designed to help developers understand and contribute to unfamiliar codebases:
 
-Summaries are cached at:
+- **Coding Assistant** — A tool-using assistant that can read, search, write, and modify workspace files.
+- **Tutor Mode** — A read-only, step-by-step walkthrough that opens files and highlights relevant lines without writing code.
+- **AI Summary** — Cached tutorial-style explanations for files and directories.
+- **Build Assistant** — Project-aware generation of test, build, and run commands.
+- **System View** — Interactive architecture diagrams generated from the source code, with links back to implementation.
 
-```
-~/.iodine/<workspace-hash>/<file-path-hash>/<file-content-hash>_ai_summary.md
-```
+Provider and model definitions live in `client/src/providers.ts`; provider adapters and agent tools live under `server/src/services/`.
 
-The file-content hash is the cache key: unchanged files open instantly, while edits trigger a new summary. Use **↺ Regenerate** to discard the cached version.
+## Extension Points
 
-## Build Assistant 🔨
+### Add a client feature
 
-The **Build** tab provides editable commands for **Test**, **Build**, and **Build & Run**. Click **✨ Generate** to have the AI inspect project signals such as `package.json`, `Makefile`, `Cargo.toml`, `go.mod`, or `pyproject.toml`, then click **▶ Execute** to run the command in a new terminal tab.
+1. Add or update shared types in `client/src/types/`.
+2. Add API wrappers in `client/src/api/` when the feature needs server communication.
+3. Put reusable stateful behavior in `client/src/hooks/`.
+4. Add UI components under the closest existing `client/src/components/` area.
+5. Thread the feature through `WorkbenchLayout` when it needs workspace-level state or coordination.
 
-Commands are saved to `~/.iodine/<workspace-hash>/build-config.json` and restored when you reopen the workspace.
+### Add a server route
 
-## Coding Assistant
+1. Create a route module under `server/src/routes/`.
+2. Register it in `server/src/app.ts`.
+3. Keep workspace-path validation and error handling close to the route boundary.
+4. Add or update typed client wrappers for the endpoint.
 
-The Coding Assistant is an AI coding partner. Describe a feature, bug fix, or refactor in plain language; it can read, write, search, and run commands in your workspace. Terminal commands always require explicit approval.
+### Add an AI provider
 
-Select a provider and model from the dropdowns.
+1. Add provider/model metadata in `client/src/providers.ts`.
+2. Implement the provider adapter under `server/src/services/`.
+3. Keep tool behavior provider-independent by using the shared agent-tool layer.
+4. Update the provider selection UI and documentation.
 
-### Supported Providers & API Keys
+## Design Principles
 
-| Provider | API Key Location | Models |
-|----------|-----------------|--------|
-| **Anthropic** | `~/.anthropic/api_key` or `ANTHROPIC_API_KEY` env var | Claude Sonnet 4.6 / 4.5 / 3.7 |
-| **OpenAI** | `OPENAI_TOKEN` env var | GPT-4o, GPT-4o mini, o3, o4-mini |
-| **Google** | `GEMINI_API_KEY` env var | Gemini 2.5 Flash / Pro, 2.0 Flash |
-
-> If Claude Code is installed, its Anthropic key is reused automatically.
-
-The UI shows a warning when the selected provider key is not configured. Click **?** in the panel header for setup instructions.
-
-### AI Tools
-
-All providers share the same tool layer:
-
-| Tool | Description |
-|------|-------------|
-| `read_file` | Read a file from the workspace |
-| `write_file` | Write or create a file in the workspace |
-| `list_directory` | Browse the directory tree (depth 3) |
-| `search_files` | Grep-like text search across workspace files |
-| `run_terminal_command` | Propose a shell command, wait for approval, then stream its output |
-| `open_file` | *(Tutor Mode only)* Open a file and highlight a line range in the editor |
+- Help users understand before asking them to act.
+- Keep Tutor Mode read-only and explicit about what it is showing.
+- Ground explanations in files and line ranges from the actual workspace.
+- Require explicit approval before running shell commands.
+- Prefer shared theme variables over hard-coded colors.
+- Keep Iodine easy to fork: use straightforward React, Express, and TypeScript rather than opaque framework abstractions.
 
 ## API Reference
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/health` | Health check |
-| `POST` | `/api/workspace/open` | Set workspace root `{ path }` |
-| `POST` | `/api/workspace/close` | Clear workspace root |
-| `GET` | `/api/workspace` | Get current workspace root |
-| `POST` | `/api/workspace/find` | Search for a directory by name |
-| `GET` | `/api/files/tree` | Full directory tree from workspace root |
-| `GET` | `/api/files/content?path=` | Read a file's text content |
-| `PUT` | `/api/files/content` | Write a file `{ path, content }` |
-| `GET` | `/api/git/status` | Git status badges for the file tree |
-| `GET` | `/api/git/diff?path=` | Unified diff for editor decorations |
-| `GET` | `/api/git/changes` | Full staged/unstaged change list |
-| `POST` | `/api/git/stage` | Stage a file `{ relPath }` |
-| `POST` | `/api/git/unstage` | Unstage a file `{ relPath }` |
-| `POST` | `/api/git/stage-all` | Stage all changes |
-| `POST` | `/api/git/discard` | Discard changes `{ relPath, isUntracked }` |
-| `POST` | `/api/files/create` | Create a file or directory |
-| `POST` | `/api/files/rename` | Rename a file or directory |
-| `POST` | `/api/git/commit` | Commit staged changes `{ message }` |
-| `GET` | `/api/agent/status` | Per-provider API key status |
-| `POST` | `/api/agent/chat` | SSE stream: AI chat with tool use |
-| `POST` | `/api/agent/terminal/approval` | Approve or reject a pending terminal command |
-| `GET` | `/api/system-graph` | Load saved architecture graph |
-| `PUT` | `/api/system-graph` | Save architecture graph |
-| `POST` | `/api/system-graph/generate` | SSE stream: agentic graph generation |
-| `GET` | `/api/ai-summary?path=` | Return a cached AI summary |
-| `POST` | `/api/ai-summary/generate` | SSE stream: generate and cache a summary |
-| `GET` | `/api/build-config` | Return saved build commands |
-| `PUT` | `/api/build-config` | Save build commands |
-| `POST` | `/api/build-config/generate` | SSE stream: generate a shell command |
-```
+The main API areas are:
+
+| Area | Route module |
+|------|-------------|
+| Files and workspace | `server/src/routes/files.ts` |
+| Agent chat | `server/src/routes/agent.ts` |
+| AI summaries | `server/src/routes/aiSummary.ts` |
+| Build configuration | `server/src/routes/buildConfig.ts` |
+| Project metadata | `server/src/routes/project.ts` |
+| Git integration | `server/src/routes/git.ts` |
+
+For endpoint payloads and implementation details, inspect the route module and its corresponding client API wrapper.
+
+## Pull Requests
+
+Before opening a pull request:
+
+1. Run `npm run typecheck`.
+2. Run `npm run build`.
+3. Explain user-facing behavior and any changes to AI prompts or tool permissions.
+4. Include screenshots or a short recording for meaningful UI changes.
+5. Keep documentation in sync with the implementation.
