@@ -2,7 +2,7 @@
   <img src="images/iodine_logo_2-preview.png" alt="Iodine" width="180" />
 </p>
 
-<h1 align="center">Iodine — Few Drops of IDE Essentials</h1>
+<h1 align="center">Iodine — The IDE That Teaches You</h1>
 
 <p align="center">
   An AI-native IDE that turns unfamiliar Git repositories into interactive learning environments.
@@ -137,7 +137,7 @@ System View is interactive documentation generated from the code that is actuall
 | Backend | Node.js, Express 4, TypeScript, `ws` (WebSocket) |
 | Dev runner | `tsx watch` (server), Vite HMR (client) |
 | Monorepo | npm workspaces + `concurrently` |
-|
+
 ## Getting Started
 
 ### Prerequisites
