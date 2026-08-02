@@ -332,11 +332,12 @@ interface CodingAssistantProps {
   activeSystemNode?: string | null;
   onUserTyping?: () => void;
   onMessageSent?: () => void;
+  onWatchTrigger?: () => void;
 }
 
 export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(
-function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent }, ref) {
-  const { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage } = useCodingAssistant(provider, model, onNavigateToLine);
+function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onWatchTrigger }, ref) {
+  const { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage } = useCodingAssistant(provider, model, onNavigateToLine, onWatchTrigger);
   useImperativeHandle(ref, () => ({ injectProactiveMessage }), [injectProactiveMessage]);
   const [input, setInput] = useState('');
   const [isTutorMode, setIsTutorMode] = useState(false);
@@ -407,6 +408,18 @@ function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provi
         @keyframes blink {
           0%, 100% { opacity: 1; }
           50% { opacity: 0; }
+        }
+        @keyframes watching-pulse {
+          0%, 100% { opacity: 0.4; transform: scale(0.8); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
+        .watching-dot {
+          display: inline-block;
+          width: 7px; height: 7px;
+          border-radius: 50%;
+          background: #4fc1ff;
+          animation: watching-pulse 1.2s ease-in-out infinite;
+          flex-shrink: 0;
         }
         .md-body { font-size: 13px; color: var(--color-text-primary); line-height: 1.6; word-break: break-word; margin-bottom: 4px; }
         .md-body > *:first-child { margin-top: 0; }
@@ -741,6 +754,13 @@ function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provi
                 </button>
               </div>
             ))}
+          </div>
+        )}
+        {/* Progress watch indicator */}
+        {isWatching && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#4fc1ff', fontStyle: 'italic' }}>
+            <span className="watching-dot" />
+            Watching progress…
           </div>
         )}
         <textarea

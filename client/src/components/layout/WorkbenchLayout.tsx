@@ -413,6 +413,7 @@ export function WorkbenchLayout() {
             onOpenUrl={handleOpenUrl}
             activeSystemNode={activeSystemNode}
             onMessageSent={recordAction}
+            onWatchTrigger={() => { playBell(); rightPanelRef.current?.triggerPulse(); }}
           />
         </div>
 

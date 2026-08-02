@@ -38,7 +38,7 @@ router.post('/proactive/rephrase', async (req, res) => {
       const client = new OpenAI({ apiKey: await loadOpenAIKey() });
       const response = await client.chat.completions.create({
         model,
-        max_tokens: 120,
+        max_completion_tokens: 120,
         messages: [
           { role: 'system', content: REPHRASE_SYSTEM },
           { role: 'user', content: message },
@@ -60,6 +60,94 @@ router.post('/proactive/rephrase', async (req, res) => {
   } catch {
     // Degrade gracefully — return the original canned message.
     res.json({ rephrased: message });
+  }
+});
+
+const WATCH_SYSTEM =
+  'You are a coding assistant doing a brief check-in after giving a developer guidance. ' +
+  'You can see: (1) your previous reply that guided them, and (2) git diffs showing what ' +
+  'they changed in the 30 seconds after your reply. ' +
+  'Write a short, natural follow-up (1-3 sentences). You might: acknowledge their progress, ' +
+  'point out something relevant to what they changed, suggest a next step, or ask if they need help. ' +
+  'Be conversational and encouraging. Do not use tools or perform any actions.';
+
+router.post('/proactive/watch', async (req, res) => {
+  const { previousReply, diffSnapshots, provider, model } = req.body as {
+    previousReply: string;
+    diffSnapshots: string[];
+    provider: string;
+    model: string;
+  };
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const diffsText = diffSnapshots
+    .map((d, i) =>
+      d.trim()
+        ? `Snapshot ${i + 1} (at ${(i + 1) * 10}s):\n\`\`\`diff\n${d}\n\`\`\``
+        : `Snapshot ${i + 1} (at ${(i + 1) * 10}s): (no changes)`
+    )
+    .join('\n\n');
+
+  const userContent =
+    `My previous reply:\n---\n${previousReply}\n---\n\nGit diff snapshots:\n${diffsText}`;
+
+  try {
+    if (provider === 'anthropic') {
+      const client = new Anthropic({ apiKey: await loadApiKey() });
+      const stream = client.messages.stream({
+        model,
+        max_tokens: 300,
+        system: WATCH_SYSTEM,
+        messages: [{ role: 'user', content: userContent }],
+      });
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          send('text_delta', { text: event.delta.text });
+        }
+      }
+
+    } else if (provider === 'openai') {
+      const client = new OpenAI({ apiKey: await loadOpenAIKey() });
+      const stream = await client.chat.completions.create({
+        model,
+        max_completion_tokens: 300,
+        stream: true,
+        messages: [
+          { role: 'system', content: WATCH_SYSTEM },
+          { role: 'user', content: userContent },
+        ],
+      });
+      for await (const chunk of stream) {
+        const text = chunk.choices[0]?.delta?.content;
+        if (text) send('text_delta', { text });
+      }
+
+    } else if (provider === 'gemini') {
+      const ai = new GoogleGenAI({ apiKey: await loadGeminiKey() });
+      const stream = await ai.models.generateContentStream({
+        model,
+        contents: [{ role: 'user', parts: [{ text: userContent }] }],
+        config: { systemInstruction: WATCH_SYSTEM },
+      });
+      for await (const chunk of stream) {
+        const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) send('text_delta', { text });
+      }
+    }
+
+    send('done', {});
+  } catch (err) {
+    send('error', { message: err instanceof Error ? err.message : 'Unknown error' });
+  } finally {
+    res.end();
   }
 });
 

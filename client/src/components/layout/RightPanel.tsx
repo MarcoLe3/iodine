@@ -44,10 +44,11 @@ interface RightPanelProps {
   onOpenUrl?: (url: string) => void;
   activeSystemNode?: string | null;
   onMessageSent?: () => void;
+  onWatchTrigger?: () => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent }, ref) {
+function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent, onWatchTrigger }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const panelRef             = useRef<HTMLDivElement>(null);
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -222,7 +223,8 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
           contextNodes={contextNodes} onRemoveContextNode={onRemoveContextNode} onClearContextNodes={onClearContextNodes}
           onNavigateToLine={onNavigateToLine} onOpenNode={handleOpenNode} activeSystemNode={activeSystemNode}
           onUserTyping={() => { if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current); panelRef.current?.classList.remove('proactive-pulse'); }}
-          onMessageSent={onMessageSent} />
+          onMessageSent={onMessageSent}
+          onWatchTrigger={onWatchTrigger} />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { UIMessage, UIBlock, HistoryMessage } from '../types';
 import type { Provider } from '../providers';
+import { fetchOverallDiff } from '../api/files';
 
 function uid() {
   return Math.random().toString(36).slice(2);
@@ -18,15 +19,20 @@ export function useCodingAssistant(
   provider: Provider,
   model: string,
   onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void,
+  onWatchTrigger?: () => void,
 ) {
   const [uiMessages, setUiMessages] = useState<UIMessage[]>([]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isWatching, setIsWatching] = useState(false);
 
   // Keep a ref to the latest callback so sendMessage's useCallback closure
   // never goes stale (onNavigateToLine is not in the dependency array).
   const onNavigateToLineRef = useRef(onNavigateToLine);
   onNavigateToLineRef.current = onNavigateToLine;
+
+  const onWatchTriggerRef = useRef(onWatchTrigger);
+  onWatchTriggerRef.current = onWatchTrigger;
 
   // Refs that accumulate text/thought tokens between animation frames.
   // Prevents per-token re-renders when providers like OpenAI stream very fast.
@@ -34,6 +40,11 @@ export function useCodingAssistant(
   const thoughtBufRef = useRef('');
   const rafRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const watchControllerRef = useRef<AbortController | null>(null);
+
+  // Accumulates all text_delta text for the current send (reset at start of sendMessage).
+  // Used to capture final text synchronously in the done handler without reading React state.
+  const streamingTextRef = useRef('');
 
   // Holds a context collector installed by the proactive help system.
   // Awaited and prepended (API-side only, not in the UI) on the next user reply.
@@ -80,11 +91,169 @@ export function useCodingAssistant(
 
   useEffect(() => () => {
     abortControllerRef.current?.abort();
+    watchControllerRef.current?.abort();
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
   }, []);
 
+  // ── Progress Watch ────────────────────────────────────────────────────────────
+
+  // Stream the AI progress-check response as a new assistant message.
+  const runProgressCheck = useCallback(async (
+    previousReply: string,
+    diffs: string[],
+    watchController: AbortController,
+  ) => {
+    const assistantId = uid();
+    const assistantMsg: UIMessage = { id: assistantId, role: 'assistant', blocks: [], isStreaming: true };
+
+    setUiMessages(prev => [...prev, assistantMsg]);
+    setIsLoading(true);
+    onWatchTriggerRef.current?.(); // bell + pulse
+
+    const updateWatchMsg = (updater: (msg: UIMessage & { role: 'assistant' }) => UIMessage) => {
+      setUiMessages(prev => prev.map(m =>
+        m.id === assistantId && m.role === 'assistant'
+          ? updater(m as UIMessage & { role: 'assistant' })
+          : m
+      ));
+    };
+
+    let watchText = '';
+
+    try {
+      const response = await fetch(`${API_BASE}/api/proactive/watch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ previousReply, diffSnapshots: diffs, model, provider: provider.id }),
+        signal: watchController.signal,
+      });
+
+      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const chunks = buf.split('\n\n');
+        buf = chunks.pop() ?? '';
+
+        for (const chunk of chunks) {
+          if (!chunk.trim()) continue;
+          const lines = chunk.split('\n');
+          let eventName = '';
+          let dataStr = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventName = line.slice(7).trim();
+            else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
+          }
+          if (!eventName || !dataStr) continue;
+
+          let payload: Record<string, unknown>;
+          try { payload = JSON.parse(dataStr); } catch { continue; }
+
+          if (eventName === 'text_delta') {
+            const text = payload.text as string;
+            watchText += text;
+            updateWatchMsg(msg => {
+              const blocks = [...msg.blocks];
+              const last = blocks[blocks.length - 1];
+              if (last?.type === 'text') {
+                blocks[blocks.length - 1] = { ...last, content: last.content + text } as UIBlock;
+              } else {
+                blocks.push({ type: 'text', content: text } as UIBlock);
+              }
+              return { ...msg, blocks };
+            });
+          } else if (eventName === 'done') {
+            updateWatchMsg(msg => {
+              setHistory(h => [...h, { role: 'assistant', content: watchText }]);
+              return { ...msg, isStreaming: false };
+            });
+          } else if (eventName === 'error') {
+            updateWatchMsg(msg => ({
+              ...msg,
+              isStreaming: false,
+              blocks: [...msg.blocks, { type: 'text', content: `Error: ${payload.message as string}` }],
+            }));
+          }
+        }
+      }
+    } catch {
+      // Aborted or network error — remove the placeholder if empty, else mark done.
+      setUiMessages(prev => {
+        const msg = prev.find(m => m.id === assistantId && m.role === 'assistant') as (UIMessage & { role: 'assistant' }) | undefined;
+        if (!msg) return prev;
+        const hasContent = msg.blocks.some(b => 'content' in b && typeof (b as { content?: string }).content === 'string' && (b as { content: string }).content.trim().length > 0);
+        if (!hasContent) return prev.filter(m => m.id !== assistantId);
+        return prev.map(m => m.id === assistantId ? { ...m, isStreaming: false } : m);
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [model, provider]);
+
+  // Stored in a ref so startProgressWatch (stable deps) always calls the latest version.
+  const runProgressCheckRef = useRef(runProgressCheck);
+  runProgressCheckRef.current = runProgressCheck;
+
+  // Capture three git diff snapshots at 10-second intervals, then fire the progress check.
+  const startProgressWatch = useCallback(async (previousReply: string) => {
+    watchControllerRef.current?.abort();
+    const controller = new AbortController();
+    watchControllerRef.current = controller;
+    setIsWatching(true);
+
+    const diffs: string[] = [];
+
+    try {
+      for (let i = 0; i < 3; i++) {
+        await new Promise<void>((resolve, reject) => {
+          const t = setTimeout(resolve, 10_000);
+          const onAbort = () => { clearTimeout(t); reject(new DOMException('watch aborted', 'AbortError')); };
+          controller.signal.addEventListener('abort', onAbort, { once: true });
+        });
+        if (controller.signal.aborted) return;
+        try {
+          const { diff } = await fetchOverallDiff();
+          diffs.push(diff);
+        } catch {
+          diffs.push('');
+        }
+      }
+
+      if (controller.signal.aborted) return;
+
+      // Only fire if the user actually made changes
+      const hasDiff = diffs.some(d => d.trim().length > 0);
+      if (!hasDiff) return;
+
+      await runProgressCheckRef.current(previousReply, diffs, controller);
+    } catch {
+      // Silently stop on abort or unexpected error
+    } finally {
+      if (watchControllerRef.current === controller) watchControllerRef.current = null;
+      setIsWatching(false);
+    }
+  }, []); // stable — only reads from refs and setState
+
+  // Stored in a ref so the done handler inside sendMessage can call the latest version.
+  const startProgressWatchRef = useRef(startProgressWatch);
+  startProgressWatchRef.current = startProgressWatch;
+
+  // ── sendMessage ───────────────────────────────────────────────────────────────
+
   const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[], tutorMode?: boolean) => {
     if (!text.trim() || isLoading) return;
+
+    // Cancel any in-progress progress watch before starting a new message.
+    watchControllerRef.current?.abort();
+    setIsWatching(false);
+    streamingTextRef.current = '';
 
     const userMsg: UIMessage = { id: uid(), role: 'user', content: text };
     const assistantId = uid();
@@ -213,8 +382,11 @@ export function useCodingAssistant(
               onNavigateToLineRef.current?.(filePath, line, endLine, startCol, endCol);
             }
           } else if (eventName === 'text_delta') {
-            // Buffer and render at most once per animation frame (~60 fps)
-            textBufRef.current += payload.text as string;
+            const text = payload.text as string;
+            // Buffer for animation-frame batching
+            textBufRef.current += text;
+            // Also accumulate in streamingTextRef so done handler can capture full text
+            streamingTextRef.current += text;
             if (rafRef.current === null) rafRef.current = requestAnimationFrame(flushBufs);
           } else if (eventName === 'thought_delta') {
             thoughtBufRef.current += payload.text as string;
@@ -265,14 +437,15 @@ export function useCodingAssistant(
             }));
           } else if (eventName === 'done') {
             flushNow();
+            const capturedText = streamingTextRef.current;
             updateAssistant(msg => {
-              const finalText = msg.blocks
-                .filter((b): b is UIBlock & { type: 'text' } => b.type === 'text')
-                .map(b => b.content)
-                .join('');
-              setHistory(h => [...h, { role: 'assistant', content: finalText }]);
+              setHistory(h => [...h, { role: 'assistant', content: capturedText }]);
               return { ...msg, isStreaming: false };
             });
+            // Start 30-second progress watch if the reply had content
+            if (capturedText.trim()) {
+              void startProgressWatchRef.current(capturedText);
+            }
           } else if (eventName === 'error') {
             flushNow();
             const errText = payload.message as string;
@@ -316,9 +489,11 @@ export function useCodingAssistant(
 
   const clearMessages = useCallback(() => {
     abortControllerRef.current?.abort();
+    watchControllerRef.current?.abort();
+    setIsWatching(false);
     setUiMessages([]);
     setHistory([]);
   }, []);
 
-  return { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage };
+  return { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage };
 }

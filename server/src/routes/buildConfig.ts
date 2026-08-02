@@ -152,7 +152,7 @@ router.post('/build-config/generate', async (req, res) => {
       const client = new OpenAI({ apiKey });
       const stream = await client.chat.completions.create({
         model: selectedModel,
-        max_tokens: 128,
+        max_completion_tokens: 128,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user',   content: userMsg },
