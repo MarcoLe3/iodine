@@ -390,6 +390,17 @@ router.post('/git/diff', async (req, res) => {
   }
 });
 
+/** Overall unstaged diff across the whole workspace — used by proactive help detector. */
+router.get('/git/diff/all', async (_req, res) => {
+  if (!rootPath) return res.json({ diff: '', lineCount: 0 });
+  try {
+    const { stdout } = await execFileAsync('git', ['diff'], { cwd: rootPath });
+    return res.json({ diff: stdout, lineCount: stdout.split('\n').length });
+  } catch {
+    return res.json({ diff: '', lineCount: 0 });
+  }
+});
+
 router.get('/git/status', async (_req, res) => {
   if (!rootPath) return res.json({ status: {} });
 

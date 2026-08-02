@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef, KeyboardEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useCodingAssistant } from '../../hooks/useCodingAssistant';
@@ -311,6 +311,10 @@ function MessageBubble({ msg, isLast, sendApproval }: {
   );
 }
 
+export interface CodingAssistantHandle {
+  injectProactiveMessage: (message: string, collectContext: () => Promise<string>) => void;
+}
+
 interface CodingAssistantProps {
   workspacePath: string | null;
   activeFilePath: string | null;
@@ -326,10 +330,14 @@ interface CodingAssistantProps {
   onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void;
   onOpenNode?: (nodeName: string, nodeId?: string) => void;
   activeSystemNode?: string | null;
+  onUserTyping?: () => void;
+  onMessageSent?: () => void;
 }
 
-export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode }: CodingAssistantProps) {
-  const { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval } = useCodingAssistant(provider, model, onNavigateToLine);
+export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(
+function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent }, ref) {
+  const { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage } = useCodingAssistant(provider, model, onNavigateToLine);
+  useImperativeHandle(ref, () => ({ injectProactiveMessage }), [injectProactiveMessage]);
   const [input, setInput] = useState('');
   const [isTutorMode, setIsTutorMode] = useState(false);
   const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({});
@@ -383,6 +391,7 @@ export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen
     });
     onClearContextNodes();
     sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode);
+    onMessageSent?.();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -736,7 +745,7 @@ export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen
         )}
         <textarea
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={e => { setInput(e.target.value); onUserTyping?.(); }}
           onKeyDown={handleKeyDown}
           placeholder="Ask anything… (Enter to send, Shift+Enter for newline)"
           rows={3}
@@ -811,4 +820,5 @@ export function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen
       </div>
     </div>
   );
-}
+});
+CodingAssistant.displayName = 'CodingAssistant';

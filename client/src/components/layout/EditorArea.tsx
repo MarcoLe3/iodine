@@ -29,6 +29,8 @@ interface EditorAreaProps {
   summaryRequestPath?: string | null;
   /** Called once the summary request has been consumed. */
   onSummaryHandled?: () => void;
+  /** Fired on editor scroll — forwarded to MonacoEditor for activity tracking. */
+  onActivity?: () => void;
 }
 
 export interface EditorAreaHandle {
@@ -69,7 +71,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl) ? null : (activeFile?.path ?? null),
@@ -522,6 +524,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                 file={activeFile}
                 onContentChange={onContentChange}
                 diffData={diffData}
+                onActivity={onActivity}
                 onEditorMount={editor => {
                   monacoEditorRef.current = editor;
                   // Apply any pending navigation for this file

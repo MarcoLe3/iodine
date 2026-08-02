@@ -13,6 +13,8 @@ interface MonacoEditorProps {
   diffData?: DiffData | null;
   onEditorMount?: (editor: MonacoEditorAPI.IStandaloneCodeEditor) => void;
   onAfterRevert?: () => void;
+  /** Fired on editor scroll — used by proactive help activity tracking. */
+  onActivity?: () => void;
 }
 
 type DialogState = { hunk: DiffHunk; currents: string[] };
@@ -101,13 +103,15 @@ function revertHunk(editor: MonacoEditorAPI.IStandaloneCodeEditor, hunk: DiffHun
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function MonacoEditor({ file, onContentChange, diffData, onEditorMount, onAfterRevert }: MonacoEditorProps) {
+export function MonacoEditor({ file, onContentChange, diffData, onEditorMount, onAfterRevert, onActivity }: MonacoEditorProps) {
   const editorRef = useRef<MonacoEditorAPI.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const decorationIdsRef = useRef<string[]>([]);
   const diffDataRef = useRef<DiffData | null>(diffData ?? null);
   const onAfterRevertRef = useRef(onAfterRevert);
   onAfterRevertRef.current = onAfterRevert;
+  const onActivityRef = useRef(onActivity);
+  onActivityRef.current = onActivity;
   const [mounted, setMounted] = useState(false);
   const [dialog, setDialog] = useState<DialogState | null>(null);
 
@@ -121,6 +125,15 @@ export function MonacoEditor({ file, onContentChange, diffData, onEditorMount, o
     editorRef.current = editor;
     monacoRef.current = monaco;
     onEditorMount?.(editor);
+
+    let lastScrollActivity = 0;
+    editor.onDidScrollChange(() => {
+      const now = Date.now();
+      if (now - lastScrollActivity >= 3000) {
+        lastScrollActivity = now;
+        onActivityRef.current?.();
+      }
+    });
 
     editor.onMouseDown(e => {
       if (e.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;

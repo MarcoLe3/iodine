@@ -35,6 +35,21 @@ export function useCodingAssistant(
   const rafRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Holds a context collector installed by the proactive help system.
+  // Awaited and prepended (API-side only, not in the UI) on the next user reply.
+  const pendingProactiveContextRef = useRef<(() => Promise<string>) | null>(null);
+
+  const injectProactiveMessage = useCallback((message: string, collectContext: () => Promise<string>) => {
+    const proactiveMsg: UIMessage = {
+      id: uid(),
+      role: 'assistant',
+      blocks: [{ type: 'text', content: message }],
+      isStreaming: false,
+    };
+    setUiMessages(prev => [...prev, proactiveMsg]);
+    pendingProactiveContextRef.current = collectContext;
+  }, []);
+
   const sendApproval = useCallback(async (id: string, approved: boolean) => {
     // Update block status immediately so buttons disappear
     setUiMessages(prev => prev.map(msg => {
@@ -75,7 +90,19 @@ export function useCodingAssistant(
     const assistantId = uid();
     const assistantMsg: UIMessage = { id: assistantId, role: 'assistant', blocks: [], isStreaming: true };
 
+    // Collect proactive context if a signal fired before this message.
+    // Injected into the API content only — the UI shows only the user's typed text.
+    const collectProactive = pendingProactiveContextRef.current;
+    pendingProactiveContextRef.current = null;
+    let proactiveContext = '';
+    if (collectProactive) {
+      try { proactiveContext = await collectProactive(); } catch { /* ignore — context is best-effort */ }
+    }
+
     let apiContent = text;
+    if (proactiveContext) {
+      apiContent = `**Context at the time of the assistant's proactive message (for reference only — respond conversationally, do not call any tools):**\n${proactiveContext}\n\n---\n${text}`;
+    }
     if (contextPaths && contextPaths.length > 0) {
       apiContent += `\n\n---\n**Relevant paths hint** (check these paths first when looking for relevant code):\n${contextPaths.map(p => `- \`${p}\``).join('\n')}`;
     }
@@ -293,5 +320,5 @@ export function useCodingAssistant(
     setHistory([]);
   }, []);
 
-  return { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval };
+  return { uiMessages, isLoading, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage };
 }

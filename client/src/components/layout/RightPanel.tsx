@@ -1,6 +1,7 @@
 import { useState, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { CodingAssistant } from '../right/CodingAssistant';
+import type { CodingAssistantHandle } from '../right/CodingAssistant';
 import { SystemView } from '../right/SystemView';
 import type { SystemViewHandle } from '../right/SystemView';
 import { BuildAssistant } from '../right/BuildAssistant';
@@ -17,6 +18,12 @@ export interface RightPanelHandle {
   /** Silently sync the active editor file to System View without switching tabs.
    *  Returns the matched node/edge name, or null if no graph / no match. */
   syncActiveFile: (path: string | null) => string | null;
+  /** Inject a proactive AI message into the Coding Assistant chat. */
+  injectProactiveMessage: (message: string, collectContext: () => Promise<string>) => void;
+  /** Start the looping yellow attention pulse on the panel border. */
+  triggerPulse: () => void;
+  /** Stop the pulse immediately (e.g. user started typing). */
+  stopPulse: () => void;
 }
 
 interface RightPanelProps {
@@ -36,12 +43,16 @@ interface RightPanelProps {
   onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void;
   onOpenUrl?: (url: string) => void;
   activeSystemNode?: string | null;
+  onMessageSent?: () => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode }, ref) {
+function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
-  const systemViewRef = useRef<SystemViewHandle>(null);
+  const panelRef             = useRef<HTMLDivElement>(null);
+  const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const systemViewRef        = useRef<SystemViewHandle>(null);
+  const codingAssistantRef   = useRef<CodingAssistantHandle>(null);
 
   const handleOpenNode = useCallback((_nodeName: string, _nodeId?: string) => {
     // flushSync commits the tab switch synchronously so the SVG has real
@@ -74,6 +85,26 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
       if (!path || !systemViewRef.current?.hasGraph()) return null;
       // selectByPath only updates the selection — no pan — safe while SVG is hidden.
       return systemViewRef.current.selectByPath(path);
+    },
+    injectProactiveMessage: (message, collectContext) => {
+      codingAssistantRef.current?.injectProactiveMessage(message, collectContext);
+    },
+    triggerPulse: () => {
+      const el = panelRef.current;
+      if (!el) return;
+      // Remove, force reflow, re-add — guarantees animation restart even on repeat triggers.
+      el.classList.remove('proactive-pulse');
+      void el.offsetWidth;
+      el.classList.add('proactive-pulse');
+      // Auto-stop after 10 seconds if the user hasn't responded.
+      if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current);
+      pulseAutoStopRef.current = setTimeout(() => {
+        panelRef.current?.classList.remove('proactive-pulse');
+      }, 10_000);
+    },
+    stopPulse: () => {
+      if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current);
+      panelRef.current?.classList.remove('proactive-pulse');
     },
   }), [activeTab]);
 
@@ -121,6 +152,7 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
 
   return (
     <div
+      ref={panelRef}
       style={{
         width,
         background: 'var(--color-bg-right-panel)',
@@ -185,10 +217,12 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
       </div>
 
       <div style={{ flex: 1, display: activeTab === 'assistant' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
-        <CodingAssistant workspacePath={workspacePath} activeFilePath={activeFilePath} onWorkspaceOpen={onWorkspaceOpen}
+        <CodingAssistant ref={codingAssistantRef} workspacePath={workspacePath} activeFilePath={activeFilePath} onWorkspaceOpen={onWorkspaceOpen}
           provider={provider} model={model} setProvider={setProvider} setModel={setModel} getEditorContext={getEditorContext}
           contextNodes={contextNodes} onRemoveContextNode={onRemoveContextNode} onClearContextNodes={onClearContextNodes}
-          onNavigateToLine={onNavigateToLine} onOpenNode={handleOpenNode} activeSystemNode={activeSystemNode} />
+          onNavigateToLine={onNavigateToLine} onOpenNode={handleOpenNode} activeSystemNode={activeSystemNode}
+          onUserTyping={() => { if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current); panelRef.current?.classList.remove('proactive-pulse'); }}
+          onMessageSent={onMessageSent} />
       </div>
     </div>
   );

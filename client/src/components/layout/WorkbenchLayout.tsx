@@ -1,16 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ActivityBar } from './ActivityBar';
 import { MenuBar } from './MenuBar';
 import { Sidebar } from './Sidebar';
 import { EditorArea, EditorAreaHandle } from './EditorArea';
 import { RightPanel, RightPanelHandle } from './RightPanel';
 import { ResizeDivider } from './ResizeDivider';
+import { StatusBar } from './StatusBar';
 import { BottomTray, BottomTrayHandle } from '../bottom/BottomTray';
 import { useOpenFiles, sortOpenFilesByStructure } from '../../hooks/useOpenFiles';
 import { useFileWatcher } from '../../hooks/useFileWatcher';
 import { useTheme } from '../../hooks/useTheme';
 import { useSourceControl } from '../../hooks/useSourceControl';
-import { getWorkspace, closeWorkspace } from '../../api/files';
+import { getWorkspace, closeWorkspace, rephraseProactiveMessage } from '../../api/files';
+import { useProactiveHelp } from '../../hooks/useProactiveHelp';
+import { createIdleChurnSignal } from '../../services/proactiveSignals';
 import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL } from '../../providers';
 import type { Provider } from '../../providers';
 import type { FileNode, SidebarView } from '../../types';
@@ -24,6 +27,25 @@ const RIGHT_MAX = 1200;
 const TRAY_DEFAULT = 200;
 const TRAY_MIN = 80;
 const TRAY_MAX = 600;
+
+function playBell() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.4);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.9);
+  } catch {
+    // AudioContext unavailable — silently skip
+  }
+}
 
 export function WorkbenchLayout() {
   const [activeView, setActiveView] = useState<SidebarView>('explorer');
@@ -70,6 +92,7 @@ export function WorkbenchLayout() {
   }, []);
 
   const bottomTrayRef = useRef<BottomTrayHandle>(null);
+
   const runCommandInTerminal = useCallback((cmd: string) => {
     bottomTrayRef.current?.runCommand(cmd);
   }, []);
@@ -93,12 +116,40 @@ export function WorkbenchLayout() {
 
   useFileWatcher(workspacePath, refreshFile);
 
+  // ── Proactive help ───────────────────────────────────────────────────────────
+  const actionCountRef = useRef(0);
+  const recordAction = useCallback(() => { actionCountRef.current++; }, []);
+
+  const workspacePathRef  = useRef(workspacePath);
+  const activeFilePathRef = useRef(activeFilePath);
+  workspacePathRef.current  = workspacePath;
+  activeFilePathRef.current = activeFilePath;
+
+  const idleChurnSignal = useMemo(() => createIdleChurnSignal({
+    getWorkspacePath:  () => workspacePathRef.current,
+    getActiveFilePath: () => activeFilePathRef.current,
+  }), []); // stable — accessors read from refs at collection time
+
+  const proactiveStatus = useProactiveHelp({
+    signals: [idleChurnSignal],
+    enabled: !!workspacePath,
+    actionCountRef,
+    onTrigger: async (message, collectContext) => {
+      const rephrased = await rephraseProactiveMessage(message, provider.id, model);
+      playBell();
+      rightPanelRef.current?.triggerPulse();
+      rightPanelRef.current?.injectProactiveMessage(rephrased, collectContext);
+    },
+  });
+
   // Keep System View in sync with the active editor file.
   // Also propagate the matched node name so CodingAssistant can show a navigation chip.
+  // File navigation also counts as user activity for proactive help.
   useEffect(() => {
     const matched = rightPanelRef.current?.syncActiveFile(activeFilePath);
     setActiveSystemNode(matched ?? null);
-  }, [activeFilePath]);
+    if (activeFilePath) recordAction();
+  }, [activeFilePath, recordAction]);
 
   /** Open a URL as an iframe tab in the editor area. */
   const handleOpenUrl = useCallback((url: string) => {
@@ -326,7 +377,8 @@ export function WorkbenchLayout() {
             onTabClick={setActiveFilePath}
             onTabClose={closeFile}
             onTabReorder={reorderFiles}
-            onContentChange={updateContent}
+            onContentChange={(path, content) => { updateContent(path, content); recordAction(); }}
+            onActivity={recordAction}
             workspacePath={workspacePath}
             provider={provider}
             model={model}
@@ -360,6 +412,7 @@ export function WorkbenchLayout() {
             onNavigateToLine={handleNavigateToLine}
             onOpenUrl={handleOpenUrl}
             activeSystemNode={activeSystemNode}
+            onMessageSent={recordAction}
           />
         </div>
 
@@ -373,6 +426,7 @@ export function WorkbenchLayout() {
         />
         <BottomTray ref={bottomTrayRef} height={trayHeight} workspacePath={workspacePath} />
       </div>
+      {workspacePath && <StatusBar proactive={proactiveStatus} />}
     </div>
   );
 }

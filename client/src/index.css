@@ -142,6 +142,17 @@ input {
 .tutor-line-highlight { background: rgba(79, 193, 255, 0.12) !important; }
 .tutor-line-gutter    { background: #4fc1ff !important; width: 3px !important; margin-left: 9px !important; }
 
+/* Proactive help — right-panel attention pulse (loops until dismissed) */
+@keyframes proactive-pulse {
+  0%   { box-shadow: inset 0 0 0 0px rgba(234, 179, 8, 0); }
+  35%  { box-shadow: inset 0 0 0 3px rgba(234, 179, 8, 0.6); }
+  65%  { box-shadow: inset 0 0 0 3px rgba(234, 179, 8, 0.2); }
+  100% { box-shadow: inset 0 0 0 0px rgba(234, 179, 8, 0); }
+}
+.proactive-pulse {
+  animation: proactive-pulse 2s ease-in-out infinite;
+}
+
 /* System view — directed edge flow animation */
 @keyframes edge-flow {
   from { stroke-dashoffset: 0; }

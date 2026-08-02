@@ -561,6 +561,57 @@ This is the same pattern used for `filePathRef`/`contentRef` in `useFileDiff.ts`
 
 ---
 
+## Proactive Reply Triggers Agent Tool Execution
+
+### Symptom
+
+Replying to a proactive "do you need help" message caused the Coding Assistant to immediately run `search_files` or similar tools, then stop with an execution error instead of responding conversationally.
+
+### Root Cause
+
+When the user replies to a proactive message, `useCodingAssistant.sendMessage` awaits the stored `collectContext()` and prepends the result to the API payload. The context block included the raw output of `git diff` (up to 150 lines). The agent interpreted the diff as a signal that it should investigate the codebase using tools before responding.
+
+### Fix
+
+Added an explicit instruction to the context framing:
+
+```ts
+apiContent = `**Context at the time of the assistant's proactive message ` +
+  `(for reference only — respond conversationally, do not call any tools):**\n` +
+  `${proactiveContext}\n\n---\n${text}`;
+```
+
+The parenthetical is read by the LLM and suppresses tool-use behaviour for that turn.
+
+---
+
+## Blank Screen After Adding Proactive Help Wiring
+
+### Symptom
+
+The entire workbench rendered as a blank screen after adding the proactive help hooks to `WorkbenchLayout`.
+
+### Root Cause
+
+The proactive help block was inserted above the `useOpenFiles()` call but referenced `activeFilePath` — a value destructured from `useOpenFiles()` — before it was declared:
+
+```ts
+// BUG: placed before useOpenFiles()
+const activeFilePathRef = useRef(activeFilePath); // TS2448: used before declaration
+activeFilePathRef.current = activeFilePath;        // TS2448: used before declaration
+
+// ... later ...
+const { activeFilePath, ... } = useOpenFiles();   // declared here
+```
+
+TypeScript emitted `TS2448: Block-scoped variable 'activeFilePath' used before its declaration`. Vite still bundled the file (treating it as a warning at build time), but the runtime reference to an uninitialised `let` binding threw a `ReferenceError`, crashing the component tree before anything rendered.
+
+### Fix
+
+Move the entire proactive help block (refs, `useMemo`, `useProactiveHelp`) to after the `useOpenFiles()` destructure so `activeFilePath` is in scope.
+
+---
+
 ## System View Active-File Chip — Node Not Highlighted After Tab Switch
 
 ### Symptom

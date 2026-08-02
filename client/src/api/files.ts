@@ -113,6 +113,30 @@ export async function fetchFileDiffWithContent(filePath: string, content: string
   });
 }
 
+/** Overall unstaged diff across the whole workspace, for proactive help detection. */
+export async function fetchOverallDiff(): Promise<{ diff: string; lineCount: number }> {
+  return request<{ diff: string; lineCount: number }>('/api/git/diff/all');
+}
+
+/** Ask the LLM to rephrase a canned proactive message out-of-band.
+ *  Falls back to the original message on any error. */
+export async function rephraseProactiveMessage(
+  message: string,
+  provider: string,
+  model: string,
+): Promise<string> {
+  try {
+    const result = await request<{ rephrased: string }>('/api/proactive/rephrase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, provider, model }),
+    });
+    return result.rephrased || message;
+  } catch {
+    return message;
+  }
+}
+
 export type GitFileStatus = 'unstaged' | 'staged' | 'both';
 
 export async function fetchGitStatus(): Promise<Record<string, GitFileStatus>> {

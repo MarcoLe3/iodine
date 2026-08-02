@@ -8,6 +8,7 @@ import terminalCommandsRouter from './routes/terminalCommands';
 import aiSummaryRouter from './routes/aiSummary';
 import buildConfigRouter from './routes/buildConfig';
 import projectRouter from './routes/project';
+import proactiveRouter from './routes/proactive';
 
 export function createApp() {
   const app = express();
@@ -23,6 +24,7 @@ export function createApp() {
   app.use('/api', aiSummaryRouter);
   app.use('/api', buildConfigRouter);
   app.use('/api/project', projectRouter);
+  app.use('/api', proactiveRouter);
 
   return app;
 }

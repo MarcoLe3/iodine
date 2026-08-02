@@ -273,6 +273,96 @@ activeFilePath changes (editor tab switch)
 - **Two-step select+focus:** `selectByPath` (no DOM reads, safe while SVG is `display:none`) + `focusSelected` (reads live `clientWidth`/`clientHeight` after `flushSync` makes the tab visible). Avoids the zero-dimension bug from panning a hidden SVG.
 - `activeSystemNode` flows through component props so the chip appears without touching the message history.
 
+## Proactive Help System
+
+The proactive help system monitors user activity and automatically offers assistance when it detects the user is churning — taking many actions but producing little diff output. It is designed to be modular: new signal types can be registered alongside the existing one without touching the hook.
+
+### Architecture
+
+```
+WorkbenchLayout
+  ├── useProactiveHelp()         ← generic signal runner hook
+  │     ├── 1-min check interval  (fetches git diff, evaluates signals)
+  │     └── 1-sec display ticker  (updates ProactiveStatus for status bar)
+  ├── createIdleChurnSignal()    ← specific signal factory
+  └── onTrigger callback
+        ├── POST /api/proactive/rephrase  ← out-of-band LLM rephrase
+        ├── playBell()                    ← Web Audio API tone
+        ├── rightPanelRef.triggerPulse()  ← yellow border animation
+        └── rightPanelRef.injectProactiveMessage()
+              └── useCodingAssistant.injectProactiveMessage()
+                    ├── appends assistant message to UI
+                    └── stores collectContext for next user reply
+```
+
+### Files
+
+| File | Role |
+|------|------|
+| `client/src/hooks/useProactiveHelp.ts` | Generic hook. Runs a `setInterval` at `checkIntervalMs` (default 1 min). Each tick drains `actionCountRef`, fetches overall git diff, computes `diffLineDelta`, calls `shouldFire` on each registered signal. Enforces a global `cooldownMs` (default 2 min) between any two triggers. Returns `ProactiveStatus` for the debug status bar. |
+| `client/src/services/proactiveSignals.ts` | `createIdleChurnSignal` factory. Implements `ProactiveSignal` with `shouldFire`, `describe` (forward-looking reason), `collectContext` (active file + git diff), and 6 canned message variants. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Wires the signal, `onTrigger` callback, `playBell`, and proactive status into the layout. Passes `recordAction` as `onMessageSent` to `RightPanel`. |
+| `client/src/components/layout/RightPanel.tsx` | Exposes `triggerPulse()` and `stopPulse()` on `RightPanelHandle`. Manages the looping `proactive-pulse` CSS animation via direct DOM class manipulation (remove → `offsetWidth` reflow → add). Auto-stops after 10 s or on first chat keystroke (`onUserTyping`). |
+| `client/src/components/right/CodingAssistant.tsx` | Calls `onUserTyping()` on textarea change (stops pulse). Calls `onMessageSent()` on send (counts as an action). |
+| `client/src/hooks/useCodingAssistant.ts` | `injectProactiveMessage` appends the AI message to the UI and stores `collectContext`. On the next `sendMessage`, awaits `collectContext`, prepends the result as `**Context at the time of the assistant's proactive message (for reference only — respond conversationally, do not call any tools):**` to the API payload only (not shown in UI). |
+| `client/src/components/layout/StatusBar.tsx` | Thin 22 px bar below `BottomTray`. Shows live `Actions`, `Next` countdown, and forward-looking `Next check: YES / NO · quiet / NO · progress / NO · cooldown`. Only rendered when a workspace is open. |
+| `client/src/index.css` | `@keyframes proactive-pulse` — inset yellow `box-shadow`, 2 s `ease-in-out infinite`. |
+| `server/src/routes/proactive.ts` | `POST /api/proactive/rephrase` — non-streaming, single-turn LLM call to rephrase a canned message. Falls back to the original on any error. |
+
+### Signal Interface
+
+```ts
+interface ProactiveSignal {
+  readonly type: string;
+  shouldFire(snapshot: SignalSnapshot): boolean;
+  describe?(snapshot: SignalSnapshot): { fires: boolean; reason: string | null };
+  collectContext(): Promise<string>;
+  readonly messages: readonly string[];
+}
+
+interface SignalSnapshot {
+  actionCount: number;   // actions since last check (drained atomically)
+  diffLineDelta: number; // change in git diff line count vs previous check
+}
+```
+
+Add new signals by implementing this interface and registering them in `WorkbenchLayout`'s `useProactiveHelp` call alongside `idleChurnSignal`.
+
+### IdleChurn Signal — Detection Logic
+
+```
+fires when:  actionCount >= 30  AND  |diffLineDelta| < max(3, actionCount × 0.15)
+```
+
+- `actionCount >= 30` — user must be meaningfully active (not idle)
+- `|diffLineDelta| < threshold` — activity is not producing output (churning)
+- `diffLineDelta` is the change in total **git diff output line count** (includes headers and context lines) between two consecutive checks, not raw code lines
+
+**What counts as an action:** editor content edits, editor scroll (throttled to one event per 3 s), tab switches, and chat messages sent.
+
+**Status bar reasons:**
+- `NO · quiet` — `actionCount < 30`
+- `NO · progress` — diff growing proportionally to activity
+- `NO · cooldown` — within 2-minute cooldown window
+
+### Out-of-Band Rephrase
+
+Before injecting the canned message, `WorkbenchLayout.onTrigger` awaits `POST /api/proactive/rephrase` with the canned message, current provider, and model. The server makes a minimal non-streaming LLM call to rephrase it naturally. On any error the original canned message is used unchanged. This call is completely outside the conversation history.
+
+### Pulse Animation
+
+`triggerPulse()` uses the browser's canonical animation-restart pattern:
+```ts
+el.classList.remove('proactive-pulse');
+void el.offsetWidth;  // force reflow — browser registers removal
+el.classList.add('proactive-pulse');
+```
+React state is not involved. The animation loops at 2 s until `stopPulse()` is called, the user types in the chat textarea, or the 10-second auto-stop fires.
+
+### Debug Status Bar
+
+Visible whenever a workspace is open. Forward-looking: evaluates `shouldFire` against the current live action count and the last check's `diffLineDelta` to show what the next check would do — not what the previous check did. The `describe()` method on each signal provides the human-readable reason.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.

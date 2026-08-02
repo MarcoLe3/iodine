@@ -51,6 +51,7 @@ Iodine is organized around the learning journey:
 ### Explore
 
 - **Tutor Mode** — A read-only AI guide that walks through an unfamiliar codebase one file at a time, opening files and highlighting the lines worth studying.
+- **Proactive Help** — The IDE monitors your activity and automatically offers assistance when it detects you are churning in place — many actions, little output — without waiting for you to ask.
 - **Visible editor context** — The assistant automatically sees the code currently visible in your editor, so you can ask about what is on screen without copy-pasting.
 - **Interactive navigation** — Move between explanations, source files, architecture, and documentation without leaving the IDE.
 
@@ -84,6 +85,7 @@ The project is built to be forked. Change the layout, add panels, wire new backe
 - 📑 **Editor tabs** — Drag tabs to reorder them, scroll when they overflow, and track unsaved changes
 - 📁 **File and folder management** — Create, rename, and delete files and folders from the explorer
 - 🤖 **AI Coding Assistant** — Streaming chat with tool use backed by Claude, GPT, or Gemini
+- 🔔 **Proactive Help** — Detects when you are stuck and proactively offers context-aware assistance
 - 🎓 **Tutor Mode** — Read-only, step-by-step codebase walkthrough with file opening and line highlighting
 - 👁️ **User Visual Context** — Automatically includes visible editor lines or the active selection in AI context
 - 📖 **AI Summary** — Cached, tutorial-style explanations for files and their place in the system
