@@ -209,11 +209,14 @@ export function useCodingAssistant(
     setIsWatching(true);
 
     const diffs: string[] = [];
+    // Snapshots are taken at 4s, 10s, and 20s after the AI reply.
+    // Intervals between captures: 4s → 6s → 10s.
+    const INTERVALS = [4_000, 6_000, 10_000];
 
     try {
-      for (let i = 0; i < 3; i++) {
+      for (const delay of INTERVALS) {
         await new Promise<void>((resolve, reject) => {
-          const t = setTimeout(resolve, 10_000);
+          const t = setTimeout(resolve, delay);
           const onAbort = () => { clearTimeout(t); reject(new DOMException('watch aborted', 'AbortError')); };
           controller.signal.addEventListener('abort', onAbort, { once: true });
         });

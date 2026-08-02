@@ -66,10 +66,12 @@ router.post('/proactive/rephrase', async (req, res) => {
 const WATCH_SYSTEM =
   'You are a coding assistant doing a brief check-in after giving a developer guidance. ' +
   'You can see: (1) your previous reply that guided them, and (2) git diffs showing what ' +
-  'they changed in the 30 seconds after your reply. ' +
-  'Write a short, natural follow-up (1-3 sentences). You might: acknowledge their progress, ' +
-  'point out something relevant to what they changed, suggest a next step, or ask if they need help. ' +
-  'Be conversational and encouraging. Do not use tools or perform any actions.';
+  'they changed in the 20 seconds after your reply. ' +
+  'Your job is to review the diff critically and call out any issues — especially minor ones ' +
+  'like syntax errors, typos, missing semicolons, wrong variable names, off-by-one errors, ' +
+  'or anything that looks slightly off. Do not ignore nits; surface them clearly. ' +
+  'If the changes look correct, briefly acknowledge progress and suggest a next step. ' +
+  'Keep it to 2-4 sentences. Be direct and specific. Do not use tools or perform any actions.';
 
 router.post('/proactive/watch', async (req, res) => {
   const { previousReply, diffSnapshots, provider, model } = req.body as {
@@ -88,12 +90,14 @@ router.post('/proactive/watch', async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  const SNAPSHOT_TIMES = [4, 10, 20];
   const diffsText = diffSnapshots
-    .map((d, i) =>
-      d.trim()
-        ? `Snapshot ${i + 1} (at ${(i + 1) * 10}s):\n\`\`\`diff\n${d}\n\`\`\``
-        : `Snapshot ${i + 1} (at ${(i + 1) * 10}s): (no changes)`
-    )
+    .map((d, i) => {
+      const t = SNAPSHOT_TIMES[i] ?? (i + 1) * 10;
+      return d.trim()
+        ? `Snapshot ${i + 1} (at ${t}s):\n\`\`\`diff\n${d}\n\`\`\``
+        : `Snapshot ${i + 1} (at ${t}s): (no changes)`;
+    })
     .join('\n\n');
 
   const userContent =
