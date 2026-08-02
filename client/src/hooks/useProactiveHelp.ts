@@ -67,7 +67,7 @@ export function useProactiveHelp({
   enabled,
   actionCountRef,
   onTrigger,
-  checkIntervalMs = 100_000,
+  checkIntervalMs = 60_000,
   cooldownMs = 120_000,
 }: UseProactiveHelpOptions): ProactiveStatus {
   const prevDiffLinesRef  = useRef<number | null>(null);
