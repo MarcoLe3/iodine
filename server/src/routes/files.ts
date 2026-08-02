@@ -349,7 +349,10 @@ router.post('/git/diff', async (req, res) => {
 
   let headContent: string;
   try {
-    const r = await execFileAsync('git', ['show', `HEAD:${relPath}`], { cwd: rootPath });
+    // `HEAD:<path>` resolves against the repo root, not `cwd` — but the `./` prefix
+    // tells git to resolve it relative to `cwd` instead, which matters whenever the
+    // open workspace (rootPath) is a subdirectory of the git repo root.
+    const r = await execFileAsync('git', ['show', `HEAD:./${relPath.replace(/\\/g, '/')}`], { cwd: rootPath });
     headContent = r.stdout;
   } catch {
     // File not tracked in HEAD — treat as fully new, no diff to show
