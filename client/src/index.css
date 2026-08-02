@@ -150,8 +150,7 @@ input {
 
 .git-added-glyph,
 .git-modified-glyph,
-.git-deleted-glyph,
-.git-deleted-glyph-open {
+.git-deleted-glyph {
   width: 4px !important;
   margin-left: 8px !important;
   border-radius: 1px;
@@ -161,8 +160,7 @@ input {
 .git-modified-glyph { background: #e9b44c !important; cursor: pointer; }
 .git-modified-glyph:hover { background: #f0c060 !important; }
 
-.git-deleted-glyph,
-.git-deleted-glyph-open {
+.git-deleted-glyph {
   background: transparent !important;
   display: flex !important;
   align-items: center !important;
@@ -173,8 +171,7 @@ input {
   font-size: 11px;
   cursor: pointer;
 }
-.git-deleted-glyph::before    { content: '▸'; }
-.git-deleted-glyph-open::before { content: '▾'; }
+.git-deleted-glyph::before { content: '▸'; }
 
 /* Markdown preview prose styles */
 .md-preview h1, .md-preview h2, .md-preview h3,
