@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { Response } from 'express';
 import { TOOL_SCHEMAS } from './fileTools';
 import { executeAgentTool } from './agentTools';
-import { rootPath } from '../state';
+import { buildSystemPrompt } from './systemPrompt';
 
 export async function loadOpenAIKey(): Promise<string> {
   if (process.env.OPENAI_TOKEN) return process.env.OPENAI_TOKEN;
@@ -26,40 +26,6 @@ const TOOLS: OpenAI.ChatCompletionTool[] = Object.entries(TOOL_SCHEMAS).map(([na
 
 function writeSSE(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-const TUTOR_SYSTEM_ADDENDUM = `
-
-You are currently in TUTOR MODE. Follow this strict protocol every time:
-
-**Turn 1 — Plan only (no open_file yet)**
-Read whichever files you need silently, then write a short numbered list of the steps you will walk through (e.g. "1. Entry point  2. Auth middleware  3. Route handler"). End with exactly: "Ready to start? Say 'go' or ask a question."
-Do NOT call open_file during this turn.
-
-**Turn 2+ — One file per turn**
-Each time the user responds (even just "next" / "ok" / "go"), open exactly ONE file with open_file, highlight the relevant lines, and explain what the user should look at and why.
-Then stop and wait for the user to respond before opening the next file.
-Never open more than one file in a single response.
-
-**Rules (always enforced)**
-- Never use write_file or run_terminal_command.
-- Never open more than one file per response turn.
-- Always wait for user input between file navigations.
-- If the user asks a question mid-walk, answer it fully before continuing.
-- Keep explanations concise — one paragraph per file.`;
-
-function buildSystemPrompt(activeFile: string | null, tutorMode?: boolean): string {
-  const workspaceInfo = rootPath ? `Workspace: ${rootPath}` : 'No workspace is currently open.';
-  const activeFileInfo = activeFile ? `The user currently has this file open in the editor: ${activeFile}` : '';
-  const base = `You are a coding assistant with access to the user's project files.
-${workspaceInfo}
-${activeFileInfo}
-
-You can read, write, list, and search files, and run terminal commands. When modifying files, read them first.
-Be concise in your explanations. When writing files with write_file, ALWAYS write the complete file content — never truncate, abbreviate, or use placeholder comments like "// rest of file unchanged" or "// ...". The file on disk will be exactly what you pass to write_file, so partial content means a broken file.
-When the user's message contains a **Relevant paths hint**, read or list those exact paths first using read_file or list_directory before reaching for search_files or broader directory scans. Only fall back to searching if the provided paths don't contain what you need.
-Call open_file whenever you reference a specific file or a specific block of code. Use it liberally.`;
-  return tutorMode ? base + TUTOR_SYSTEM_ADDENDUM : base;
 }
 
 export async function runOpenAIAgentLoop(
@@ -98,15 +64,11 @@ export async function runOpenAIAgentLoop(
       if (abortSignal.aborted) return;
       const delta = chunk.choices[0]?.delta;
 
-      if (delta?.content) {
-        writeSSE(res, 'text_delta', { text: delta.content });
-      }
+      if (delta?.content) writeSSE(res, 'text_delta', { text: delta.content });
 
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
-          if (!toolCallsAcc.has(tc.index)) {
-            toolCallsAcc.set(tc.index, { id: '', name: '', args: '' });
-          }
+          if (!toolCallsAcc.has(tc.index)) toolCallsAcc.set(tc.index, { id: '', name: '', args: '' });
           const acc = toolCallsAcc.get(tc.index)!;
           if (tc.id) acc.id = tc.id;
           if (tc.function?.name) acc.name += tc.function.name;
@@ -114,53 +76,30 @@ export async function runOpenAIAgentLoop(
         }
       }
 
-      if (chunk.choices[0]?.finish_reason) {
-        finishReason = chunk.choices[0].finish_reason;
-      }
+      if (chunk.choices[0]?.finish_reason) finishReason = chunk.choices[0].finish_reason;
     }
 
     if (abortSignal.aborted) return;
-
     const toolCalls = Array.from(toolCallsAcc.values());
-
     if (finishReason !== 'tool_calls' || toolCalls.length === 0) {
       writeSSE(res, 'done', {});
       return;
     }
 
-    // Append assistant message with tool_calls
     history.push({
       role: 'assistant',
       content: null,
-      tool_calls: toolCalls.map(tc => ({
-        id: tc.id,
-        type: 'function' as const,
-        function: { name: tc.name, arguments: tc.args },
-      })),
+      tool_calls: toolCalls.map(tc => ({ id: tc.id, type: 'function' as const, function: { name: tc.name, arguments: tc.args } })),
     });
 
-    // Execute tools and append results
     for (const tc of toolCalls) {
       if (abortSignal.aborted) return;
-
       let input: Record<string, unknown> = {};
       try { input = JSON.parse(tc.args); } catch { /* malformed args */ }
-
       writeSSE(res, 'tool_call', { id: tc.id, name: tc.name, input });
-
       const result = await executeAgentTool(tc.name, input, res, abortSignal);
-      writeSSE(res, 'tool_result', {
-        tool_use_id: tc.id,
-        name: tc.name,
-        preview: result.preview,
-        error: result.error,
-      });
-
-      history.push({
-        role: 'tool',
-        tool_call_id: tc.id,
-        content: result.content,
-      });
+      writeSSE(res, 'tool_result', { tool_use_id: tc.id, name: tc.name, preview: result.preview, error: result.error });
+      history.push({ role: 'tool', tool_call_id: tc.id, content: result.content });
     }
   }
 }

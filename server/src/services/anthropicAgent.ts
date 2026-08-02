@@ -6,6 +6,7 @@ import { Response } from 'express';
 import { TOOL_SCHEMAS } from './fileTools';
 import { executeAgentTool } from './agentTools';
 import { rootPath } from '../state';
+import { TUTOR_SYSTEM_ADDENDUM } from './tutorSystem';
 
 export async function loadApiKey(): Promise<string> {
   try {
@@ -41,25 +42,19 @@ function writeSSE(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-const TUTOR_SYSTEM_ADDENDUM = `
+function buildSystemPrompt(activeFile: string | null, tutorMode?: boolean): string {
+  const workspaceInfo = rootPath ? `Workspace: ${rootPath}` : 'No workspace is currently open.';
+  const activeFileInfo = activeFile ? `The user currently has this file open in the editor: ${activeFile}` : '';
+  const base = `You are a coding assistant with access to the user's project files.
+${workspaceInfo}
+${activeFileInfo}
 
-You are currently in TUTOR MODE. Follow this strict protocol every time:
-
-**Turn 1 — Plan only (no open_file yet)**
-Read whichever files you need silently, then write a short numbered list of the steps you will walk through (e.g. "1. Entry point  2. Auth middleware  3. Route handler"). End with exactly: "Ready to start? Say 'go' or ask a question."
-Do NOT call open_file during this turn.
-
-**Turn 2+ — One file per turn**
-Each time the user responds (even just "next" / "ok" / "go"), open exactly ONE file with open_file, highlight the relevant lines, and explain what the user should look at and why.
-Then stop and wait for the user to respond before opening the next file.
-Never open more than one file in a single response.
-
-**Rules (always enforced)**
-- Never use write_file or run_terminal_command.
-- Never open more than one file per response turn.
-- Always wait for user input between file navigations.
-- If the user asks a question mid-walk, answer it fully before continuing.
-- Keep explanations concise — one paragraph per file.`;
+You can read, write, list, and search files, and run terminal commands. When modifying files, read them first.
+Be concise in your explanations. When writing files with write_file, ALWAYS write the complete file content — never truncate, abbreviate, or use placeholder comments like "// rest of file unchanged" or "// ...". The file on disk will be exactly what you pass to write_file, so partial content means a broken file.
+When the user's message contains a **Relevant paths hint**, read or list those exact paths first using read_file or list_directory before reaching for search_files or broader directory scans. Only fall back to searching if the provided paths don't contain what you need.
+Call open_file whenever you reference a specific file or a specific block of code. Use it liberally.`;
+  return tutorMode ? base + TUTOR_SYSTEM_ADDENDUM : base;
+}
 
 export async function runAgentLoop(
   messages: Anthropic.MessageParam[],
@@ -118,19 +113,15 @@ Call open_file whenever you reference a specific file or a specific block of cod
     );
 
     if (toolUseBlocks.length === 0) {
-      // No more tool calls — done
       writeSSE(res, 'done', {});
       return;
     }
 
-    // Append assistant message — drop any thinking blocks with empty content
-    // (the API rejects them on subsequent turns when they have thinking: "")
     const contentForHistory = finalMessage.content.filter(
       b => b.type !== 'thinking' || (b as Anthropic.ThinkingBlock).thinking.length > 0
     );
     history.push({ role: 'assistant', content: contentForHistory });
 
-    // Execute tools and collect results
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const toolUse of toolUseBlocks) {
       if (abortSignal.aborted) return;
