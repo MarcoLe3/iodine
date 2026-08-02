@@ -146,11 +146,37 @@ When a file is open in the Monaco editor, changed lines are decorated in real ti
 
 | Decoration | Gutter | Line background | Meaning |
 |---|---|---|---|
-| Added | Green bar (`#2ea043`) | Green tint | Line exists in working tree but not in HEAD |
-| Modified | Yellow bar (`#e9b44c`) | Yellow tint | Line exists in both but content has changed |
-| Deleted | Red `▸` glyph | — | Lines were removed; click glyph to expand |
+| Added | Green bar (`#2ea043`) | Green tint | Lines exist in the working tree but not in HEAD |
+| Modified | Yellow bar (`#e9b44c`) | Yellow tint | Lines exist in both, with different content |
+| Deleted | Red `▸` glyph | — | Lines were removed; the glyph marks where they used to be |
 
-Clicking a **`▸`** glyph toggles an inline view zone showing the deleted lines in red below the marker. Click **`▾`** to collapse it. All three types also appear as colored marks in the scrollbar **overview ruler**.
+Clicking **any** marker opens the diff dialog (see below). All three types also appear as colored marks in the scrollbar **overview ruler**.
+
+### The Hunk Model
+
+A change is represented as a **hunk**, not as per-line flags:
+
+```ts
+type DiffHunk = {
+  startLine: number;        // 1-based, in the working copy
+  lineCount: number;        // 0 for a pure deletion
+  originalLines: string[];  // [] for a pure addition
+  type: 'added' | 'modified' | 'deleted';
+};
+```
+
+Read it as *"the working-copy range `[startLine, startLine + lineCount)` replaces `originalLines`."* The `type` is derived from which side is empty.
+
+This matters because the two sides of a hunk **need not be the same length**. An earlier design bucketed changes per line — pairing the first `min(m, p)` lines of a mixed block as "modified" and spilling the remainder into separate "added"/"deleted" entries. That cannot represent an unbalanced edit: collapsing two lines into one produced a `modified` entry *and* a `deleted` entry anchored to the same line, which meant two competing gutter glyphs on one line, a preview that showed only half the change, and two reverts that each restored only part of it. Keeping both sides of a hunk together makes one marker, one preview and one revert describe the whole change.
+
+### Diff Dialog
+
+Clicking any gutter marker opens `client/src/components/editor/DiffHunkDialog.tsx`:
+
+- Two stacked blocks — a red "before" block rendering `originalLines`, and a green "after" block rendering the hunk's current text (snapshotted from the Monaco model at click time). A pure addition has an empty before-block; a pure deletion has an empty after-block.
+- When the two sides have the **same** line count, each row is word-diffed with `diffWordsWithSpace` from the [`diff`](https://www.npmjs.com/package/diff) package, so only the changed words are tinted — showing the exact area modified rather than just "this line changed". When the counts differ there is no meaningful per-line pairing, so each side renders plainly and the block tint alone carries the meaning (the same thing GitHub does).
+- **Revert** replaces the hunk's whole range with `originalLines` in a single `executeEdits` call, so the change is restored atomically and stays on the undo stack. **Cancel**, the backdrop, or **Escape** close without changing anything.
+- The snapshot is taken once, when the dialog opens. If the buffer no longer matches it by the time Revert is clicked (further edits, or a diff refresh that made the hunk stale), Revert is a no-op and the dialog just closes — it never overwrites newer edits.
 
 ### How It Works
 
@@ -158,21 +184,27 @@ Clicking a **`▸`** glyph toggles an inline view zone showing the deleted lines
 
 Runs `git diff HEAD -- <file>` via `execFile` (no shell injection risk). The response is parsed by `parseDiff()`:
 
-- Each hunk header (`@@`) sets the current new-file line counter.
-- Contiguous blocks of `−`/`+` lines are classified as a *change block*:
-  - Only `+` lines → **added** (each line recorded individually)
-  - Only `−` lines → **deleted** block (content preserved, position = after current new line)
-  - Mixed `−` and `+` → first `min(m, p)` additions are **modified**; extra additions are **added**; extra deletions form an additional **deleted** block
+- Each hunk header (`@@`) sets the current new-file line counter and marks the parser as inside a hunk. Everything before the first `@@` is header noise and is skipped on that flag — matching on `--- `/`+++ ` prefixes instead would misread a removed line whose own content starts with `--`.
+- Each contiguous block of `−`/`+` lines becomes **one** hunk:
+  - Only `+` lines → `type: 'added'`, `originalLines: []`
+  - Only `−` lines → `type: 'deleted'`, `lineCount: 0`, anchored to the line the removed text followed (`0` at the top of the file)
+  - Mixed `−` and `+` → `type: 'modified'`, carrying **all** removed lines and **all** added lines, whatever their counts
 
 ```json
 {
-  "added":    [5, 6],
-  "modified": [12],
-  "deleted":  [{ "afterLine": 8, "lines": ["old line content"] }]
+  "hunks": [
+    { "startLine": 5,  "lineCount": 2, "originalLines": [],                    "type": "added" },
+    { "startLine": 12, "lineCount": 1, "originalLines": ["old a", "old b"],    "type": "modified" },
+    { "startLine": 8,  "lineCount": 0, "originalLines": ["removed line"],      "type": "deleted" }
+  ]
 }
 ```
 
-Returns `{ added: [], modified: [], deleted: [] }` if the file is untracked, clean, or git is unavailable.
+Returns `{ hunks: [] }` if the file is untracked, clean, or git is unavailable.
+
+**Server: `POST /api/git/diff`**
+
+Diffs in-memory editor content against HEAD without requiring a save. Fetches the committed blob with `git show HEAD:./<relPath>`, writes both sides to temp files, and runs `git diff --no-index`. The `./` prefix is load-bearing: `HEAD:<path>` resolves against the **repo root**, whereas `HEAD:./<path>` resolves against `cwd` — which is what makes this work when the open workspace is a subdirectory of the repo rather than its root.
 
 **Client: `useFileDiff` hook** (`client/src/hooks/useFileDiff.ts`)
 
@@ -183,14 +215,15 @@ Fetches `GET /api/git/diff` for the currently active file path. Polls every 3 se
 Decorations are applied via the Monaco `deltaDecorations` API after the editor mounts. Key implementation details:
 
 - `onMount` captures the editor and monaco instances in refs and fires a state flag (`mounted`) to trigger the decoration effect.
-- A `diffDataRef` ref keeps the glyph-click handler pointing at the latest diff data without re-subscribing.
-- Expanded deleted blocks are tracked in a `Set<number>` (keyed by `afterLine`). State resets when the active file changes.
-- Glyph clicks are detected via `editor.onMouseDown` checking `MouseTargetType.GUTTER_GLYPH_MARGIN`, then matched to a deleted block by line number.
-- Expanded blocks are rendered as Monaco **ViewZones** (`editor.changeViewZones`) — DOM nodes inserted as virtual lines in the editor, styled with red text and a red left border.
+- A `diffDataRef` ref keeps the glyph-click handler pointing at the latest diff data without re-subscribing. The handler only ever *sets* dialog state — it is registered once at mount, so reading that state inside it would capture a stale closure.
+- `markerRange(hunk)` gives the gutter line(s) a hunk owns: its working-copy range, or — for a deletion, which owns no lines — the single line it was anchored to. One hunk yields exactly one decoration, so glyphs can never compete for the same line.
+- Glyph clicks are detected via `editor.onMouseDown` checking `MouseTargetType.GUTTER_GLYPH_MARGIN`, then matched to a hunk through `markerRange`.
+- The hunk's current text is snapshotted with `readCurrentLines()` at click time and passed to `DiffHunkDialog` alongside the hunk itself.
+- `revertHunk()` is the single revert path for all three types: re-insert for a deletion, remove-with-newline for an addition, replace-range otherwise.
 
 **CSS** (`client/src/index.css`)
 
-`.git-added-glyph`, `.git-modified-glyph`, `.git-deleted-glyph`, `.git-deleted-glyph-open` — gutter bar/icon styles. `.git-added-line`, `.git-modified-line` — 12% opacity background tints.
+`.git-added-glyph`, `.git-modified-glyph`, `.git-deleted-glyph` — gutter bar/icon styles. `.git-added-line`, `.git-modified-line` — 12% opacity background tints.
 
 ---
 
@@ -217,10 +250,11 @@ All three features share the same refresh strategy:
 
 ### Add more diff decoration types (e.g. conflict markers)
 
-1. Extend `DiffResult` / `DiffData` types in `server/src/routes/files.ts` and `client/src/api/files.ts`.
-2. Update `parseDiff()` on the server.
-3. Add decoration entries in the `useEffect` inside `MonacoEditor.tsx`.
-4. Add CSS classes in `index.css`.
+1. Extend `DiffHunk['type']` in `server/src/routes/files.ts` and `client/src/api/files.ts` (keep the two in sync — there is no shared types package).
+2. Update `parseDiff()` on the server to emit the new type.
+3. Add a branch in the decoration `useEffect` inside `MonacoEditor.tsx`, and in `markerRange()` if the new type does not occupy a plain working-copy line range.
+4. Handle it in `revertHunk()` and in `DiffHunkDialog`'s `title()`.
+5. Add CSS classes in `index.css`.
 
 ### Add more SCM actions (e.g. push, pull, stash)
 

@@ -11,65 +11,75 @@ import { rootPath, setRootPath, clearRootPath } from '../state';
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
-type DeletedBlock = { afterLine: number; lines: string[] };
-type ModifiedLine = { line: number; originalLine: string };
-type DiffResult = { added: number[]; modified: ModifiedLine[]; deleted: DeletedBlock[] };
+/**
+ * One contiguous change, modelled the way an editor's SCM gutter needs it:
+ * "the working-copy range [startLine, startLine + lineCount) replaces `originalLines`".
+ *
+ * - `added`    → `originalLines` is empty (nothing was there before)
+ * - `deleted`  → `lineCount` is 0, and `startLine` is the working-copy line the
+ *                removed text used to follow (0 when it was the top of the file)
+ * - `modified` → both sides are non-empty, and the two sides need not be the
+ *                same length (e.g. two lines collapsed into one)
+ *
+ * Keeping both sides of a hunk together is what lets a single gutter marker,
+ * a single preview and a single revert describe the whole change. Splitting a
+ * mixed hunk into per-line "added"/"modified"/"deleted" buckets cannot represent
+ * an unbalanced edit and produces markers that each restore only half of it.
+ */
+type DiffHunk = {
+  startLine: number;
+  lineCount: number;
+  originalLines: string[];
+  type: 'added' | 'modified' | 'deleted';
+};
+type DiffResult = { hunks: DiffHunk[] };
 
 function parseDiff(diffOutput: string): DiffResult {
-  const added: number[] = [];
-  const modified: ModifiedLine[] = [];
-  const deleted: DeletedBlock[] = [];
+  const hunks: DiffHunk[] = [];
 
   const hunkRe = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
   const lines = diffOutput.split('\n');
   let newLine = 0;
+  let inHunk = false;
   let i = 0;
 
   while (i < lines.length) {
     const line = lines[i];
-    const hunkMatch = line.match(hunkRe);
 
+    if (line.startsWith('diff --git')) { inHunk = false; i++; continue; }
+
+    const hunkMatch = line.match(hunkRe);
     if (hunkMatch) {
       newLine = parseInt(hunkMatch[1], 10);
+      inHunk = true;
       i++; continue;
     }
 
-    // Skip file-level header lines
-    if (line.startsWith('diff ') || line.startsWith('index ') ||
-        line.startsWith('--- ') || line.startsWith('+++ ') ||
-        line.startsWith('new file') || line.startsWith('deleted file')) {
-      i++; continue;
-    }
+    // Everything before the first @@ is file-level header noise. Skipping on
+    // this flag (rather than matching '--- '/'+++ ' prefixes) means a removed
+    // line whose own content starts with "--" is not mistaken for a header.
+    if (!inHunk) { i++; continue; }
 
     // Collect a contiguous change block (consecutive - and + lines)
     if (line.startsWith('-') || line.startsWith('+')) {
-      const minusLines: string[] = [];
+      const originalLines: string[] = [];
       const plusLineNos: number[] = [];
 
       while (i < lines.length && (lines[i].startsWith('-') || lines[i].startsWith('+'))) {
         if (lines[i].startsWith('-')) {
-          minusLines.push(lines[i].slice(1));
+          originalLines.push(lines[i].slice(1));
         } else {
           plusLineNos.push(newLine++);
         }
         i++;
       }
 
-      if (minusLines.length === 0) {
-        for (const ln of plusLineNos) added.push(ln);
+      if (originalLines.length === 0) {
+        hunks.push({ startLine: plusLineNos[0], lineCount: plusLineNos.length, originalLines: [], type: 'added' });
       } else if (plusLineNos.length === 0) {
-        deleted.push({ afterLine: newLine - 1, lines: minusLines });
+        hunks.push({ startLine: newLine - 1, lineCount: 0, originalLines, type: 'deleted' });
       } else {
-        // Mixed: first overlap lines are "modified"; extras on either side classified individually
-        const overlap = Math.min(minusLines.length, plusLineNos.length);
-        for (let j = 0; j < overlap; j++) modified.push({ line: plusLineNos[j], originalLine: minusLines[j] });
-        for (let j = overlap; j < plusLineNos.length; j++) added.push(plusLineNos[j]);
-        if (minusLines.length > plusLineNos.length) {
-          deleted.push({
-            afterLine: plusLineNos[plusLineNos.length - 1],
-            lines: minusLines.slice(plusLineNos.length),
-          });
-        }
+        hunks.push({ startLine: plusLineNos[0], lineCount: plusLineNos.length, originalLines, type: 'modified' });
       }
       continue;
     }
@@ -79,7 +89,7 @@ function parseDiff(diffOutput: string): DiffResult {
     i++;
   }
 
-  return { added, modified, deleted };
+  return { hunks };
 }
 
 // ── Helper to convert git remote URL to HTTPS GitHub URL ────────────────────
@@ -327,7 +337,7 @@ router.get('/files/pdf', async (req, res) => {
 // ── Git diff & status ─────────────────────────────────────────────────────────
 
 router.get('/git/diff', async (req, res) => {
-  if (!rootPath) return res.json({ added: [], modified: [], deleted: [] });
+  if (!rootPath) return res.json({ hunks: [] });
   const filePath = req.query.path as string;
   if (!filePath) return res.status(400).json({ error: 'path is required' });
 
@@ -335,13 +345,13 @@ router.get('/git/diff', async (req, res) => {
     const { stdout } = await execFileAsync('git', ['diff', 'HEAD', '--', filePath], { cwd: rootPath });
     return res.json(parseDiff(stdout));
   } catch {
-    return res.json({ added: [], modified: [], deleted: [] });
+    return res.json({ hunks: [] });
   }
 });
 
 /** Diff provided editor content against HEAD (no disk I/O required on the client side). */
 router.post('/git/diff', async (req, res) => {
-  if (!rootPath) return res.json({ added: [], modified: [], deleted: [] });
+  if (!rootPath) return res.json({ hunks: [] });
   const { path: filePath, content } = req.body as { path: string; content: string };
   if (!filePath || content === undefined) return res.status(400).json({ error: 'path and content required' });
 
@@ -349,11 +359,14 @@ router.post('/git/diff', async (req, res) => {
 
   let headContent: string;
   try {
-    const r = await execFileAsync('git', ['show', `HEAD:${relPath}`], { cwd: rootPath });
+    // `HEAD:<path>` resolves against the repo root, not `cwd` — but the `./` prefix
+    // tells git to resolve it relative to `cwd` instead, which matters whenever the
+    // open workspace (rootPath) is a subdirectory of the git repo root.
+    const r = await execFileAsync('git', ['show', `HEAD:./${relPath.replace(/\\/g, '/')}`], { cwd: rootPath });
     headContent = r.stdout;
   } catch {
     // File not tracked in HEAD — treat as fully new, no diff to show
-    return res.json({ added: [], modified: [], deleted: [] });
+    return res.json({ hunks: [] });
   }
 
   const tmpA = path.join(os.tmpdir(), `iodine-head-${Date.now()}`);

@@ -83,9 +83,22 @@ export function getPdfUrl(path: string): string {
   return `${API_BASE}/api/files/pdf?path=${encodeURIComponent(path)}`;
 }
 
-export type ModifiedLine = { line: number; originalLine: string };
-export type DeletedBlock = { afterLine: number; lines: string[] };
-export type DiffData = { added: number[]; modified: ModifiedLine[]; deleted: DeletedBlock[] };
+/**
+ * One contiguous change: the working-copy range `[startLine, startLine + lineCount)`
+ * replaces `originalLines` (the committed text).
+ *
+ * - `added`    → `originalLines` is empty
+ * - `deleted`  → `lineCount` is 0; `startLine` is the line the removed text used
+ *                to follow (0 when it was the top of the file)
+ * - `modified` → both sides non-empty, and they need not be the same length
+ */
+export type DiffHunk = {
+  startLine: number;
+  lineCount: number;
+  originalLines: string[];
+  type: 'added' | 'modified' | 'deleted';
+};
+export type DiffData = { hunks: DiffHunk[] };
 
 export async function fetchFileDiff(filePath: string): Promise<DiffData> {
   return request<DiffData>(`/api/git/diff?path=${encodeURIComponent(filePath)}`);
