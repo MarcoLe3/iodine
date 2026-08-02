@@ -33,7 +33,7 @@ interface RightPanelProps {
   contextNodes: FileNode[];
   onRemoveContextNode: (path: string) => void;
   onClearContextNodes: () => void;
-  onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
+  onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void;
   onOpenUrl?: (url: string) => void;
   activeSystemNode?: string | null;
 }

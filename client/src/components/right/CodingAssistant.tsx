@@ -323,7 +323,7 @@ interface CodingAssistantProps {
   contextNodes: FileNode[];
   onRemoveContextNode: (path: string) => void;
   onClearContextNodes: () => void;
-  onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
+  onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void;
   onOpenNode?: (nodeName: string, nodeId?: string) => void;
   activeSystemNode?: string | null;
 }

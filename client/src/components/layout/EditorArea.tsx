@@ -34,7 +34,7 @@ interface EditorAreaProps {
 export interface EditorAreaHandle {
   save: () => void;
   getVisibleContext: () => string | null;
-  navigateToLine: (filePath: string, line: number, endLine?: number) => void;
+  navigateToLine: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void;
 }
 
 function isPreviewable(path: string) {
@@ -85,7 +85,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
     // Pending navigation request: open a file at a line and highlight a range.
     // Stored in a ref so it can be applied when the Monaco editor mounts for the target file.
-    const pendingNavigationRef = useRef<{ filePath: string; line: number; endLine: number } | null>(null);
+    const pendingNavigationRef = useRef<{ filePath: string; line: number; endLine: number; startCol?: number; endCol?: number } | null>(null);
     const decorationIdsRef = useRef<string[]>([]);
 
     // Reset view & summary when switching files; directories go straight to summary view
@@ -125,25 +125,34 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     }, [summaryRequestPath, activeFile?.path]);
 
     /** Apply a stored navigation request to the given Monaco editor instance. */
-    const applyNavigation = useCallback((editor: MonacoEditorAPI.IStandaloneCodeEditor, line: number, endLine: number) => {
+    const applyNavigation = useCallback((editor: MonacoEditorAPI.IStandaloneCodeEditor, line: number, endLine: number, startCol?: number, endCol?: number) => {
       const model = editor.getModel();
       if (!model) return;
       editor.revealLineInCenter(line);
-      const maxCol = model.getLineMaxColumn(endLine);
+      const hasColRange = startCol != null && endCol != null;
       decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, [{
-        range: { startLineNumber: line, startColumn: 1, endLineNumber: endLine, endColumn: maxCol },
-        options: { isWholeLine: true, className: 'tutor-line-highlight', linesDecorationsClassName: 'tutor-line-gutter' },
+        range: {
+          startLineNumber: line,
+          startColumn: hasColRange ? startCol : 1,
+          endLineNumber: endLine,
+          endColumn: hasColRange ? endCol : model.getLineMaxColumn(endLine),
+        },
+        options: {
+          isWholeLine: !hasColRange,
+          className: 'tutor-line-highlight',
+          linesDecorationsClassName: 'tutor-line-gutter',
+        },
       }]);
     }, []);
 
     useImperativeHandle(ref, () => ({
       save: () => {},
-      navigateToLine: (filePath: string, line: number, endLine?: number) => {
+      navigateToLine: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => {
         const resolvedEndLine = endLine ?? line;
-        pendingNavigationRef.current = { filePath, line, endLine: resolvedEndLine };
+        pendingNavigationRef.current = { filePath, line, endLine: resolvedEndLine, startCol, endCol };
         // If the target file is already active and Monaco is mounted, apply immediately
         if (monacoEditorRef.current && activeFilePath === filePath) {
-          applyNavigation(monacoEditorRef.current, line, resolvedEndLine);
+          applyNavigation(monacoEditorRef.current, line, resolvedEndLine, startCol, endCol);
           pendingNavigationRef.current = null;
         }
       },
@@ -519,7 +528,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   const nav = pendingNavigationRef.current;
                   if (nav && nav.filePath === activeFile.path) {
                     pendingNavigationRef.current = null;
-                    applyNavigation(editor, nav.line, nav.endLine);
+                    applyNavigation(editor, nav.line, nav.endLine, nav.startCol, nav.endCol);
                   }
 
                 }}

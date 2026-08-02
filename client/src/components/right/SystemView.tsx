@@ -266,7 +266,7 @@ interface SystemViewProps {
   workspacePath: string | null;
   provider: Provider;
   model: string;
-  onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void;
+  onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void;
 }
 
 type Selected = { type: 'node'; id: string } | { type: 'edge'; idx: number } | null;

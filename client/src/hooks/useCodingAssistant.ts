@@ -17,7 +17,7 @@ const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 export function useCodingAssistant(
   provider: Provider,
   model: string,
-  onNavigateToLine?: (filePath: string, line: number, endLine?: number) => void,
+  onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void,
 ) {
   const [uiMessages, setUiMessages] = useState<UIMessage[]>([]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
@@ -180,8 +180,10 @@ export function useCodingAssistant(
             const filePath = payload.path as string;
             const line = payload.line as number;
             const endLine = payload.endLine as number | undefined;
+            const startCol = payload.startCol as number | undefined;
+            const endCol = payload.endCol as number | undefined;
             if (filePath) {
-              onNavigateToLineRef.current?.(filePath, line, endLine);
+              onNavigateToLineRef.current?.(filePath, line, endLine, startCol, endCol);
             }
           } else if (eventName === 'text_delta') {
             // Buffer and render at most once per animation frame (~60 fps)

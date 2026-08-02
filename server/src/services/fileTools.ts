@@ -130,13 +130,15 @@ export const TOOL_SCHEMAS = {
     },
   },
   open_file: {
-    description: 'Open a file in the editor and highlight a range of lines to draw the user\'s attention to specific code. Use this to walk through the codebase, point out relevant sections, or guide the user to where changes should be made without making the changes yourself.',
+    description: 'Open a file in the editor and highlight a range of lines to draw the user\'s attention to specific code. Use this to walk through the codebase, point out relevant sections, or guide the user to where changes should be made without making the changes yourself. For ranges of fewer than 5 lines, also supply start_col and end_col to highlight the exact expression or token rather than the whole line — read the file content carefully to count columns accurately (1-based, tabs count as 1).',
     parameters: {
       type: 'object' as const,
       properties: {
         path: { type: 'string', description: 'Absolute path to the file to open' },
         line: { type: 'integer', description: 'Line number to scroll to and start highlighting (1-based)' },
         end_line: { type: 'integer', description: 'Last line of the highlighted range (inclusive, defaults to line if omitted)' },
+        start_col: { type: 'integer', description: 'First column of the highlight on the start line (1-based, inclusive). Omit to highlight the whole line.' },
+        end_col: { type: 'integer', description: 'Last column of the highlight on the end line (1-based, exclusive). Omit to highlight the whole line.' },
       },
       required: ['path', 'line'],
     },

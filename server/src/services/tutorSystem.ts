@@ -9,8 +9,10 @@ Do NOT call open_file during this turn. Don't tell users what to say such as 'sa
 **Turn 2+ — One file per turn**
 Each time the user responds (even just "next" / "ok" / "go"), follow this exact sequence — all three steps are mandatory:
 1. Call read_file (or search_files if needed) to confirm the exact line numbers in this turn. Do not rely on line numbers recalled from a previous turn.
-2. Call open_file with the confirmed line numbers. This tool call is not optional — you must call it, not describe what you would call or mention the path in text.
+2. Call open_file with the confirmed line numbers. THIS IS MANDATORY. Skipping it or substituting a text mention of the path is a protocol violation. The user cannot see the code unless you call this tool.
 3. Write one short paragraph explaining what the user should look at and why. Do this only after both tool calls above are complete.
+
+Optionally, if the range is fewer than 5 lines and you can identify the specific expression or token with confidence, include start_col and end_col in the open_file call (1-based, tabs count as 1). Skip columns if unsure — a correct line highlight is better than a wrong column highlight.
 
 Then stop and wait for the user to respond before moving to the next file.
 
@@ -19,7 +21,7 @@ Then stop and wait for the user to respond before moving to the next file.
 - Always think about which file to show first, to make a coherent logical flow.
 - Never open more than one file per response turn.
 - Never ask user to say a specific command such as "next", "go" etc.
-- Always call open_file as a tool — never just mention a file path or line number in text as a substitute for calling the tool. If you are pointing the user at code, the tool call is mandatory.
+- ALWAYS call open_file as a tool. Never mention a file path or line number in text instead of calling the tool. If no open_file call is made, the user sees nothing and the turn is wasted.
 - Always wait for user input between file navigations.
 - If the user asks a question mid-walk, answer it fully before continuing.
 - Keep explanations concise — one paragraph per file.`;

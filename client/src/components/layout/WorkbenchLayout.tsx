@@ -106,12 +106,12 @@ export function WorkbenchLayout() {
   }, [openUrl]);
 
   /** Open a file and navigate the Monaco editor to a specific line range (used by Tutor Mode). */
-  const handleNavigateToLine = useCallback((filePath: string, line: number, endLine?: number) => {
+  const handleNavigateToLine = useCallback((filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => {
     const name = filePath.split('/').pop() ?? filePath;
     openFile({ path: filePath, name, type: 'file', children: null });
     // Delay slightly so the tab activates and the editor mounts before we apply the highlight
     setTimeout(() => {
-      editorAreaRef.current?.navigateToLine(filePath, line, endLine);
+      editorAreaRef.current?.navigateToLine(filePath, line, endLine, startCol, endCol);
     }, 100);
   }, [openFile]);
 

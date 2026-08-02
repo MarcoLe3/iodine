@@ -28,8 +28,10 @@ export async function executeAgentTool(
     };
     const line = toInt(input.line, 1);
     const endLine = toInt(input.end_line, line);
+    const startCol = typeof input.start_col !== 'undefined' ? toInt(input.start_col, 1) : undefined;
+    const endCol = typeof input.end_col !== 'undefined' ? toInt(input.end_col, 1) : undefined;
     if (!abortSignal.aborted) {
-      res.write(`event: open_file\ndata: ${JSON.stringify({ path: filePath, line, endLine })}\n\n`);
+      res.write(`event: open_file\ndata: ${JSON.stringify({ path: filePath, line, endLine, startCol, endCol })}\n\n`);
     }
     return { content: `Opened ${filePath} at line ${line}`, preview: `Opened ${filePath}:${line}`, error: false };
   }
