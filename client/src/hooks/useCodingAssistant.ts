@@ -201,7 +201,7 @@ export function useCodingAssistant(
   const runProgressCheckRef = useRef(runProgressCheck);
   runProgressCheckRef.current = runProgressCheck;
 
-  // Capture three git diff snapshots at 10-second intervals, then fire the progress check.
+  // Capture three git diff snapshots at 5, 15, and 30 seconds, then fire the progress check.
   const startProgressWatch = useCallback(async (previousReply: string) => {
     watchControllerRef.current?.abort();
     const controller = new AbortController();
@@ -209,9 +209,9 @@ export function useCodingAssistant(
     setIsWatching(true);
 
     const diffs: string[] = [];
-    // Snapshots are taken at 4s, 10s, and 20s after the AI reply.
-    // Intervals between captures: 4s → 6s → 10s.
-    const INTERVALS = [4_000, 6_000, 10_000];
+    // Snapshots are taken at 5s, 15s, and 30s after the AI reply.
+    // Intervals between captures: 5s → 10s → 15s.
+    const INTERVALS = [5_000, 10_000, 15_000];
 
     try {
       for (const delay of INTERVALS) {
