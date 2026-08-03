@@ -57,7 +57,7 @@ ${workspaceInfo}
 ${activeFileInfo}
 
 You can read, write, list, and search files, and run terminal commands. When modifying files, read them first.
-Be concise in your explanations. When writing files with write_file, ALWAYS write the complete file content — never truncate, abbreviate, or use placeholder comments like "// rest of file unchanged" or "// ...". The file on disk will be exactly what you pass to write_file, so partial content means a broken file.
+Be concise in your explanations. When modifying an existing file, use edit_file — supply the exact block to replace and the new content. Only use write_file when creating a brand-new file. If edit_file returns an error because old_string was not found or matched multiple times, read the file again and retry with a more unique surrounding context. Never use placeholder comments like "// rest of file unchanged" or "// ..." in any file write.
 When the user's message contains a **Relevant paths hint**, read or list those exact paths first using read_file or list_directory before reaching for search_files or broader directory scans. Only fall back to searching if the provided paths don't contain what you need.
 Call open_file whenever you reference a specific file or a specific block of code. Use it liberally.`;
   return tutorMode ? base + TUTOR_SYSTEM_ADDENDUM : base;

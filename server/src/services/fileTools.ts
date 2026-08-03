@@ -57,6 +57,27 @@ export async function executeTool(name: string, input: Record<string, unknown>):
       return { content: `File written: ${filePath}`, preview: `File written: ${filePath}`, error: false };
     }
 
+    if (name === 'edit_file') {
+      if (!rootPath) return { content: 'No workspace open', preview: 'No workspace open', error: true };
+      const filePath = input.path as string;
+      const oldString = input.old_string as string;
+      const newString = input.new_string as string;
+      const abs = path.isAbsolute(filePath) ? filePath : path.join(rootPath, filePath);
+      const original = await fs.promises.readFile(abs, 'utf-8');
+      const count = original.split(oldString).length - 1;
+      if (count === 0) {
+        return { content: `edit_file failed: old_string not found in ${filePath}. Read the file first to confirm the exact text.`, preview: 'old_string not found', error: true };
+      }
+      if (count > 1) {
+        return { content: `edit_file failed: old_string matches ${count} locations in ${filePath}. Add more surrounding context to make it unique.`, preview: `${count} matches — ambiguous`, error: true };
+      }
+      const updated = original.replace(oldString, newString);
+      await writeFileContent(abs, updated, rootPath);
+      const added = newString.split('\n').length - oldString.split('\n').length;
+      const summary = added === 0 ? 'lines replaced' : added > 0 ? `+${added} lines` : `${added} lines`;
+      return { content: `Edited ${filePath} (${summary})`, preview: `Edited ${filePath} (${summary})`, error: false };
+    }
+
     if (name === 'list_directory') {
       const dirPath = (input.path as string | undefined) || rootPath;
       if (!dirPath) return { content: 'No workspace open', preview: 'No workspace open', error: true };
@@ -88,8 +109,20 @@ export const TOOL_SCHEMAS = {
       required: ['path'],
     },
   },
+  edit_file: {
+    description: 'Edit a file by replacing an exact string with a new string. Prefer this over write_file when modifying an existing file — only the changed lines are needed. old_string must match exactly once in the file; if it matches zero or multiple times an error is returned and you should retry with more surrounding context. For new files use write_file instead.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        path: { type: 'string', description: 'Absolute or workspace-relative path to the file' },
+        old_string: { type: 'string', description: 'The exact string to replace (must match exactly once)' },
+        new_string: { type: 'string', description: 'The string to replace it with' },
+      },
+      required: ['path', 'old_string', 'new_string'],
+    },
+  },
   write_file: {
-    description: 'Write content to a file in the workspace. Creates parent directories if needed.',
+    description: 'Write content to a file in the workspace. Use for creating new files. For modifying existing files prefer edit_file. Creates parent directories if needed.',
     parameters: {
       type: 'object' as const,
       properties: {
