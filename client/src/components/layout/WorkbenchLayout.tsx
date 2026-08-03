@@ -49,6 +49,8 @@ function playBell() {
 
 export function WorkbenchLayout() {
   const [activeView, setActiveView] = useState<SidebarView>('explorer');
+  const [currentEditorView, setCurrentEditorView] = useState('source');
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [rightPanelWidth, setRightPanelWidth] = useState(RIGHT_PANEL_DEFAULT);
   const [trayHeight, setTrayHeight] = useState(TRAY_DEFAULT);
@@ -149,6 +151,8 @@ export function WorkbenchLayout() {
     const matched = rightPanelRef.current?.syncActiveFile(activeFilePath);
     setActiveSystemNode(matched ?? null);
     if (activeFilePath) recordAction();
+    // Reset outline state when the active file changes
+    setActiveHeadingId(null);
   }, [activeFilePath, recordAction]);
 
   /** Open a URL as an iframe tab in the editor area. */
@@ -214,6 +218,21 @@ export function WorkbenchLayout() {
 
   const handleViewChange = useCallback((view: SidebarView) => {
     setActiveView(view);
+  }, []);
+
+  const handleEditorViewChange = useCallback((view: string) => {
+    setCurrentEditorView(view);
+    if (view === 'preview') {
+      setActiveView('outline');
+      setActiveHeadingId(null);
+    } else {
+      setActiveView(v => v === 'outline' ? 'explorer' : v);
+    }
+  }, []);
+
+  const handleOutlineNavigate = useCallback((id: string) => {
+    setActiveHeadingId(id);
+    editorAreaRef.current?.scrollToHeading(id);
   }, []);
 
   /** Shared handler — opens a server-side workspace from any entrypoint
@@ -345,7 +364,12 @@ export function WorkbenchLayout() {
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         {/* Main row: sidebar + editor + right panel */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ActivityBar activeView={activeView} onViewChange={handleViewChange} gitChangeCount={gitChangeCount} />
+          <ActivityBar
+            activeView={activeView}
+            onViewChange={handleViewChange}
+            gitChangeCount={gitChangeCount}
+            outlineEnabled={currentEditorView === 'preview' && openFiles.some(f => f.path === activeFilePath && /\.(md|markdown)$/i.test(f.path))}
+          />
 
           <Sidebar
             activeView={activeView}
@@ -360,6 +384,13 @@ export function WorkbenchLayout() {
             onAddToContext={handleAddToContext}
             onNodeSelect={handleNodeSelect}
             expandToPath={activeFilePath}
+            outlineContent={
+              currentEditorView === 'preview' && openFiles.some(f => f.path === activeFilePath && /\.(md|markdown)$/i.test(f.path))
+                ? (openFiles.find(f => f.path === activeFilePath)?.content ?? null)
+                : null
+            }
+            onOutlineNavigate={handleOutlineNavigate}
+            activeHeadingId={activeHeadingId}
           />
 
           <ResizeDivider
@@ -379,6 +410,7 @@ export function WorkbenchLayout() {
             onTabReorder={reorderFiles}
             onContentChange={(path, content) => { updateContent(path, content); recordAction(); rightPanelRef.current?.notifyEditorActivity(); }}
             onActivity={recordAction}
+            onEditorViewChange={handleEditorViewChange}
             workspacePath={workspacePath}
             provider={provider}
             model={model}

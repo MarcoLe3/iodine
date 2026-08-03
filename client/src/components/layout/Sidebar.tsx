@@ -1,5 +1,6 @@
 import { FileExplorer } from '../sidebar/FileExplorer';
 import { SourceControlPanel } from '../sidebar/SourceControlPanel';
+import { OutlinePanel } from '../sidebar/OutlinePanel';
 import type { FileNode, SidebarView } from '../../types';
 
 interface SidebarProps {
@@ -17,6 +18,12 @@ interface SidebarProps {
   onNodeSelect?: (node: FileNode) => void;
   /** When set, auto-expands all parent folders to reveal this file path. */
   expandToPath?: string | null;
+  /** Markdown content for the outline panel (null = not in outline mode). */
+  outlineContent?: string | null;
+  /** Called when the user clicks a heading in the outline panel. */
+  onOutlineNavigate?: (id: string) => void;
+  /** The currently active heading id (for bolding). */
+  activeHeadingId?: string | null;
 }
 
 export function Sidebar({
@@ -33,6 +40,9 @@ export function Sidebar({
   onAddToContext,
   onNodeSelect,
   expandToPath,
+  outlineContent,
+  onOutlineNavigate,
+  activeHeadingId,
 }: SidebarProps) {
   // Helper to open a file given only its absolute path (from SCM panel)
   const handleOpenByPath = (absPath: string) => {
@@ -52,7 +62,13 @@ export function Sidebar({
         flexShrink: 0,
       }}
     >
-      {activeView === 'explorer' ? (
+      {activeView === 'outline' ? (
+        <OutlinePanel
+          content={outlineContent ?? null}
+          activeHeadingId={activeHeadingId}
+          onNavigate={onOutlineNavigate}
+        />
+      ) : activeView === 'explorer' ? (
         <FileExplorer
           workspacePath={workspacePath}
           activeFilePath={activeFilePath}

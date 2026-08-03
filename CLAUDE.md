@@ -78,6 +78,27 @@ The content hash means the cache auto-invalidates when the file/directory struct
 
 **Provider/model state** is owned by `WorkbenchLayout` and passed down to `RightPanel`, `CodingAssistant`, `SystemView`, and `EditorArea` so all features share the same selection.
 
+## Outline / Table-of-Contents Sidebar Panel
+
+When a Markdown file is in **Preview** mode, the activity bar's third icon (document outline) becomes active and the sidebar automatically switches to the **Outline** panel. The panel lists all headings from the file, indented by level. Clicking a heading scrolls the preview to it; the active heading is bolded and accent-coloured, its ancestors are semi-bold.
+
+| File | Role |
+|------|------|
+| `client/src/types/index.ts` | `SidebarView` union includes `'outline'` as the third value. |
+| `client/src/components/layout/ActivityBar.tsx` | Adds `OutlineIcon` (document SVG) as the 3rd nav item. Accepts `outlineEnabled?: boolean`; when `false` the button is rendered at opacity 0.3 with `pointer-events: none` so it is visually greyed out but never triggers navigation. |
+| `client/src/components/sidebar/OutlinePanel.tsx` | Parses Markdown content into `HeadingEntry[]` with `parseHeadings` (regex on `#`-prefixed lines). Renders each heading as a button indented by `(level − minLevel) × 14 + 12` px. Active heading gets `fontWeight: 700`, accent colour, and a `▸` prefix; ancestor headings (walked backwards to find the closest at each lower level) get `fontWeight: 600`. Shows "No headings found." when the file has no headings. |
+| `client/src/components/layout/Sidebar.tsx` | Adds `outlineContent`, `onOutlineNavigate`, and `activeHeadingId` props. Renders `<OutlinePanel>` when `activeView === 'outline'`. |
+| `client/src/components/layout/EditorArea.tsx` | Adds `onEditorViewChange` prop (fired via `useEffect` keyed on `[editorView]`). Adds `scrollToHeading(id)` to `EditorAreaHandle` — queries the preview `<div>` for `#<CSS.escape(id)>` and smooth-scrolls to it. Adds `id` attributes to h1–h6 in the ReactMarkdown `components` map using `makeHeadingId` (recursive child-text extraction → `slugify`). |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Tracks `currentEditorView` and `activeHeadingId` state. `handleEditorViewChange` switches sidebar to `'outline'` on `'preview'` and reverts to `'explorer'` otherwise. `handleOutlineNavigate` sets `activeHeadingId` and calls `editorAreaRef.current?.scrollToHeading`. `outlineEnabled` is true only when `currentEditorView === 'preview'` and the active file is `.md`/`.markdown`. |
+
+**Slug algorithm (`slugify`):** lowercase → strip inline Markdown punctuation (`*_\`~[]()!`) → strip non-word characters → collapse spaces to `-` → trim. Identical to the algorithm used in `OutlinePanel` so outline entries always map to the correct heading element `id`.
+
+**Auto-switch flow:**
+1. User clicks **👁 Preview** on a `.md` file → `EditorArea` fires `onEditorViewChange('preview')`.
+2. `WorkbenchLayout.handleEditorViewChange` sets `activeView = 'outline'` → sidebar switches panels.
+3. User clicks a heading in `OutlinePanel` → `handleOutlineNavigate(id)` → `scrollToHeading(id)` on `EditorAreaHandle` → preview scrolls smoothly.
+4. User clicks **⌨ Source** → `onEditorViewChange('source')` → sidebar reverts to `'explorer'`.
+
 ## Source / Preview Scroll Sync
 
 When toggling between the **source** (Monaco) and **preview** (rendered Markdown) views of a `.md` file, the editor preserves the approximate reading position using a scroll-percentage approach.

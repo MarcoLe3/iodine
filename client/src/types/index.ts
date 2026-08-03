@@ -21,7 +21,7 @@ export interface OpenFile {
   url?: string;
 }
 
-export type SidebarView = 'explorer' | 'scm';
+export type SidebarView = 'explorer' | 'scm' | 'outline';
 
 export interface WorkspaceInfo {
   path: string | null;

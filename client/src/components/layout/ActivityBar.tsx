@@ -4,6 +4,7 @@ interface ActivityBarProps {
   activeView: SidebarView | null;
   onViewChange: (view: SidebarView) => void;
   gitChangeCount?: number;
+  outlineEnabled?: boolean;
 }
 
 interface NavItem {
@@ -25,12 +26,19 @@ const BranchIcon = () => (
   </svg>
 );
 
+const OutlineIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <path d="M6 2h9l4 4v16H5V2h1zm9 0v4h4M9 10h7M9 13h7M9 16h5" />
+  </svg>
+);
+
 const NAV_ITEMS: NavItem[] = [
   { id: 'explorer', label: 'Explorer', icon: <FolderIcon /> },
   { id: 'scm', label: 'Source Control', icon: <BranchIcon /> },
+  { id: 'outline', label: 'Outline', icon: <OutlineIcon /> },
 ];
 
-export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0 }: ActivityBarProps) {
+export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0, outlineEnabled = false }: ActivityBarProps) {
   return (
     <div
       style={{
@@ -47,11 +55,13 @@ export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0 }: Ac
       {NAV_ITEMS.map(item => {
         const isActive = activeView === item.id;
         const isGitIcon = item.id === 'scm';
+        const isOutlineIcon = item.id === 'outline';
+        const isDisabled = isOutlineIcon && !outlineEnabled;
         return (
           <button
             key={item.id}
             title={item.label}
-            onClick={() => onViewChange(item.id)}
+            onClick={() => !isDisabled && onViewChange(item.id)}
             style={{
               width: '100%',
               height: 48,
@@ -61,14 +71,16 @@ export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0 }: Ac
               color: isActive ? 'var(--color-icon-active)' : 'var(--color-icon)',
               position: 'relative',
               borderLeft: isActive ? '2px solid var(--color-accent)' : '2px solid transparent',
-              opacity: isActive ? 1 : 0.7,
+              opacity: isDisabled ? 0.3 : isActive ? 1 : 0.7,
               transition: 'opacity 0.1s, color 0.1s',
+              cursor: isDisabled ? 'default' : 'pointer',
+              pointerEvents: isDisabled ? 'none' : undefined,
             }}
             onMouseEnter={e => {
-              if (!isActive) (e.currentTarget as HTMLButtonElement).style.opacity = '1';
+              if (!isActive && !isDisabled) (e.currentTarget as HTMLButtonElement).style.opacity = '1';
             }}
             onMouseLeave={e => {
-              if (!isActive) (e.currentTarget as HTMLButtonElement).style.opacity = '0.7';
+              if (!isActive && !isDisabled) (e.currentTarget as HTMLButtonElement).style.opacity = '0.7';
             }}
           >
             {item.icon}

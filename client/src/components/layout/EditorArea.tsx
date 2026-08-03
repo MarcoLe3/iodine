@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useState, useEffect, useCallback, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useState, useEffect, useCallback, useRef } from 'react';
 import type { editor as MonacoEditorAPI } from 'monaco-editor';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -31,16 +31,41 @@ interface EditorAreaProps {
   onSummaryHandled?: () => void;
   /** Fired on editor scroll — forwarded to MonacoEditor for activity tracking. */
   onActivity?: () => void;
+  /** Called whenever the editor view switches between source / preview / summary. */
+  onEditorViewChange?: (view: string) => void;
 }
 
 export interface EditorAreaHandle {
   save: () => void;
   getVisibleContext: () => string | null;
   navigateToLine: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void;
+  scrollToHeading: (id: string) => void;
 }
 
 function isPreviewable(path: string) {
   return path.endsWith('.md') || path.endsWith('.html');
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[*_`~[\]()!]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+}
+
+function makeHeadingId(children: React.ReactNode): string {
+  const extract = (n: React.ReactNode): string => {
+    if (!n) return '';
+    if (typeof n === 'string') return n;
+    if (Array.isArray(n)) return n.map(extract).join('');
+    if (typeof n === 'object' && 'props' in (n as object))
+      return extract((n as React.ReactElement).props.children);
+    return '';
+  };
+  return slugify(extract(children));
 }
 
 /** Resolve a potentially relative image src to an API URL that the server can serve. */
@@ -71,7 +96,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl) ? null : (activeFile?.path ?? null),
@@ -201,6 +226,11 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       }
     }, [editorView, restoreScrollPercentage]);
 
+    // Notify parent when the editor view changes.
+    useEffect(() => {
+      onEditorViewChange?.(editorView);
+    }, [editorView, onEditorViewChange]);
+
     useImperativeHandle(ref, () => ({
       save: () => {},
       navigateToLine: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => {
@@ -211,6 +241,14 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
           applyNavigation(monacoEditorRef.current, line, resolvedEndLine, startCol, endCol);
           pendingNavigationRef.current = null;
         }
+      },
+      scrollToHeading: (id: string) => {
+        const container = previewRef.current;
+        if (!container) return;
+        const target = container.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+        if (!target) return;
+        const offset = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+        container.scrollTo({ top: offset - 16, behavior: 'smooth' });
       },
       getVisibleContext: () => {
         const editor = monacoEditorRef.current;
@@ -559,6 +597,12 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                         const resolvedSrc = resolveImageSrc(src ?? '', activeFile.path);
                         return <img src={resolvedSrc} alt={alt ?? ''} {...props} style={{ maxWidth: '100%' }} />;
                       },
+                      h1: ({ children, ...p }) => <h1 id={makeHeadingId(children)} {...p}>{children}</h1>,
+                      h2: ({ children, ...p }) => <h2 id={makeHeadingId(children)} {...p}>{children}</h2>,
+                      h3: ({ children, ...p }) => <h3 id={makeHeadingId(children)} {...p}>{children}</h3>,
+                      h4: ({ children, ...p }) => <h4 id={makeHeadingId(children)} {...p}>{children}</h4>,
+                      h5: ({ children, ...p }) => <h5 id={makeHeadingId(children)} {...p}>{children}</h5>,
+                      h6: ({ children, ...p }) => <h6 id={makeHeadingId(children)} {...p}>{children}</h6>,
                     }}
                   >
                     {activeFile.content}
