@@ -29,7 +29,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenProjectClick = () => {
-    setFileMenuOpen(false);
+    setProjectMenuOpen(false);
     fileInputRef.current?.click();
   };
 
@@ -99,7 +99,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   };
 
   const handleDownloadMetadata = async () => {
-    setProjectMenuOpen(false);
+    setEditorMenuOpen(false);
     setProjectStatus({ type: 'downloading', message: 'Downloading…' });
     try {
       await downloadProjectMetadata();
@@ -112,7 +112,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   };
 
   const handleImportMetadataClick = () => {
-    setProjectMenuOpen(false);
+    setEditorMenuOpen(false);
     importInputRef.current?.click();
   };
 
@@ -146,7 +146,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
 
   const handleCloseAllTabsClick = () => {
     if (openTabsCount === 0) {
-      setEditorMenuOpen(false);
+      setFileMenuOpen(false);
       return;
     }
     setShowCloseAllDialog(true);
@@ -154,7 +154,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
 
   const handleConfirmCloseAllTabs = () => {
     setShowCloseAllDialog(false);
-    setEditorMenuOpen(false);
+    setFileMenuOpen(false);
     onCloseAllTabs();
   };
 
@@ -163,12 +163,12 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   };
 
   const handleCloseUneditedTabsClick = () => {
-    setEditorMenuOpen(false);
+    setFileMenuOpen(false);
     onCloseUneditedTabs();
   };
 
   const handleSortTabsClick = () => {
-    setEditorMenuOpen(false);
+    setFileMenuOpen(false);
     onSortTabsByFileStructure();
   };
 
@@ -205,6 +205,78 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
           zIndex: 100,
         }}
       >
+        {/* Project menu */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setProjectMenuOpen(v => !v)}
+            onBlur={() => setTimeout(() => setProjectMenuOpen(false), 150)}
+            style={{
+              padding: '0 10px',
+              height: 24,
+              borderRadius: 3,
+              background: projectMenuOpen ? 'var(--color-bg-hover)' : 'none',
+              color: 'var(--color-text-primary)',
+              fontSize: 13,
+            }}
+            onMouseEnter={e => { if (!projectMenuOpen) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+            onMouseLeave={e => { if (!projectMenuOpen) e.currentTarget.style.background = 'none'; }}
+          >
+            Project
+          </button>
+
+          {projectMenuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: 2,
+                background: 'var(--color-bg-sidebar)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 4,
+                padding: '4px 0',
+                minWidth: 200,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                zIndex: 200,
+              }}
+            >
+              <button
+                onMouseDown={handleOpenProjectClick}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '5px 16px',
+                  textAlign: 'left',
+                  color: 'var(--color-text-primary)',
+                  fontSize: 13,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                Open Project…
+              </button>
+
+              {workspacePath && (
+                <button
+                  onMouseDown={() => { setProjectMenuOpen(false); onCloseProject(); }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '5px 16px',
+                    textAlign: 'left',
+                    color: 'var(--color-text-primary)',
+                    fontSize: 13,
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                >
+                  Close Project
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* File menu */}
         <div style={{ position: 'relative' }}>
           <button
@@ -236,81 +308,6 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
                 borderRadius: 4,
                 padding: '4px 0',
                 minWidth: 180,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-                zIndex: 200,
-              }}
-            >
-              <button
-                onMouseDown={handleOpenProjectClick}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '5px 16px',
-                  textAlign: 'left',
-                  color: 'var(--color-text-primary)',
-                  fontSize: 13,
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-              >
-                Open Project…
-              </button>
-
-              {workspacePath && (
-                <>
-                  <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0' }} />
-                  <button
-                    onMouseDown={() => { setFileMenuOpen(false); onCloseProject(); }}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: '5px 16px',
-                      textAlign: 'left',
-                      color: 'var(--color-text-primary)',
-                      fontSize: 13,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                  >
-                    Close Project
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Editor menu */}
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setEditorMenuOpen(v => !v)}
-            onBlur={() => setTimeout(() => setEditorMenuOpen(false), 150)}
-            style={{
-              padding: '0 10px',
-              height: 24,
-              borderRadius: 3,
-              background: editorMenuOpen ? 'var(--color-bg-hover)' : 'none',
-              color: 'var(--color-text-primary)',
-              fontSize: 13,
-            }}
-            onMouseEnter={e => { if (!editorMenuOpen) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
-            onMouseLeave={e => { if (!editorMenuOpen) e.currentTarget.style.background = 'none'; }}
-          >
-            Editor
-          </button>
-
-          {editorMenuOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                marginTop: 2,
-                background: 'var(--color-bg-sidebar)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 4,
-                padding: '4px 0',
-                minWidth: 220,
                 boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
                 zIndex: 200,
               }}
@@ -374,68 +371,66 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
           )}
         </div>
 
-        {/* Project menu — only visible when a workspace is open */}
-        {workspacePath && (
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setProjectMenuOpen(v => !v)}
-              onBlur={() => setTimeout(() => setProjectMenuOpen(false), 150)}
-              style={{
-                padding: '0 10px',
-                height: 24,
-                borderRadius: 3,
-                background: projectMenuOpen ? 'var(--color-bg-hover)' : 'none',
-                color: 'var(--color-text-primary)',
-                fontSize: 13,
-              }}
-              onMouseEnter={e => { if (!projectMenuOpen) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
-              onMouseLeave={e => { if (!projectMenuOpen) e.currentTarget.style.background = 'none'; }}
-            >
-              Project
-            </button>
+        {/* Editor menu */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setEditorMenuOpen(v => !v)}
+            onBlur={() => setTimeout(() => setEditorMenuOpen(false), 150)}
+            style={{
+              padding: '0 10px',
+              height: 24,
+              borderRadius: 3,
+              background: editorMenuOpen ? 'var(--color-bg-hover)' : 'none',
+              color: 'var(--color-text-primary)',
+              fontSize: 13,
+            }}
+            onMouseEnter={e => { if (!editorMenuOpen) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+            onMouseLeave={e => { if (!editorMenuOpen) e.currentTarget.style.background = 'none'; }}
+          >
+            Editor
+          </button>
 
-            {projectMenuOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: 2,
-                  background: 'var(--color-bg-sidebar)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 4,
-                  padding: '4px 0',
-                  minWidth: 200,
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-                  zIndex: 200,
-                }}
-              >
-                {([
-                  { label: 'Download Metadata', action: handleDownloadMetadata },
-                  { label: 'Import Metadata…',  action: handleImportMetadataClick },
-                  { label: 'Clear Metadata',    action: () => { setProjectMenuOpen(false); setShowClearConfirm(true); } },
-                ]).map(item => (
-                  <button
-                    key={item.label}
-                    onMouseDown={item.action}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: '5px 16px',
-                      textAlign: 'left',
-                      color: 'var(--color-text-primary)',
-                      fontSize: 13,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+          {editorMenuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: 2,
+                background: 'var(--color-bg-sidebar)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 4,
+                padding: '4px 0',
+                minWidth: 220,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                zIndex: 200,
+              }}
+            >
+              {([
+                { label: 'Download Metadata', action: handleDownloadMetadata },
+                { label: 'Import Metadata…',  action: handleImportMetadataClick },
+                { label: 'Clear Metadata',    action: () => { setEditorMenuOpen(false); setShowClearConfirm(true); } },
+              ]).map(item => (
+                <button
+                  key={item.label}
+                  onMouseDown={item.action}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '5px 16px',
+                    textAlign: 'left',
+                    color: 'var(--color-text-primary)',
+                    fontSize: 13,
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {opening && (
           <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
