@@ -230,6 +230,15 @@ export function WorkbenchLayout() {
     }
   }, []);
 
+  const handlePreview = useCallback(() => {
+    // Only allow preview for markdown files
+    if (activeFilePath && /\.(md|markdown)$/i.test(activeFilePath)) {
+      setCurrentEditorView('preview');
+      setActiveView('outline');
+      setActiveHeadingId(null);
+    }
+  }, [activeFilePath]);
+
   const handleOutlineNavigate = useCallback((id: string) => {
     setActiveHeadingId(id);
     editorAreaRef.current?.scrollToHeading(id);
@@ -292,6 +301,9 @@ export function WorkbenchLayout() {
   const handleSortTabsByFileStructure = useCallback(() => {
     setSortedFiles(sortOpenFilesByStructure(openFiles));
   }, [openFiles, setSortedFiles]);
+
+  // Check if preview button should be enabled
+  const canPreview = !!activeFilePath && /\.(md|markdown)$/i.test(activeFilePath);
 
   return (
     <div
@@ -368,7 +380,9 @@ export function WorkbenchLayout() {
             activeView={activeView}
             onViewChange={handleViewChange}
             gitChangeCount={gitChangeCount}
-            outlineEnabled={currentEditorView === 'preview' && openFiles.some(f => f.path === activeFilePath && /\.(md|markdown)$/i.test(f.path))}
+            canPreview={canPreview}
+            previewActive={currentEditorView === 'preview'}
+            onPreview={handlePreview}
           />
 
           <Sidebar

@@ -4,7 +4,9 @@ interface ActivityBarProps {
   activeView: SidebarView | null;
   onViewChange: (view: SidebarView) => void;
   gitChangeCount?: number;
-  outlineEnabled?: boolean;
+  canPreview?: boolean;
+  previewActive?: boolean;
+  onPreview?: () => void;
 }
 
 interface NavItem {
@@ -21,7 +23,7 @@ const FolderIcon = () => (
 
 const BranchIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M6 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM6 15a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm12-11a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2z" />
+    <path d="M6 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0-0-2zM6 15a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0-0-2zm12-11a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0-0-2z" />
     <path d="M6 8v8M18 8v2a4 4 0 0 1-4 4H9" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
   </svg>
 );
@@ -32,83 +34,50 @@ const OutlineIcon = () => (
   </svg>
 );
 
+const EyeIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <ellipse cx="12" cy="12" rx="10" ry="6" />
+    <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 const NAV_ITEMS: NavItem[] = [
   { id: 'explorer', label: 'Explorer', icon: <FolderIcon /> },
   { id: 'scm', label: 'Source Control', icon: <BranchIcon /> },
   { id: 'outline', label: 'Outline', icon: <OutlineIcon /> },
 ];
 
-export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0, outlineEnabled = false }: ActivityBarProps) {
+export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0, canPreview = false, previewActive = false, onPreview }: ActivityBarProps) {
   return (
-    <div
-      style={{
-        width: 'var(--activity-bar-width)',
-        background: 'var(--color-bg-activity-bar)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        paddingTop: 4,
-        borderRight: '1px solid var(--color-border)',
-        flexShrink: 0,
-      }}
-    >
+    <div style={{ width: 'var(--activity-bar-width)', background: 'var(--color-bg-activity-bar)', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 4, borderRight: '1px solid var(--color-border)', flexShrink: 0 }}>
       {NAV_ITEMS.map(item => {
         const isActive = activeView === item.id;
         const isGitIcon = item.id === 'scm';
-        const isOutlineIcon = item.id === 'outline';
-        const isDisabled = isOutlineIcon && !outlineEnabled;
         return (
           <button
             key={item.id}
             title={item.label}
-            onClick={() => !isDisabled && onViewChange(item.id)}
-            style={{
-              width: '100%',
-              height: 48,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: isActive ? 'var(--color-icon-active)' : 'var(--color-icon)',
-              position: 'relative',
-              borderLeft: isActive ? '2px solid var(--color-accent)' : '2px solid transparent',
-              opacity: isDisabled ? 0.3 : isActive ? 1 : 0.7,
-              transition: 'opacity 0.1s, color 0.1s',
-              cursor: isDisabled ? 'default' : 'pointer',
-              pointerEvents: isDisabled ? 'none' : undefined,
-            }}
-            onMouseEnter={e => {
-              if (!isActive && !isDisabled) (e.currentTarget as HTMLButtonElement).style.opacity = '1';
-            }}
-            onMouseLeave={e => {
-              if (!isActive && !isDisabled) (e.currentTarget as HTMLButtonElement).style.opacity = '0.7';
-            }}
+            onClick={() => onViewChange(item.id)}
+            style={{ width: '100%', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--color-icon-active)' : 'var(--color-icon)', position: 'relative', borderLeft: isActive ? '2px solid var(--color-accent)' : '2px solid transparent', opacity: isActive ? 1 : 0.7, transition: 'opacity 0.1s, color 0.1s', cursor: 'pointer' }}
+            onMouseEnter={e => { if (!isActive) e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.opacity = '0.7'; }}
           >
             {item.icon}
-            {isGitIcon && gitChangeCount > 0 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: -4,
-                  right: 4,
-                  background: 'var(--color-accent)',
-                  color: '#fff',
-                  borderRadius: '50%',
-                  width: 18,
-                  height: 18,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  minWidth: 18,
-                }}
-              >
-                {gitChangeCount}
-              </span>
-            )}
+            {isGitIcon && gitChangeCount > 0 && <span style={{ position: 'absolute', top: -4, right: 4, background: 'var(--color-accent)', color: '#fff', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, minWidth: 18 }}>{gitChangeCount}</span>}
           </button>
         );
       })}
+      {/* Preview eye button — independent of sidebar nav, highlights when editor is in preview mode */}
+      <button
+        title={canPreview ? 'Toggle Preview' : 'Preview (open a Markdown file)'}
+        onClick={() => canPreview && onPreview && onPreview()}
+        disabled={!canPreview}
+        style={{ width: '100%', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', color: previewActive ? 'var(--color-icon-active)' : 'var(--color-icon)', position: 'relative', borderLeft: previewActive ? '2px solid var(--color-accent)' : '2px solid transparent', opacity: !canPreview ? 0.3 : previewActive ? 1 : 0.7, transition: 'opacity 0.1s, color 0.1s', cursor: canPreview ? 'pointer' : 'default' }}
+        onMouseEnter={e => { if (canPreview && !previewActive) e.currentTarget.style.opacity = '1'; }}
+        onMouseLeave={e => { if (canPreview && !previewActive) e.currentTarget.style.opacity = '0.7'; }}
+      >
+        <EyeIcon />
+      </button>
     </div>
   );
 }
