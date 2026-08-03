@@ -322,3 +322,67 @@ export async function importProjectMetadata(file: File): Promise<void> {
     throw new Error((err as { error?: string }).error ?? 'Import failed');
   }
 }
+
+// ── AI Summary ────────────────────────────────────────────────────────────────
+
+function toRelPath(workspacePath: string, filePath: string): string {
+  return filePath.startsWith(workspacePath + '/')
+    ? filePath.slice(workspacePath.length + 1)
+    : filePath;
+}
+
+/** Check whether a cached AI summary exists for a file or directory. */
+export async function getAiSummary(
+  workspacePath: string,
+  filePath: string,
+  isDirectory = false,
+): Promise<{ exists: boolean; content?: string }> {
+  const relPath = toRelPath(workspacePath, filePath);
+  const endpoint = isDirectory ? '/api/ai-directory-summary' : '/api/ai-summary';
+  try {
+    const data = await request<{ content: string | null }>(`${endpoint}?path=${encodeURIComponent(relPath)}`);
+    return data.content ? { exists: true, content: data.content } : { exists: false };
+  } catch {
+    return { exists: false };
+  }
+}
+
+/** Generate (or retrieve cached) AI summary, collecting the full SSE stream. */
+export async function generateAiSummary(
+  workspacePath: string,
+  filePath: string,
+  provider: string,
+  model: string,
+  isDirectory = false,
+): Promise<{ content: string }> {
+  const relPath = toRelPath(workspacePath, filePath);
+  const endpoint = isDirectory ? '/api/ai-directory-summary/generate' : '/api/ai-summary/generate';
+
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: relPath, provider, model }),
+  });
+  if (!resp.ok) throw new Error('Failed to generate summary');
+
+  const reader = resp.body?.getReader();
+  const decoder = new TextDecoder();
+  let content = '';
+
+  if (reader) {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6)) as { text_delta?: string; content?: string };
+          if (ev.text_delta) content += ev.text_delta;
+          if (ev.content) content = ev.content;
+        } catch { /* skip malformed */ }
+      }
+    }
+  }
+
+  return { content };
+}

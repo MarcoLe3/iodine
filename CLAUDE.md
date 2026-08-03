@@ -67,6 +67,7 @@ The editor pane has a three-way view toggle: **source / preview / summary**.
 | File | Role |
 |------|------|
 | `client/src/components/layout/EditorArea.tsx` | Owns `editorView` state (`'source' \| 'preview' \| 'summary'`). Renders the `🤖 Summary` button for any non-image, non-PDF file when a workspace is open. Streams `text_delta` SSE events from the server and renders partial Markdown progressively. Provides a `↺ Regenerate` button to clear the in-session cache and re-run. Accepts `summaryRequestPath` prop to open in summary view when triggered externally (both files and directories). |
+| `client/src/api/files.ts` | `getAiSummary(workspacePath, filePath, isDirectory?)` probes the cache (`GET /api/ai-summary` or `/api/ai-directory-summary`). `generateAiSummary(workspacePath, filePath, provider, model, isDirectory?)` POSTs to the generate endpoint, collects the full SSE stream, and returns `{ content }`. |
 | `server/src/routes/aiSummary.ts` | `GET /api/ai-summary?path=` and `GET /api/ai-directory-summary?path=` check the disk cache. `POST /api/ai-summary/generate` and `POST /api/ai-directory-summary/generate` stream LLM-generated summaries, then write to cache. |
 
 **File cache path:** `~/.iodine/<workspace-md5>/<relpath-md5>/<file-content-md5>_ai_summary.md`
@@ -76,6 +77,24 @@ The content hash means the cache auto-invalidates when the file/directory struct
 **Directory summary** is accessible via the `+` hover menu on any folder in the file tree ("View/Generate Summary"). Directories open as synthetic tabs with `isDirectory: true`; `WorkbenchLayout` calls `handleDirSummary` which opens the tab and sets `summaryRequestPath`, triggering `EditorArea` to auto-switch to summary view and start generation.
 
 **Provider/model state** is owned by `WorkbenchLayout` and passed down to `RightPanel`, `CodingAssistant`, `SystemView`, and `EditorArea` so all features share the same selection.
+
+## Source / Preview Scroll Sync
+
+When toggling between the **source** (Monaco) and **preview** (rendered Markdown) views of a `.md` file, the editor preserves the approximate reading position using a scroll-percentage approach.
+
+| File | Role |
+|------|------|
+| `client/src/components/layout/EditorArea.tsx` | Owns `scrollPercentageRef` (0–1 ratio), `previousViewRef` (last active view), and `previewRef` (DOM ref on the preview `<div>`). `captureScrollPercentage()` snapshots the ratio before a view switch; `restoreScrollPercentage(view)` applies it in the new view using a double-`requestAnimationFrame` to wait for layout. |
+
+**Flow:**
+1. User clicks the `👁 Preview` / `⌨ Source` button → `captureScrollPercentage()` is called synchronously, then `setEditorView(...)` queues the React update.
+2. A `useEffect` keyed on `[editorView]` detects the change via `previousViewRef` and calls `restoreScrollPercentage(newView)`.
+3. The double-RAF pattern (`rAF → restore → rAF → restore`) handles both React's render frame and the browser's layout frame so dimensions are available before scrolling.
+4. `onScroll={captureScrollPercentage}` on the preview div keeps the ratio current as the user scrolls, so switching back to source also lands in the right place.
+5. On Monaco mount (`onEditorMount`), `restoreScrollPercentage('source')` is called so the position is correct after the editor first renders.
+6. When the active file changes, both refs reset to 0 / the new view so each file starts at the top.
+
+**Key design:** Scroll percentage (not line number) is used because the preview renders Markdown differently from the source — a 30% scroll in source maps to roughly 30% of the rendered output regardless of heading sizes or image heights.
 
 ## Build Assistant
 

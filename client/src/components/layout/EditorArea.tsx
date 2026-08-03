@@ -78,6 +78,9 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       activeFile?.content ?? '',
     );
     const monacoEditorRef = useRef<MonacoEditorAPI.IStandaloneCodeEditor | null>(null);
+    const scrollPercentageRef = useRef(0);
+    const previousViewRef = useRef<EditorView>('source');
+    const previewRef = useRef<HTMLDivElement | null>(null);
 
     const [editorView,       setEditorView]       = useState<EditorView>('source');
     const [summaryContent,   setSummaryContent]   = useState('');
@@ -92,11 +95,14 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
     // Reset view & summary when switching files; directories go straight to summary view
     useEffect(() => {
-      setEditorView(activeFile?.isDirectory ? 'summary' : 'source');
+      const view: EditorView = activeFile?.isDirectory ? 'summary' : 'source';
+      setEditorView(view);
       setSummaryContent('');
       setSummaryError(null);
       setSummaryLoading(false);
       setHasCachedSummary(false);
+      scrollPercentageRef.current = 0;
+      previousViewRef.current = view;
     }, [activeFile?.path]);
 
     // Probe cache whenever the active file/dir changes so the button label is accurate
@@ -146,6 +152,54 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         },
       }]);
     }, []);
+
+    /** Capture the current scroll position as a 0–1 ratio before switching views. */
+    const captureScrollPercentage = useCallback(() => {
+      const editor = monacoEditorRef.current;
+      if (editor && editorView === 'source') {
+        const scrollable = editor.getScrollHeight() - editor.getLayoutInfo().height;
+        scrollPercentageRef.current = scrollable > 0 ? editor.getScrollTop() / scrollable : 0;
+        return;
+      }
+      const el = previewRef.current;
+      if (el && editorView === 'preview') {
+        const scrollable = el.scrollHeight - el.clientHeight;
+        scrollPercentageRef.current = scrollable > 0 ? el.scrollTop / scrollable : 0;
+      }
+    }, [editorView]);
+
+    /** Restore the captured scroll position in the newly visible view. */
+    const restoreScrollPercentage = useCallback((view: EditorView) => {
+      const percentage = scrollPercentageRef.current;
+      const restore = () => {
+        if (view === 'source') {
+          const editor = monacoEditorRef.current;
+          if (!editor) return false;
+          const scrollable = editor.getScrollHeight() - editor.getLayoutInfo().height;
+          editor.setScrollTop(Math.max(0, scrollable * percentage));
+          return true;
+        }
+        if (view === 'preview') {
+          const el = previewRef.current;
+          if (!el) return false;
+          const scrollable = el.scrollHeight - el.clientHeight;
+          el.scrollTop = Math.max(0, scrollable * percentage);
+          return true;
+        }
+        return true;
+      };
+      // Two frames: first lets React render the new view, second waits for layout.
+      requestAnimationFrame(() => { restore(); requestAnimationFrame(restore); });
+    }, []);
+
+    // Restore scroll whenever the view changes (source ↔ preview).
+    useEffect(() => {
+      const previous = previousViewRef.current;
+      if (editorView !== previous) {
+        previousViewRef.current = editorView;
+        restoreScrollPercentage(editorView);
+      }
+    }, [editorView, restoreScrollPercentage]);
 
     useImperativeHandle(ref, () => ({
       save: () => {},
@@ -378,7 +432,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               {/* Preview toggle — only for .md / .html */}
               {showPreviewButton && editorView !== 'summary' && (
                 <button
-                  onClick={() => setEditorView(v => v === 'preview' ? 'source' : 'preview')}
+                  onClick={() => { captureScrollPercentage(); setEditorView(v => v === 'preview' ? 'source' : 'preview'); }}
                   title={editorView === 'preview' ? 'Switch to source' : 'Switch to preview'}
                   style={{ ...btnStyle, background: editorView === 'preview' ? '#007acc' : '#3a3d41' }}
                 >
@@ -487,6 +541,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               /* Markdown / HTML preview */
               activeFile.path.endsWith('.md') ? (
                 <div
+                  ref={previewRef}
+                  onScroll={captureScrollPercentage}
                   className="md-preview"
                   style={{
                     height: '100%', overflow: 'auto',
@@ -533,7 +589,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                     pendingNavigationRef.current = null;
                     applyNavigation(editor, nav.line, nav.endLine, nav.startCol, nav.endCol);
                   }
-
+                  restoreScrollPercentage('source');
                 }}
                 onAfterRevert={() => {
                   // Monaco's onChange fires synchronously from executeEdits, so
