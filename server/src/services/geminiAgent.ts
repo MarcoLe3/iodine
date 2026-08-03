@@ -2,8 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { Response } from 'express';
 import { TOOL_SCHEMAS } from './fileTools';
 import { executeAgentTool } from './agentTools';
-import { rootPath } from '../state';
-import { TUTOR_SYSTEM_ADDENDUM } from './tutorSystem';
+import { buildSystemPrompt } from './systemPrompt';
 
 export async function loadGeminiKey(): Promise<string> {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
@@ -49,20 +48,6 @@ function writeSSE(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function buildSystemInstruction(activeFile: string | null, tutorMode?: boolean): string {
-  const workspaceInfo = rootPath ? `Workspace: ${rootPath}` : 'No workspace is currently open.';
-  const activeFileInfo = activeFile ? `The user currently has this file open in the editor: ${activeFile}` : '';
-  const base = `You are a coding assistant with access to the user's project files.
-${workspaceInfo}
-${activeFileInfo}
-
-You can read, write, list, and search files, and run terminal commands. When modifying files, read them first.
-Be concise in your explanations. When modifying an existing file, use edit_file — supply the exact block to replace and the new content. Only use write_file when creating a brand-new file. If edit_file returns an error because old_string was not found or matched multiple times, read the file again and retry with a more unique surrounding context. If edit_file still fails to apply cleanly after a retry, or the target is ambiguous because the change spans large or repeated sections, fall back to write_file: read the file in full, then rewrite it in full with your changes applied. Never use placeholder comments like "// rest of file unchanged" or "// ..." in any file write.
-When the user's message contains a **Relevant paths hint**, read or list those exact paths first using read_file or list_directory before reaching for search_files or broader directory scans. Only fall back to searching if the provided paths don't contain what you need.
-Call open_file whenever you reference a specific file or a specific block of code. Use it liberally.`;
-  return tutorMode ? base + TUTOR_SYSTEM_ADDENDUM : base;
-}
-
 // Permissive part type so thought parts (with thoughtSignature) are preserved verbatim.
 type GeminiPart = Record<string, unknown>;
 type GeminiContent = {
@@ -98,7 +83,7 @@ export async function runGeminiAgentLoop(
       model,
       contents: history,
       config: {
-        systemInstruction: customSystemPrompt ?? buildSystemInstruction(activeFile, tutorMode),
+        systemInstruction: customSystemPrompt ?? buildSystemPrompt(activeFile, tutorMode),
         tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
         ...(supportsThinking ? { thinkingConfig: { thinkingBudget: 8000 } } : {}),
       },

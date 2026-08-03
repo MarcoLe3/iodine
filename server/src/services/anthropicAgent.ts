@@ -5,8 +5,7 @@ import path from 'path';
 import { Response } from 'express';
 import { TOOL_SCHEMAS } from './fileTools';
 import { executeAgentTool } from './agentTools';
-import { rootPath } from '../state';
-import { TUTOR_SYSTEM_ADDENDUM } from './tutorSystem';
+import { buildSystemPrompt } from './systemPrompt';
 
 export async function loadApiKey(): Promise<string> {
   try {
@@ -42,20 +41,6 @@ function writeSSE(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function buildSystemPrompt(activeFile: string | null, tutorMode?: boolean): string {
-  const workspaceInfo = rootPath ? `Workspace: ${rootPath}` : 'No workspace is currently open.';
-  const activeFileInfo = activeFile ? `The user currently has this file open in the editor: ${activeFile}` : '';
-  const base = `You are a coding assistant with access to the user's project files.
-${workspaceInfo}
-${activeFileInfo}
-
-You can read, write, list, and search files, and run terminal commands. When modifying files, read them first.
-Be concise in your explanations. When modifying an existing file, use edit_file — supply the exact block to replace and the new content. Only use write_file when creating a brand-new file. If edit_file returns an error because old_string was not found or matched multiple times, read the file again and retry with a more unique surrounding context. If edit_file still fails to apply cleanly after a retry, or the target is ambiguous because the change spans large or repeated sections, fall back to write_file: read the file in full, then rewrite it in full with your changes applied. Never use placeholder comments like "// rest of file unchanged" or "// ..." in any file write.
-When the user's message contains a **Relevant paths hint**, read or list those exact paths first using read_file or list_directory before reaching for search_files or broader directory scans. Only fall back to searching if the provided paths don't contain what you need.
-Call open_file whenever you reference a specific file or a specific block of code. Use it liberally.`;
-  return tutorMode ? base + TUTOR_SYSTEM_ADDENDUM : base;
-}
-
 export async function runAgentLoop(
   messages: Anthropic.MessageParam[],
   model: string,
@@ -68,17 +53,7 @@ export async function runAgentLoop(
   const apiKey = await loadApiKey();
   const client = new Anthropic({ apiKey });
 
-  const workspaceInfo = rootPath ? `Workspace: ${rootPath}` : 'No workspace is currently open.';
-  const activeFileInfo = activeFile ? `The user currently has this file open in the editor: ${activeFile}` : '';
-  const baseSystem = customSystemPrompt ?? `You are a coding assistant with access to the user's project files.
-${workspaceInfo}
-${activeFileInfo}
-
-You can read, write, list, and search files, and run terminal commands. When modifying files, read them first.
-Be concise in your explanations. When modifying an existing file, use edit_file — supply the exact block to replace and the new content. Only use write_file when creating a brand-new file. If edit_file returns an error because old_string was not found or matched multiple times, read the file again and retry with a more unique surrounding context. If edit_file still fails to apply cleanly after a retry, or the target is ambiguous because the change spans large or repeated sections, fall back to write_file: read the file in full, then rewrite it in full with your changes applied. Never use placeholder comments like "// rest of file unchanged" or "// ..." in any file write.
-When the user's message contains a **Relevant paths hint**, read or list those exact paths first using read_file or list_directory before reaching for search_files or broader directory scans. Only fall back to searching if the provided paths don't contain what you need.
-Call open_file whenever you reference a specific file or a specific block of code. Use it liberally.`;
-  const system = tutorMode ? baseSystem + TUTOR_SYSTEM_ADDENDUM : baseSystem;
+  const system = customSystemPrompt ?? buildSystemPrompt(activeFile, tutorMode);
 
   const history = [...messages];
 

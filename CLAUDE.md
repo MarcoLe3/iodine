@@ -201,14 +201,15 @@ The coding assistant has two tools for writing files, each suited to a different
 | `edit_file(path, old_string, new_string)` | Modifying an existing file | Reads the file, verifies `old_string` matches **exactly once**, replaces it, writes back. Returns an error if the string is missing or ambiguous — the model then reads the file and retries with more surrounding context. |
 | `write_file(path, content)` | Creating a brand-new file | Writes the full content; creates parent directories as needed. |
 
-All three provider system prompts (`anthropicAgent.ts`, `geminiAgent.ts`, `systemPrompt.ts`) instruct the model to prefer `edit_file` for modifications and reserve `write_file` for new files only. This avoids sending entire large files as output tokens when only a few lines change.
+The system prompt lives in **one place** — `systemPrompt.ts`'s `buildSystemPrompt(activeFile, tutorMode)` — and all three providers call it. It instructs the model to prefer `edit_file` for modifications and reserve `write_file` for new files only (this avoids sending entire large files as output tokens when only a few lines change), and to **fall back to `write_file` (read fully, then rewrite fully) when `edit_file` fails to apply cleanly after a retry or the target block is ambiguous/repeated**.
 
 | File | Role |
 |------|------|
 | `server/src/services/fileTools.ts` | `edit_file` executor: reads file, counts occurrences of `old_string`, rejects on 0 or >1 matches with an actionable error message, replaces and writes back. Schema registered in `TOOL_SCHEMAS` (auto-picked up by all three provider tool lists). |
-| `server/src/services/systemPrompt.ts` | Shared system prompt instruction: use `edit_file` for modifications, `write_file` for new files, retry with more context on failure. |
-| `server/src/services/anthropicAgent.ts` | Inline system prompt updated with the same `edit_file` instruction (duplicate of `systemPrompt.ts` — used when a `customSystemPrompt` is not supplied). |
-| `server/src/services/geminiAgent.ts` | Same inline update for Gemini's `buildSystemInstruction`. |
+| `server/src/services/systemPrompt.ts` | **Single source of truth** for the shared system prompt: workspace/active-file context, the `edit_file`-vs-`write_file` guidance including the ambiguity/failure fallback, and the tutor-mode addendum. Reads `rootPath` directly from state. |
+| `server/src/services/anthropicAgent.ts` | Imports and calls `buildSystemPrompt(activeFile, tutorMode)` when no `customSystemPrompt` is supplied. No inline prompt. |
+| `server/src/services/geminiAgent.ts` | Same — imports and calls `buildSystemPrompt`. No inline prompt. |
+| `server/src/services/openaiAgent.ts` | Same — imports and calls `buildSystemPrompt`. |
 
 **Error messages the model receives:**
 - `old_string not found` → model re-reads the file and retries with exact text
