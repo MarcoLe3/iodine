@@ -13,6 +13,7 @@
   --color-bg-selected: #094771;
   --color-bg-subtle: #ffffff08;
   --color-bg-subtler: #ffffff05;
+  --color-bg-user-bubble: #2a2d2e;
   --color-bg-code: #0d1117;
   --color-code-text: #9cdcfe;
   --color-border: #3c3c3c;
@@ -57,6 +58,7 @@
   --color-bg-selected: #cce8ff;
   --color-bg-subtle: #00000008;
   --color-bg-subtler: #00000005;
+  --color-bg-user-bubble: #e3e3e3;
   --color-bg-code: #f6f8fa;
   --color-code-text: #0550ae;
   --color-border: #d4d4d4;
