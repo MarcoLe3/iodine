@@ -248,12 +248,24 @@ export function useCodingAssistant(
   const startProgressWatchRef = useRef(startProgressWatch);
   startProgressWatchRef.current = startProgressWatch;
 
+  // Holds the last AI reply text when the watch is armed but waiting for editor activity.
+  const armedReplyRef = useRef<string | null>(null);
+
+  // Called when the user types in the editor. If a reply is armed, starts the watch window.
+  const notifyEditorActivity = useCallback(() => {
+    const reply = armedReplyRef.current;
+    if (!reply) return;
+    armedReplyRef.current = null;
+    void startProgressWatchRef.current(reply);
+  }, []); // stable — only reads refs
+
   // ── sendMessage ───────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[], tutorMode?: boolean) => {
     if (!text.trim() || isLoading) return;
 
-    // Cancel any in-progress progress watch before starting a new message.
+    // Cancel any in-progress watch and clear any armed reply before starting a new message.
+    armedReplyRef.current = null;
     watchControllerRef.current?.abort();
     setIsWatching(false);
     streamingTextRef.current = '';
@@ -446,8 +458,9 @@ export function useCodingAssistant(
               return { ...msg, isStreaming: false };
             });
             // Start 30-second progress watch if the reply had content
+            // Arm the watch — it will start when the user next types in the editor.
             if (capturedText.trim()) {
-              void startProgressWatchRef.current(capturedText);
+              armedReplyRef.current = capturedText;
             }
           } else if (eventName === 'error') {
             flushNow();
@@ -491,6 +504,7 @@ export function useCodingAssistant(
   }, [history, isLoading, model, provider]);
 
   const clearMessages = useCallback(() => {
+    armedReplyRef.current = null;
     abortControllerRef.current?.abort();
     watchControllerRef.current?.abort();
     setIsWatching(false);
@@ -498,5 +512,5 @@ export function useCodingAssistant(
     setHistory([]);
   }, []);
 
-  return { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage };
+  return { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity };
 }

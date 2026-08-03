@@ -363,6 +363,49 @@ React state is not involved. The animation loops at 2 s until `stopPulse()` is c
 
 Visible whenever a workspace is open. Forward-looking: evaluates `shouldFire` against the current live action count and the last check's `diffLineDelta` to show what the next check would do — not what the previous check did. The `describe()` method on each signal provides the human-readable reason.
 
+## Progress Watch
+
+After the AI replies, the assistant arms a **progress watch** that fires once the user starts typing in the editor. The watch captures three git diff snapshots, then streams a follow-up message reviewing what changed — calling out any nits, syntax issues, or next steps.
+
+### Flow
+
+```
+AI reply done (done SSE event)
+  → armedReplyRef.current = capturedText   (silent — no timer yet)
+
+User presses a key in the Monaco editor
+  → WorkbenchLayout.onContentChange
+  → rightPanelRef.notifyEditorActivity()
+  → codingAssistantRef.notifyEditorActivity()
+  → useCodingAssistant: armedReplyRef consumed → startProgressWatch(reply)
+      → setIsWatching(true)  ← "Assistant is actively watching your progress" banner
+      → sleep 4s  → fetchOverallDiff → snapshot[0]
+      → sleep 6s  → fetchOverallDiff → snapshot[1]
+      → sleep 10s → fetchOverallDiff → snapshot[2]
+      → if any snapshot has content: runProgressCheck(reply, snapshots, controller)
+            → POST /api/proactive/watch (streaming SSE)
+            → onWatchTrigger() → playBell() + triggerPulse()
+            → new streaming assistant message appended to chat + history
+```
+
+### Key design decisions
+
+- **Armed, not eager**: the timer only starts on the first editor keypress after the AI reply. If the user never types, the watch never fires.
+- **Cancelled on new send**: `armedReplyRef.current = null` and watch controller aborted at the start of `sendMessage` and `clearMessages`.
+- **Only fires on real edits**: `onContentChange` (not `onActivity`) is used as the trigger — pure navigation/scrolls don't arm the watch.
+- **Only fires with diffs**: the progress check is skipped if all three snapshots are empty (user typed but nothing was saved / no git changes).
+- **Snapshot times**: 4 s, 10 s, 20 s after first editor keypress (sleep intervals: 4 s → 6 s → 10 s).
+
+### Files
+
+| File | Role |
+|------|------|
+| `client/src/hooks/useCodingAssistant.ts` | `armedReplyRef` stores the last AI reply text. `notifyEditorActivity()` consumes it and calls `startProgressWatch`. `startProgressWatch` manages the `AbortController`, sleep intervals, and diff captures. `runProgressCheck` streams `POST /api/proactive/watch` as a new assistant message. |
+| `client/src/components/right/CodingAssistant.tsx` | `CodingAssistantHandle` exposes `notifyEditorActivity`. Shows yellow "Assistant is actively watching your progress" banner + glowing dot when `isWatching`. |
+| `client/src/components/layout/RightPanel.tsx` | `RightPanelHandle.notifyEditorActivity` delegates to `codingAssistantRef`. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Calls `rightPanelRef.current?.notifyEditorActivity()` inside `onContentChange`. Passes `onWatchTrigger` (bell + pulse) to `RightPanel`. |
+| `server/src/routes/proactive.ts` | `POST /api/proactive/watch` — streaming SSE, no tools. System prompt instructs the model to surface nits (syntax errors, typos, off-by-ones) and acknowledge progress. Snapshot labels include actual capture times (4 s, 10 s, 20 s). |
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.

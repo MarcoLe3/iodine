@@ -24,6 +24,8 @@ export interface RightPanelHandle {
   triggerPulse: () => void;
   /** Stop the pulse immediately (e.g. user started typing). */
   stopPulse: () => void;
+  /** Forward an editor keypress to the Coding Assistant to arm the progress watch. */
+  notifyEditorActivity: () => void;
 }
 
 interface RightPanelProps {
@@ -106,6 +108,9 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
     stopPulse: () => {
       if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current);
       panelRef.current?.classList.remove('proactive-pulse');
+    },
+    notifyEditorActivity: () => {
+      codingAssistantRef.current?.notifyEditorActivity();
     },
   }), [activeTab]);
 

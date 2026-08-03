@@ -377,7 +377,7 @@ export function WorkbenchLayout() {
             onTabClick={setActiveFilePath}
             onTabClose={closeFile}
             onTabReorder={reorderFiles}
-            onContentChange={(path, content) => { updateContent(path, content); recordAction(); }}
+            onContentChange={(path, content) => { updateContent(path, content); recordAction(); rightPanelRef.current?.notifyEditorActivity(); }}
             onActivity={recordAction}
             workspacePath={workspacePath}
             provider={provider}
