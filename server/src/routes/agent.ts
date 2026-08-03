@@ -1,10 +1,34 @@
 import { Router } from 'express';
+import { readdirSync, statSync } from 'fs';
+import { join } from 'path';
 import { loadApiKey, runAgentLoop } from '../services/anthropicAgent';
 import { loadOpenAIKey, runOpenAIAgentLoop } from '../services/openaiAgent';
 import { loadGeminiKey, runGeminiAgentLoop } from '../services/geminiAgent';
 import { architectureGraphInitMessage, architectureGraphSystemPrompt } from '../prompts/architectureGraph';
 import { rootPath } from '../state';
 import Anthropic from '@anthropic-ai/sdk';
+
+const GRAPH_FILE_LIMIT = 160;
+const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.venv', 'venv']);
+
+function countFiles(dir: string): number {
+  let count = 0;
+  const queue = [dir];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    let entries;
+    try { entries = readdirSync(current, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!IGNORED_DIRS.has(entry.name)) queue.push(join(current, entry.name));
+      } else {
+        count++;
+        if (count > GRAPH_FILE_LIMIT) return count;
+      }
+    }
+  }
+  return count;
+}
 
 const router = Router();
 
@@ -75,6 +99,11 @@ router.post('/system-graph/generate', async (req, res) => {
   };
 
   if (!rootPath) return res.status(400).json({ error: 'No workspace is open' });
+
+  const fileCount = countFiles(rootPath);
+  if (fileCount > GRAPH_FILE_LIMIT) {
+    return res.status(400).json({ error: `Workspace has too many files (${fileCount}+) for graph generation. Limit is ${GRAPH_FILE_LIMIT}.` });
+  }
 
   const selectedModel    = model      || 'claude-sonnet-4-6';
   const selectedProvider = providerId || 'anthropic';

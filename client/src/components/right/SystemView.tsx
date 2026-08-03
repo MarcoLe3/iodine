@@ -432,7 +432,11 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, provider: provider.id }),
       });
-      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${resp.status}`);
+      }
+      if (!resp.body) throw new Error('No response body');
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
