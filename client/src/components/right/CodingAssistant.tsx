@@ -16,7 +16,7 @@ function argumentSummary(input: unknown): string | null {
   const path = values.find(value => typeof value === 'string' && value.includes('/')) as string | undefined;
   if (!path) return null;
   const parts = path.split('/').filter(Boolean);
-  return parts.length > 1 ? parts[parts.length - 2] : parts[0] ?? null;
+  return parts.length > 1 ? parts[parts.length - 2] + '/' + parts[parts.length - 1] : parts[0] ?? null;
 }
 
 function ToolBlock({ block }: { block: UIBlock & { type: 'tool' } }) {
