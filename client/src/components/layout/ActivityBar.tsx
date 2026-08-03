@@ -4,9 +4,6 @@ interface ActivityBarProps {
   activeView: SidebarView | null;
   onViewChange: (view: SidebarView) => void;
   gitChangeCount?: number;
-  canPreview?: boolean;
-  previewActive?: boolean;
-  onPreview?: () => void;
 }
 
 interface NavItem {
@@ -34,20 +31,13 @@ const OutlineIcon = () => (
   </svg>
 );
 
-const EyeIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <ellipse cx="12" cy="12" rx="10" ry="6" />
-    <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
-  </svg>
-);
-
 const NAV_ITEMS: NavItem[] = [
   { id: 'explorer', label: 'Explorer', icon: <FolderIcon /> },
   { id: 'scm', label: 'Source Control', icon: <BranchIcon /> },
   { id: 'outline', label: 'Outline', icon: <OutlineIcon /> },
 ];
 
-export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0, canPreview = false, previewActive = false, onPreview }: ActivityBarProps) {
+export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0 }: ActivityBarProps) {
   return (
     <div style={{ width: 'var(--activity-bar-width)', background: 'var(--color-bg-activity-bar)', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 4, borderRight: '1px solid var(--color-border)', flexShrink: 0 }}>
       {NAV_ITEMS.map(item => {
@@ -67,17 +57,6 @@ export function ActivityBar({ activeView, onViewChange, gitChangeCount = 0, canP
           </button>
         );
       })}
-      {/* Preview eye button — independent of sidebar nav, highlights when editor is in preview mode */}
-      <button
-        title={canPreview ? 'Toggle Preview' : 'Preview (open a Markdown file)'}
-        onClick={() => canPreview && onPreview && onPreview()}
-        disabled={!canPreview}
-        style={{ width: '100%', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', color: previewActive ? 'var(--color-icon-active)' : 'var(--color-icon)', position: 'relative', borderLeft: previewActive ? '2px solid var(--color-accent)' : '2px solid transparent', opacity: !canPreview ? 0.3 : previewActive ? 1 : 0.7, transition: 'opacity 0.1s, color 0.1s', cursor: canPreview ? 'pointer' : 'default' }}
-        onMouseEnter={e => { if (canPreview && !previewActive) e.currentTarget.style.opacity = '1'; }}
-        onMouseLeave={e => { if (canPreview && !previewActive) e.currentTarget.style.opacity = '0.7'; }}
-      >
-        <EyeIcon />
-      </button>
     </div>
   );
 }
