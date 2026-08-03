@@ -192,6 +192,28 @@ The **Project** menu (visible only when a workspace is open) manages the workspa
 
 The server route is in `server/src/routes/project.ts`, registered at `/api/project` in `server/src/app.ts`. The Project menu is in `client/src/components/layout/MenuBar.tsx`; "Clear Metadata" shows a custom confirm dialog before deleting.
 
+## Agent File Editing Tools
+
+The coding assistant has two tools for writing files, each suited to a different use case:
+
+| Tool | When to use | Behaviour |
+|------|------------|-----------|
+| `edit_file(path, old_string, new_string)` | Modifying an existing file | Reads the file, verifies `old_string` matches **exactly once**, replaces it, writes back. Returns an error if the string is missing or ambiguous — the model then reads the file and retries with more surrounding context. |
+| `write_file(path, content)` | Creating a brand-new file | Writes the full content; creates parent directories as needed. |
+
+All three provider system prompts (`anthropicAgent.ts`, `geminiAgent.ts`, `systemPrompt.ts`) instruct the model to prefer `edit_file` for modifications and reserve `write_file` for new files only. This avoids sending entire large files as output tokens when only a few lines change.
+
+| File | Role |
+|------|------|
+| `server/src/services/fileTools.ts` | `edit_file` executor: reads file, counts occurrences of `old_string`, rejects on 0 or >1 matches with an actionable error message, replaces and writes back. Schema registered in `TOOL_SCHEMAS` (auto-picked up by all three provider tool lists). |
+| `server/src/services/systemPrompt.ts` | Shared system prompt instruction: use `edit_file` for modifications, `write_file` for new files, retry with more context on failure. |
+| `server/src/services/anthropicAgent.ts` | Inline system prompt updated with the same `edit_file` instruction (duplicate of `systemPrompt.ts` — used when a `customSystemPrompt` is not supplied). |
+| `server/src/services/geminiAgent.ts` | Same inline update for Gemini's `buildSystemInstruction`. |
+
+**Error messages the model receives:**
+- `old_string not found` → model re-reads the file and retries with exact text
+- `old_string matches N locations` → model adds more surrounding lines to make the match unique
+
 ## Tutor Mode
 
 The **Tutor** toggle in the Coding Assistant (left of the Send button) switches the AI into a read-only guidance mode: it walks through the codebase, points to relevant lines, and tells the user what to change without writing any code itself.
