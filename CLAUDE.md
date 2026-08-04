@@ -1,4 +1,4 @@
-# Iodine — The IDE That Teaches You — Developer Notes
+# Iodine — IDE for Open-source Development — Developer Notes
 
 ## Light / Dark Mode
 

@@ -1,6 +1,6 @@
 # Contributing to Iodine
 
-Iodine — the IDE that teaches you — is built to be forked and extended. This guide covers the project structure, common extension points, local development, AI features, and API reference.
+Iodine — IDE for Open-source Development — is built to be forked and extended. This guide covers the project structure, common extension points, local development, AI features, and API reference.
 
 ## Project Structure
 

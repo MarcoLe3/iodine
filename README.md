@@ -2,7 +2,7 @@
   <img src="images/iodine_logo_2-preview.png" alt="Iodine" width="180" />
 </p>
 
-<h1 align="center">Iodine — The IDE That Teaches You</h1>
+<h1 align="center">Iodine — IDE for Open-source Development</h1>
 
 <p align="center">
   An AI-native IDE that turns unfamiliar Git repositories into interactive learning environments.
@@ -12,7 +12,7 @@
 
 **Open any repository.**  
 **Turn on Tutor.**  
-**The IDE teaches you the project one file at a time.**
+**Walks you through any project one file at a time.**
 
 Tutor Mode is Iodine's central experience. The AI reads the codebase and presents a numbered walkthrough plan. Each subsequent reply opens exactly one file, highlights the relevant lines, and explains what to look at before waiting for you to continue. You can build understanding without losing control.
 
