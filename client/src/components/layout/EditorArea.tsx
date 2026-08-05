@@ -287,10 +287,13 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && !!workspacePath && !activeFile.path.endsWith('.md');
 
     /** Convert an absolute file path to a workspace-relative path. */
-    const toRelPath = (abs: string) =>
-      workspacePath && abs.startsWith(workspacePath + '/')
-        ? abs.slice(workspacePath.length + 1)
-        : abs;
+    const toRelPath = (abs: string) => {
+      if (!workspacePath) return abs;
+      for (const sep of ['/', '\\']) {
+        if (abs.startsWith(workspacePath + sep)) return abs.slice(workspacePath.length + 1);
+      }
+      return abs;
+    };
 
     const handleSwitchToSummary = useCallback(async () => {
       if (!activeFile || !workspacePath) return;

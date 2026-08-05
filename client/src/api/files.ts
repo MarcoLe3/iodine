@@ -326,9 +326,10 @@ export async function importProjectMetadata(file: File): Promise<void> {
 // ── AI Summary ────────────────────────────────────────────────────────────────
 
 function toRelPath(workspacePath: string, filePath: string): string {
-  return filePath.startsWith(workspacePath + '/')
-    ? filePath.slice(workspacePath.length + 1)
-    : filePath;
+  for (const sep of ['/', '\\']) {
+    if (filePath.startsWith(workspacePath + sep)) return filePath.slice(workspacePath.length + 1);
+  }
+  return filePath;
 }
 
 /** Check whether a cached AI summary exists for a file or directory. */
