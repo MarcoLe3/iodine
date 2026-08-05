@@ -775,8 +775,8 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
           style={{
             position: 'fixed', inset: 0, zIndex: 500,
             display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-            paddingTop: '15vh',
-            background: 'rgba(0,0,0,0.5)',
+            paddingTop: '34px',
+            background: 'rgba(0,0,0,0.2)',
           }}
           onClick={e => { if (e.target === e.currentTarget) closeOpenFileDialog(); }}
         >
