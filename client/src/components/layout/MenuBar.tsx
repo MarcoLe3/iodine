@@ -35,7 +35,14 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   const [fileSearching, setFileSearching] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (showOpenFileDialog) {
+      setTimeout(() => searchInputRef.current?.focus(), 0);
+    }
+  }, [showOpenFileDialog]);
 
   // Cmd/Ctrl+P → workspace search
   useEffect(() => {
@@ -795,7 +802,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
                 {fileSearching ? '⟳' : '⌕'}
               </span>
               <input
-                autoFocus
+                ref={searchInputRef}
                 value={fileQuery}
                 onChange={e => setFileQuery(e.target.value)}
                 onKeyDown={e => {
