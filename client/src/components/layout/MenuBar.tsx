@@ -20,6 +20,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [editorMenuOpen, setEditorMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
   const [pathInput, setPathInput] = useState('');
@@ -505,6 +506,61 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
                   {item.label}
                 </button>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Help menu */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setHelpMenuOpen(v => !v)}
+            onBlur={() => setTimeout(() => setHelpMenuOpen(false), 150)}
+            style={{
+              padding: '0 10px',
+              height: 24,
+              borderRadius: 3,
+              background: helpMenuOpen ? 'var(--color-bg-hover)' : 'none',
+              color: 'var(--color-text-primary)',
+              fontSize: 13,
+            }}
+            onMouseEnter={e => { if (!helpMenuOpen) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+            onMouseLeave={e => { if (!helpMenuOpen) e.currentTarget.style.background = 'none'; }}
+          >
+            Help
+          </button>
+
+          {helpMenuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: 2,
+                background: 'var(--color-bg-sidebar)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 4,
+                padding: '4px 0',
+                minWidth: 160,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                zIndex: 200,
+              }}
+            >
+              <button
+                onMouseDown={() => { setHelpMenuOpen(false); window.open('https://github.com/hyunwookshin/iodine', '_blank'); }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '5px 16px',
+                  textAlign: 'left',
+                  color: 'var(--color-text-primary)',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                Contribute
+              </button>
             </div>
           )}
         </div>
