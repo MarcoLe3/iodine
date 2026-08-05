@@ -7,13 +7,15 @@ import { MonacoEditor } from '../editor/MonacoEditor';
 import { WelcomeScreen } from '../editor/WelcomeScreen';
 import { ImageViewer } from '../editor/ImageViewer';
 import { PdfViewer } from '../editor/PdfViewer';
+import MergeConflictView from '../editor/MergeConflictView';
 import { useFileDiff } from '../../hooks/useFileDiff';
+import { hasConflictMarkers } from '../../utils/mergeConflict';
 import type { OpenFile } from '../../types';
 import type { Provider } from '../../providers';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
-type EditorView = 'source' | 'preview' | 'summary';
+type EditorView = 'source' | 'preview' | 'summary' | 'conflicts';
 
 interface EditorAreaProps {
   openFiles: OpenFile[];
@@ -285,6 +287,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
     const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
     const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && !!workspacePath && !activeFile.path.endsWith('.md');
+    const showConflictsButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && hasConflictMarkers(activeFile.content ?? '');
 
     /** Convert an absolute file path to a workspace-relative path. */
     const toRelPath = (abs: string) => {
@@ -465,13 +468,24 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
 
           {/* ── Floating button group (bottom-right) ── */}
-          {(showPreviewButton || showSummaryButton) && (
+          {(showPreviewButton || showSummaryButton || showConflictsButton) && (
             <div style={{
               position: 'absolute', bottom: 20, right: 20, zIndex: 10,
               display: 'flex', gap: 6,
             }}>
+              {/* Merge conflict resolver toggle */}
+              {showConflictsButton && (
+                <button
+                  onClick={() => setEditorView(v => v === 'conflicts' ? 'source' : 'conflicts')}
+                  title={editorView === 'conflicts' ? 'Back to source' : 'Resolve merge conflicts'}
+                  style={{ ...btnStyle, background: editorView === 'conflicts' ? '#007acc' : '#6f4e37' }}
+                >
+                  {editorView === 'conflicts' ? '⌨ Source' : '⚠ Conflicts'}
+                </button>
+              )}
+
               {/* Preview toggle — only for .md / .html */}
-              {showPreviewButton && editorView !== 'summary' && (
+              {showPreviewButton && editorView !== 'summary' && editorView !== 'conflicts' && (
                 <button
                   onClick={() => { captureScrollPercentage(); setEditorView(v => v === 'preview' ? 'source' : 'preview'); }}
                   title={editorView === 'preview' ? 'Switch to source' : 'Switch to preview'}
@@ -482,7 +496,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               )}
 
               {/* AI Summary toggle */}
-              {showSummaryButton && (
+              {showSummaryButton && editorView !== 'conflicts' && (
                 <button
                   onClick={() => editorView === 'summary'
                     ? setEditorView('source')
@@ -619,6 +633,22 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   title="HTML preview"
                 />
               )
+
+            ) : editorView === 'conflicts' ? (
+              /* Merge conflict resolver */
+              <div style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'var(--color-bg-editor)' }}>
+                <MergeConflictView
+                  conflictContent={activeFile.content ?? ''}
+                  filePath={activeFile.path}
+                  language={activeFile.language ?? 'plaintext'}
+                  theme={document.documentElement.dataset.theme === 'light' ? 'light' : 'vs-dark'}
+                  onSaved={(resolved) => {
+                    onContentChange(activeFile.path, resolved);
+                    setEditorView('source');
+                  }}
+                  onClose={() => setEditorView('source')}
+                />
+              </div>
 
             ) : activeFile.isDirectory ? null : (
               /* Monaco source editor */
