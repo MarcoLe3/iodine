@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { fetchFileContent, putFileContent } from '../api/files';
+import { fetchFileContent, putFileContent, fetchExternalFileContent, putExternalFileContent } from '../api/files';
 import type { FileNode, OpenFile } from '../types';
 
 const EXT_TO_LANGUAGE: Record<string, string> = {
@@ -166,6 +166,38 @@ export function useOpenFiles() {
     }
   }, []); // stable — localFileMapRef is accessed via ref, not closure
 
+  /** Open any absolute path that lives outside the current workspace. */
+  const openExternalFile = useCallback(async (absolutePath: string) => {
+    if (openFilesRef.current.some(f => f.path === absolutePath)) {
+      setActiveFilePath(absolutePath);
+      return;
+    }
+    if (openingPaths.current.has(absolutePath)) return;
+    openingPaths.current.add(absolutePath);
+    try {
+      const content = await fetchExternalFileContent(absolutePath);
+      const name = absolutePath.split(/[/\\]/).pop() ?? absolutePath;
+      const newFile: OpenFile = {
+        path: absolutePath,
+        name,
+        content,
+        savedContent: content,
+        isDirty: false,
+        language: detectLanguage(name),
+        isExternal: true,
+      };
+      setOpenFiles(prev => {
+        if (prev.some(f => f.path === absolutePath)) return prev;
+        return [...prev, newFile];
+      });
+      setActiveFilePath(absolutePath);
+    } catch (err) {
+      console.error('Failed to open external file:', err);
+    } finally {
+      openingPaths.current.delete(absolutePath);
+    }
+  }, []);
+
   const updateContent = useCallback((filePath: string, newContent: string) => {
     setOpenFiles(prev =>
       prev.map(f =>
@@ -190,7 +222,8 @@ export function useOpenFiles() {
         );
       }
 
-      putFileContent(filePath, file.content)
+      const saveFn = file.isExternal ? putExternalFileContent : putFileContent;
+      saveFn(filePath, file.content)
         .then(() => {
           setOpenFiles(current =>
             current.map(f =>
@@ -229,7 +262,7 @@ export function useOpenFiles() {
   /** Re-fetches a file from disk if it's open and not dirty (called by file watcher). */
   const refreshFile = useCallback((absPath: string) => {
     const file = openFilesRef.current.find(f => f.path === absPath);
-    if (!file || file.isDirty || file.isImage || file.isPdf || file.isUrl || localFileMapRef.current?.has(absPath)) return;
+    if (!file || file.isDirty || file.isImage || file.isPdf || file.isUrl || file.isExternal || localFileMapRef.current?.has(absPath)) return;
     fetchFileContent(absPath)
       .then(content => {
         setOpenFiles(prev =>
@@ -316,6 +349,7 @@ export function useOpenFiles() {
     openFile,
     openDirectory,
     openUrl,
+    openExternalFile,
     updateContent,
     saveFile,
     closeFile,

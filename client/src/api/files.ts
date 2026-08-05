@@ -73,6 +73,43 @@ export async function putFileContent(path: string, content: string): Promise<voi
   });
 }
 
+/** Search workspace + common directories for a file by name.
+ *  Pass `contentHash` (SHA-256 hex of the file's raw bytes) to disambiguate same-name candidates. */
+export async function locateFile(filename: string, contentHash?: string): Promise<string[]> {
+  const data = await request<{ paths: string[] }>('/api/files/locate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename, contentHash }),
+  });
+  return data.paths;
+}
+
+/** Search for files whose names contain the query string.
+ *  Pass `workspaceOnly: true` to restrict to the open workspace; otherwise searches common dirs too. */
+export async function searchFiles(query: string, workspaceOnly = false): Promise<string[]> {
+  const data = await request<{ paths: string[] }>('/api/files/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, workspaceOnly }),
+  });
+  return data.paths;
+}
+
+/** Fetch any absolute path from the filesystem, no workspace boundary. */
+export async function fetchExternalFileContent(absolutePath: string): Promise<string> {
+  const data = await request<{ content: string }>(`/api/files/external?path=${encodeURIComponent(absolutePath)}`);
+  return data.content;
+}
+
+/** Write any absolute path to the filesystem, no workspace boundary. */
+export async function putExternalFileContent(absolutePath: string, content: string): Promise<void> {
+  await request('/api/files/external', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: absolutePath, content }),
+  });
+}
+
 /** Returns the URL to stream an image file from the server. */
 export function getImageUrl(path: string): string {
   return `${API_BASE}/api/files/image?path=${encodeURIComponent(path)}`;

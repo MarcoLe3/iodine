@@ -106,6 +106,7 @@ export function WorkbenchLayout() {
     openFile,
     openDirectory,
     openUrl,
+    openExternalFile,
     updateContent,
     saveFile,
     closeFile,
@@ -302,6 +303,12 @@ export function WorkbenchLayout() {
     setSortedFiles(sortOpenFilesByStructure(openFiles));
   }, [openFiles, setSortedFiles]);
 
+  /** Open a workspace file by absolute path (routes through workspace API, not external). */
+  const openWorkspaceFile = useCallback((absolutePath: string) => {
+    const name = absolutePath.split(/[/\\]/).pop() ?? absolutePath;
+    openFile({ path: absolutePath, name, type: 'file' });
+  }, [openFile]);
+
   // Check if preview button should be enabled
   const canPreview = !!activeFilePath && /\.(md|markdown)$/i.test(activeFilePath);
 
@@ -367,6 +374,8 @@ export function WorkbenchLayout() {
         onCloseAllTabs={closeAllFiles}
         onCloseUneditedTabs={closeUneditedFiles}
         onSortTabsByFileStructure={handleSortTabsByFileStructure}
+        onOpenExternalFile={openExternalFile}
+        onOpenWorkspaceFile={openWorkspaceFile}
         workspacePath={workspacePath}
         theme={theme}
         onToggleTheme={toggleTheme}

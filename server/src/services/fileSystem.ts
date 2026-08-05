@@ -85,3 +85,16 @@ export async function writeFileContent(filePath: string, content: string, rootPa
   validatePath(filePath, rootPath);
   await fs.promises.writeFile(filePath, content, 'utf-8');
 }
+
+/** Read any absolute path on disk — no workspace boundary check. */
+export async function readExternalFile(filePath: string): Promise<string> {
+  if (isBinaryExtension(filePath)) {
+    throw Object.assign(new Error('Binary file cannot be opened as text'), { code: 'BINARY_FILE' });
+  }
+  return fs.promises.readFile(filePath, 'utf-8');
+}
+
+/** Write any absolute path on disk — no workspace boundary check. */
+export async function writeExternalFile(filePath: string, content: string): Promise<void> {
+  await fs.promises.writeFile(filePath, content, 'utf-8');
+}

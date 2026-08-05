@@ -5,7 +5,7 @@ import os from 'os';
 import crypto from 'crypto';
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
-import { buildTree, readFileContent, writeFileContent } from '../services/fileSystem';
+import { buildTree, readFileContent, writeFileContent, readExternalFile, writeExternalFile } from '../services/fileSystem';
 import { rootPath, setRootPath, clearRootPath } from '../state';
 
 const execAsync = promisify(exec);
@@ -260,6 +260,150 @@ router.put('/files/content', async (req, res) => {
   } catch (err: unknown) {
     const e = err as NodeJS.ErrnoException & { code?: string };
     if (e.code === 'OUTSIDE_ROOT') return res.status(400).json({ error: e.message });
+    if (e.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
+    return res.status(500).json({ error: 'Failed to write file' });
+  }
+});
+
+// ── Locate a file by name across common directories ────────────────────────────
+
+const LOCATE_IGNORED = new Set(['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.DS_Store', 'coverage', '.turbo']);
+
+function locateFile(filename: string, roots: string[], maxDepth: number, maxResults: number): string[] {
+  const results: string[] = [];
+  function search(dir: string, depth: number) {
+    if (results.length >= maxResults || depth > maxDepth) return;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (results.length >= maxResults) return;
+      if (LOCATE_IGNORED.has(e.name) || e.name.startsWith('.')) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { search(full, depth + 1); }
+      else if (e.name === filename) { results.push(full); }
+    }
+  }
+  for (const root of roots) {
+    if (results.length >= maxResults) break;
+    search(root, 0);
+  }
+  return results;
+}
+
+router.post('/files/locate', (req, res) => {
+  const { filename, contentHash } = req.body as { filename?: string; contentHash?: string };
+  if (!filename) return res.status(400).json({ error: 'filename required' });
+
+  const home = os.homedir();
+  const roots: string[] = [];
+  if (rootPath) roots.push(rootPath);
+  const locateSubs = ['Desktop', 'Documents', 'Downloads', 'Projects', 'projects', 'code', 'dev', 'src', 'repos'];
+  if (process.platform === 'win32') locateSubs.push('OneDrive', 'OneDrive - Personal', 'OneDrive - Business');
+  for (const sub of locateSubs) {
+    const p = path.join(home, sub);
+    try { if (fs.statSync(p).isDirectory()) roots.push(p); } catch { /* skip */ }
+  }
+
+  let candidates = locateFile(filename, roots, 6, 20);
+
+  // Narrow by SHA-256 hash — computed from raw bytes, completely unambiguous
+  if (contentHash && candidates.length > 1) {
+    const matched = candidates.filter(p => {
+      try {
+        const hash = crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+        return hash === contentHash;
+      } catch { return false; }
+    });
+    if (matched.length > 0) candidates = matched;
+  }
+
+  return res.json({ paths: candidates.slice(0, 5) });
+});
+
+// ── File search (substring match across workspace + common dirs) ───────────────
+
+type SearchRoot = { dir: string; maxDepth: number; includeHidden?: boolean };
+
+function searchFiles(query: string, roots: SearchRoot[], maxResults: number): string[] {
+  const lower = query.toLowerCase();
+  const results: string[] = [];
+  function walk(dir: string, depth: number, maxDepth: number, includeHidden: boolean) {
+    if (results.length >= maxResults || depth > maxDepth) return;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (results.length >= maxResults) return;
+      // Always skip noisy dirs when recursing; skip hidden files unless includeHidden
+      if (e.isDirectory()) {
+        if (LOCATE_IGNORED.has(e.name) || e.name.startsWith('.')) continue;
+        walk(path.join(dir, e.name), depth + 1, maxDepth, includeHidden);
+      } else {
+        if (!includeHidden && e.name.startsWith('.')) continue;
+        if (LOCATE_IGNORED.has(e.name)) continue;
+        if (e.name.toLowerCase().includes(lower)) results.push(path.join(dir, e.name));
+      }
+    }
+  }
+  for (const root of roots) {
+    if (results.length >= maxResults) break;
+    walk(root.dir, 0, root.maxDepth, root.includeHidden ?? false);
+  }
+  return results;
+}
+
+router.post('/files/search', (req, res) => {
+  const { query, workspaceOnly } = req.body as { query?: string; workspaceOnly?: boolean };
+  if (!query || query.trim().length < 1) return res.json({ paths: [] });
+
+  const roots: SearchRoot[] = [];
+  if (workspaceOnly) {
+    if (!rootPath) return res.json({ paths: [] });
+    roots.push({ dir: rootPath, maxDepth: 6 });
+  } else {
+    const home = os.homedir();
+    if (rootPath) roots.push({ dir: rootPath, maxDepth: 6 });
+    // Home dir at depth 0 with hidden files included (e.g. .bashrc, .zshrc)
+    roots.push({ dir: home, maxDepth: 0, includeHidden: true });
+    const commonSubs = ['Desktop', 'Documents', 'Downloads', 'Projects', 'projects', 'code', 'dev', 'src', 'repos'];
+    if (process.platform === 'win32') commonSubs.push('OneDrive', 'OneDrive - Personal', 'OneDrive - Business');
+    for (const sub of commonSubs) {
+      const p = path.join(home, sub);
+      try { if (fs.statSync(p).isDirectory()) roots.push({ dir: p, maxDepth: 6 }); } catch { /* skip */ }
+    }
+  }
+
+  const paths = searchFiles(query.trim(), roots, 30);
+  return res.json({ paths });
+});
+
+// ── External file access (any absolute path, no workspace boundary) ───────────
+
+router.get('/files/external', async (req, res) => {
+  const filePath = req.query.path as string;
+  if (!filePath || !path.isAbsolute(filePath)) {
+    return res.status(400).json({ error: 'Absolute path query param required' });
+  }
+  try {
+    const content = await readExternalFile(filePath);
+    return res.json({ path: filePath, content, encoding: 'utf-8' });
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException & { code?: string };
+    if (e.code === 'BINARY_FILE') return res.status(400).json({ error: e.message });
+    if (e.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
+    return res.status(500).json({ error: 'Failed to read file' });
+  }
+});
+
+router.put('/files/external', async (req, res) => {
+  const { path: filePath, content } = req.body as { path?: string; content?: string };
+  if (!filePath || !path.isAbsolute(filePath) || content === undefined) {
+    return res.status(400).json({ error: 'Absolute path and content are required' });
+  }
+  try {
+    await writeExternalFile(filePath, content);
+    return res.json({ path: filePath, savedAt: new Date().toISOString() });
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException;
     if (e.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
     return res.status(500).json({ error: 'Failed to write file' });
   }

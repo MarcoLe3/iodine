@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { findWorkspace, openWorkspace, downloadProjectMetadata, importProjectMetadata, clearProjectMetadata } from '../../api/files';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { findWorkspace, openWorkspace, downloadProjectMetadata, importProjectMetadata, clearProjectMetadata, searchFiles } from '../../api/files';
 import type { Theme } from '../../hooks/useTheme';
 
 interface MenuBarProps {
@@ -8,13 +8,15 @@ interface MenuBarProps {
   onCloseAllTabs: () => void;
   onCloseUneditedTabs: () => void;
   onSortTabsByFileStructure: () => void;
+  onOpenExternalFile: (absolutePath: string) => void;
+  onOpenWorkspaceFile: (absolutePath: string) => void;
   workspacePath: string | null;
   theme: Theme;
   onToggleTheme: () => void;
   openTabsCount: number;
 }
 
-export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onCloseUneditedTabs, onSortTabsByFileStructure, workspacePath, theme, onToggleTheme, openTabsCount }: MenuBarProps) {
+export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onCloseUneditedTabs, onSortTabsByFileStructure, onOpenExternalFile, onOpenWorkspaceFile, workspacePath, theme, onToggleTheme, openTabsCount }: MenuBarProps) {
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [editorMenuOpen, setEditorMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -25,8 +27,62 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   const [error, setError] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState<{ type: 'downloading' | 'importing' | 'clearing' | 'success' | 'error'; message: string } | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showOpenFileDialog, setShowOpenFileDialog] = useState(false);
+  const [openFileMode, setOpenFileMode] = useState<'workspace' | 'external'>('external');
+  const [fileQuery, setFileQuery] = useState('');
+  const [fileResults, setFileResults] = useState<string[]>([]);
+  const [fileResultIndex, setFileResultIndex] = useState(-1);
+  const [fileSearching, setFileSearching] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cmd/Ctrl+P → workspace search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p' && workspacePath) {
+        e.preventDefault();
+        setOpenFileMode('workspace');
+        setShowOpenFileDialog(true);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [workspacePath]);
+
+  // Search for files as the user types
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    const q = fileQuery.trim();
+    if (!q) { setFileResults([]); setFileResultIndex(-1); return; }
+    setFileSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await searchFiles(q, openFileMode === 'workspace');
+        setFileResults(results);
+        setFileResultIndex(-1);
+      } catch { setFileResults([]); }
+      finally { setFileSearching(false); }
+    }, 250);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [fileQuery, openFileMode]);
+
+  const openFileResult = useCallback((p: string) => {
+    if (openFileMode === 'workspace') onOpenWorkspaceFile(p);
+    else onOpenExternalFile(p);
+    setShowOpenFileDialog(false);
+    setFileQuery('');
+    setFileResults([]);
+    setFileResultIndex(-1);
+  }, [openFileMode, onOpenExternalFile, onOpenWorkspaceFile]);
+
+  const closeOpenFileDialog = useCallback(() => {
+    setShowOpenFileDialog(false);
+    setFileQuery('');
+    setFileResults([]);
+    setFileResultIndex(-1);
+    setFileSearching(false);
+  }, []);
 
   const handleOpenProjectClick = () => {
     setProjectMenuOpen(false);
@@ -313,6 +369,20 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
               }}
             >
               <button
+                onMouseDown={() => { setFileMenuOpen(false); setOpenFileMode('external'); setShowOpenFileDialog(true); }}
+                style={{
+                  display: 'block', width: '100%', padding: '5px 16px',
+                  textAlign: 'left', color: 'var(--color-text-primary)', fontSize: 13, cursor: 'pointer',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                Open File…
+              </button>
+
+              <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0' }} />
+
+              <button
                 onMouseDown={handleCloseAllTabsClick}
                 disabled={openTabsCount === 0}
                 style={{
@@ -450,7 +520,29 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
           </span>
         )}
 
-        <div style={{ flex: 1 }} />
+        {/* Centered workspace search — only shown when a project is open */}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          {workspacePath && (
+            <button
+              onClick={() => { setOpenFileMode('workspace'); setShowOpenFileDialog(true); }}
+              title="Search files in workspace (⌘P)"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '0 12px', height: 22, borderRadius: 4,
+                background: 'var(--color-bg-editor)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-secondary)',
+                fontSize: 12, cursor: 'pointer', minWidth: 180,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border)')}
+            >
+              <span style={{ fontSize: 13 }}>⌕</span>
+              <span style={{ flex: 1 }}>Search workspace…</span>
+              <span style={{ fontSize: 11, opacity: 0.6 }}>⌘P</span>
+            </button>
+          )}
+        </div>
         <button
           onClick={onToggleTheme}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
@@ -676,6 +768,108 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
           </div>
         </div>
       )}
+
+      {/* Open File… dialog — Quick Open style search */}
+      {showOpenFileDialog && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 500,
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            paddingTop: '15vh',
+            background: 'rgba(0,0,0,0.5)',
+          }}
+          onClick={e => { if (e.target === e.currentTarget) closeOpenFileDialog(); }}
+        >
+          <div
+            style={{
+              background: 'var(--color-bg-sidebar)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6, width: 580,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Search input */}
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid var(--color-border)' }}>
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginRight: 8, flexShrink: 0 }}>
+                {fileSearching ? '⟳' : '⌕'}
+              </span>
+              <input
+                autoFocus
+                value={fileQuery}
+                onChange={e => setFileQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setFileResultIndex(i => Math.min(i + 1, fileResults.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setFileResultIndex(i => Math.max(i - 1, -1));
+                  } else if (e.key === 'Enter') {
+                    const idx = fileResultIndex >= 0 ? fileResultIndex : 0;
+                    if (fileResults[idx]) openFileResult(fileResults[idx]);
+                  } else if (e.key === 'Escape') {
+                    closeOpenFileDialog();
+                  }
+                }}
+                placeholder={openFileMode === 'workspace' ? 'Search workspace files…' : 'Search all files…'}
+                style={{
+                  flex: 1, padding: '12px 0', fontSize: 14,
+                  background: 'transparent', border: 'none', outline: 'none',
+                  color: 'var(--color-text-primary)',
+                }}
+              />
+            </div>
+
+            {/* Results list */}
+            {fileResults.length > 0 && (
+              <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                {fileResults.map((p, idx) => {
+                  // Split into dir + filename for better readability
+                  const lastSep = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+                  const dir = lastSep >= 0 ? p.slice(0, lastSep + 1) : '';
+                  const name = lastSep >= 0 ? p.slice(lastSep + 1) : p;
+                  return (
+                    <div
+                      key={p}
+                      onMouseDown={e => { e.preventDefault(); openFileResult(p); }}
+                      onMouseEnter={() => setFileResultIndex(idx)}
+                      style={{
+                        padding: '7px 14px',
+                        cursor: 'pointer',
+                        background: idx === fileResultIndex ? 'var(--color-bg-selected)' : 'transparent',
+                        borderLeft: idx === fileResultIndex ? '2px solid var(--color-accent)' : '2px solid transparent',
+                        display: 'flex', flexDirection: 'column', gap: 1,
+                      }}
+                    >
+                      <span style={{ fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 500 }}>{name}</span>
+                      <span style={{
+                        fontSize: 11, color: 'var(--color-text-secondary)',
+                        fontFamily: "'Cascadia Code','Fira Code',Menlo,monospace",
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{dir}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!fileSearching && fileQuery.trim() && fileResults.length === 0 && (
+              <div style={{ padding: '20px 14px', fontSize: 13, color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+                No files found matching <strong style={{ color: 'var(--color-text-primary)' }}>{fileQuery}</strong>
+              </div>
+            )}
+
+            {!fileQuery.trim() && (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                {openFileMode === 'workspace' ? 'Searches within the open workspace' : 'Searches workspace and common directories'}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </>
   );
 }

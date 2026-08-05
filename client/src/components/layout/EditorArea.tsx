@@ -101,7 +101,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
   function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
-      (activeFile?.isImage || activeFile?.isUrl) ? null : (activeFile?.path ?? null),
+      (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
       activeFile?.content ?? '',
     );
     const monacoEditorRef = useRef<MonacoEditorAPI.IStandaloneCodeEditor | null>(null);
@@ -135,13 +135,22 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     // Probe cache whenever the active file/dir changes so the button label is accurate
     // PDFs and images are excluded from AI summary
     useEffect(() => {
-      if (!activeFile || activeFile.isImage || activeFile.isPdf || !workspacePath) return;
-      const relPath = activeFile.path.startsWith(workspacePath + '/')
-        ? activeFile.path.slice(workspacePath.length + 1)
-        : activeFile.path;
+      if (!activeFile || activeFile.isImage || activeFile.isPdf) return;
+      if (!workspacePath && !activeFile.isExternal) return;
+      const isExternal = !!activeFile.isExternal;
+      const lastSep = Math.max(activeFile.path.lastIndexOf('/'), activeFile.path.lastIndexOf('\\'));
+      const externalWs = isExternal
+        ? activeFile.path.substring(0, lastSep)
+        : null;
+      const relPath = isExternal
+        ? activeFile.path.substring(lastSep + 1)
+        :(activeFile.path.startsWith(workspacePath! + '/')
+            ? activeFile.path.slice(workspacePath!.length + 1)
+            : activeFile.path);
+      const wsParam = isExternal ? `&workspacePath=${encodeURIComponent(externalWs!)}` : '';
       const url = activeFile.isDirectory
-        ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}`
-        : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}`;
+        ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}${wsParam}`
+        : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}${wsParam}`;
       fetch(url)
         .then(r => r.json())
         .then((data: { content: string | null }) => setHasCachedSummary(!!data.content))
@@ -286,7 +295,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     }), [applyNavigation, activeFilePath, activeFile]);
 
     const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
-    const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && !!workspacePath && !activeFile.path.endsWith('.md');
+    const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && (!!workspacePath || !!activeFile.isExternal) && !activeFile.path.endsWith('.md');
     const showConflictsButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && hasConflictMarkers(activeFile.content ?? '');
 
     /** Convert an absolute file path to a workspace-relative path. */
@@ -299,7 +308,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     };
 
     const handleSwitchToSummary = useCallback(async () => {
-      if (!activeFile || !workspacePath) return;
+      if (!activeFile || (!workspacePath && !activeFile.isExternal)) return;
       setEditorView('summary');
 
       // If we already have content for this session, just show it
@@ -308,14 +317,23 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       setSummaryLoading(true);
       setSummaryError(null);
 
-      const relPath = toRelPath(activeFile.path);
+      // For external files, use the file's directory as the workspace root
+      const isExternal = !!activeFile.isExternal;
+      const lastSep = Math.max(activeFile.path.lastIndexOf('/'), activeFile.path.lastIndexOf('\\'));
+      const externalWs = isExternal
+        ? activeFile.path.substring(0, lastSep)
+        : null;
+      const relPath = isExternal
+        ? activeFile.path.substring(lastSep + 1)
+        :toRelPath(activeFile.path);
       const isDir = !!activeFile.isDirectory;
 
       // 1. Check cache
       try {
+        const wsParam = isExternal ? `&workspacePath=${encodeURIComponent(externalWs!)}` : '';
         const cacheUrl = isDir
-          ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}`
-          : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}`;
+          ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}${wsParam}`
+          : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}${wsParam}`;
         const resp = await fetch(cacheUrl);
         const data = await resp.json() as { content: string | null };
         if (data.content) {
@@ -331,8 +349,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
           ? `${API_BASE}/api/ai-directory-summary/generate`
           : `${API_BASE}/api/ai-summary/generate`;
         const generateBody = isDir
-          ? JSON.stringify({ dirPath: relPath, provider: provider.id, model })
-          : JSON.stringify({ filePath: relPath, provider: provider.id, model });
+          ? JSON.stringify({ dirPath: relPath, provider: provider.id, model, ...(isExternal ? { workspacePath: externalWs } : {}) })
+          : JSON.stringify({ filePath: relPath, provider: provider.id, model, ...(isExternal ? { workspacePath: externalWs } : {}) });
         const resp = await fetch(generateUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

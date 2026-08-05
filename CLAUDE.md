@@ -469,6 +469,50 @@ User presses a key in the Monaco editor
 | `client/src/components/layout/WorkbenchLayout.tsx` | Calls `rightPanelRef.current?.notifyEditorActivity()` inside `onContentChange`. Passes `onWatchTrigger` (bell + pulse) to `RightPanel`. |
 | `server/src/routes/proactive.ts` | `POST /api/proactive/watch` — streaming SSE, no tools. System prompt instructs the model to surface nits (syntax errors, typos, off-by-ones) and acknowledge progress. Snapshot labels include actual capture times (4 s, 10 s, 20 s). |
 
+## Merge Conflict Resolver
+
+Files containing git merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) show an **⚠ Conflicts** button in the editor's floating button group. Clicking it replaces the editor with a three-pane resolver.
+
+| File | Role |
+|------|------|
+| `client/src/utils/mergeConflict.ts` | `hasConflictMarkers`, `extractBranchNames`, `buildOursVersion`, `buildTheirsVersion`, `conflictResultKey` utilities. |
+| `client/src/components/editor/MergeConflictView.tsx` | Three-pane layout: left (OURS, read-only Monaco), center (RESULT, `DiffEditor` in inline mode with `original=oursVersion`), right (THEIRS, read-only Monaco). In-progress edits auto-save to `localStorage` keyed by file path; the key is cleared on a successful disk write. Branch names are extracted from the `<<<<<<< <name>` / `>>>>>>> <name>` markers. |
+| `client/src/components/layout/EditorArea.tsx` | `EditorView` type includes `'conflicts'`. `showConflictsButton` is true when `hasConflictMarkers(activeFile.content)`. The conflict view renders in an absolute overlay so Monaco stays mounted (preserving AI visual context). The existing `useEffect` on `activeFile.path` resets the view to `'source'` on tab switch. |
+
+**Save flow:** RESULT pane changes update `resultContent` state via `onDidChangeModelContent`. Clicking **Save** calls `putFileContent`, clears the localStorage draft, then calls `onSaved(resolved)` which updates the editor's in-memory content and switches back to source view.
+
+## External File Open
+
+Any file outside the current workspace can be opened from **File > Open File…** with full editor support (Monaco, save, Markdown preview, AI summary, merge conflict resolver).
+
+| File | Role |
+|------|------|
+| `server/src/services/fileSystem.ts` | `readExternalFile(path)` / `writeExternalFile(path, content)` — no `validatePath` call, accept any absolute path. |
+| `server/src/routes/files.ts` | `GET /api/files/external?path=` and `PUT /api/files/external` serve external reads/writes. |
+| `server/src/routes/aiSummary.ts` | `GET /api/ai-summary` and `POST /api/ai-summary/generate` accept an optional `workspacePath` override so external files can be summarised using their parent directory as the effective workspace root. |
+| `client/src/types/index.ts` | `OpenFile` gains `isExternal?: boolean`. |
+| `client/src/api/files.ts` | `fetchExternalFileContent` / `putExternalFileContent` / `searchFiles(query, workspaceOnly?)`. |
+| `client/src/hooks/useOpenFiles.ts` | `openExternalFile(absolutePath)` — creates an `OpenFile` with `isExternal: true`. `saveFile` routes external files to `putExternalFileContent`. `refreshFile` and the dirty-check skip external files. |
+| `client/src/components/layout/EditorArea.tsx` | Git diff is skipped for external files. AI summary uses `path.dirname(absolutePath)` as `workspacePath` when `activeFile.isExternal`. |
+
+## File Search (Quick Open)
+
+Two search modes share the same dialog UI and server endpoint:
+
+| Trigger | Mode | Scope |
+|---------|------|-------|
+| **File > Open File…** | external | Workspace (if open) + home dir (depth 0, hidden files included) + common dirs (`Desktop`, `Documents`, …) |
+| **Search workspace… button** or **⌘P / Ctrl+P** | workspace | Open workspace root only |
+
+**Server** (`POST /api/files/search`): accepts `{ query, workspaceOnly? }`. Internally uses typed `SearchRoot[]` entries with per-root `maxDepth` and `includeHidden` flags. Home dir is added at `maxDepth: 0` with `includeHidden: true` so dotfiles (`.bashrc`, `.zshrc`) are found without recursing into all of `~`. Skips `node_modules`, `.git`, `dist`, `build` and other noise dirs. Windows: adds `OneDrive`, `OneDrive - Personal`, `OneDrive - Business` under home when `process.platform === 'win32'`.
+
+**Client** (`client/src/components/layout/MenuBar.tsx`):
+- `openFileMode: 'workspace' | 'external'` state gates which callback (`onOpenWorkspaceFile` vs `onOpenExternalFile`) is used and which `workspaceOnly` value is sent to the server.
+- Dialog is VS Code Quick Open-style: floats near the top, single search input, results render in-place as a scrollable list. Each result shows the **filename** (bold) above the **directory path** (monospace, muted). Arrow keys navigate; Enter opens highlighted result; Escape closes.
+- Workspace search button (centered in menu bar, visible only when a project is open) sets mode to `'workspace'` and opens the dialog. `Cmd/Ctrl+P` also triggers workspace search.
+- Opening via **File > Open File…** always forces mode to `'external'` regardless of previous state.
+- `onOpenWorkspaceFile` in `WorkbenchLayout` constructs a `FileNode` and calls `openFile` so workspace files are treated as regular workspace files (saves route through the workspace API; no `isExternal` flag).
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.

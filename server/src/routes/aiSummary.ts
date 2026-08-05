@@ -97,10 +97,12 @@ Do **not** mention or speculate about who uses this file, which team owns it, or
 // ── GET /api/ai-summary — check cache ─────────────────────────────────────────
 
 router.get('/ai-summary', async (req, res) => {
-  const relPath = req.query.path as string;
-  if (!relPath || !rootPath) return res.json({ content: null });
+  const relPath        = req.query.path as string;
+  const overrideWs     = req.query.workspacePath as string | undefined;
+  const effectiveRoot  = overrideWs || rootPath;
+  if (!relPath || !effectiveRoot) return res.json({ content: null });
 
-  const absPath = path.join(rootPath, relPath);
+  const absPath = path.join(effectiveRoot, relPath);
   let fileContent: string;
   try {
     fileContent = await fs.promises.readFile(absPath, 'utf-8');
@@ -108,7 +110,7 @@ router.get('/ai-summary', async (req, res) => {
     return res.json({ content: null });
   }
 
-  const dir         = summaryDir(rootPath, relPath);
+  const dir         = summaryDir(effectiveRoot, relPath);
   const contentHash = crypto.createHash('md5').update(fileContent).digest('hex');
   const sfp         = summaryFilePath(dir, contentHash);
 
@@ -123,17 +125,19 @@ router.get('/ai-summary', async (req, res) => {
 // ── POST /api/ai-summary/generate — generate, stream, cache ───────────────────
 
 router.post('/ai-summary/generate', async (req, res) => {
-  const { filePath, provider: providerId, model } = req.body as {
+  const { filePath, provider: providerId, model, workspacePath: overrideWs } = req.body as {
     filePath?: string;
     provider?: string;
     model?: string;
+    workspacePath?: string;
   };
 
-  if (!rootPath || !filePath) {
+  const effectiveRoot = overrideWs || rootPath;
+  if (!effectiveRoot || !filePath) {
     return res.status(400).json({ error: 'Missing workspace or filePath' });
   }
 
-  const absPath = path.join(rootPath, filePath);
+  const absPath = path.join(effectiveRoot, filePath);
   let fileContent: string;
   try {
     fileContent = await fs.promises.readFile(absPath, 'utf-8');
@@ -147,8 +151,8 @@ router.post('/ai-summary/generate', async (req, res) => {
     ? fileContent.slice(0, MAX_CHARS) + '\n\n[... content truncated at 80 000 characters ...]'
     : fileContent;
 
-  // Load system graph if present
-  const wh        = crypto.createHash('md5').update(rootPath).digest('hex');
+  // Load system graph if present (only when there is a real workspace)
+  const wh        = crypto.createHash('md5').update(effectiveRoot).digest('hex');
   const graphPath = path.join(os.homedir(), '.iodine', wh, 'system-graph.json');
   let graphText   = '';
   try { graphText = await fs.promises.readFile(graphPath, 'utf-8'); } catch { /* no graph */ }
@@ -175,7 +179,7 @@ router.post('/ai-summary/generate', async (req, res) => {
   ].join('\n');
 
   const contentHash = crypto.createHash('md5').update(fileContent).digest('hex');
-  const dir         = summaryDir(rootPath, filePath);
+  const dir         = summaryDir(effectiveRoot, filePath);
   const sfp         = summaryFilePath(dir, contentHash);
 
   let accumulated = '';

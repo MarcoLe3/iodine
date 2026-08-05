@@ -19,6 +19,8 @@ export interface OpenFile {
   isDirectory?: boolean;
   isUrl?: boolean;
   url?: string;
+  /** File opened from outside the current workspace via File > Open File… */
+  isExternal?: boolean;
 }
 
 export type SidebarView = 'explorer' | 'scm' | 'outline';
