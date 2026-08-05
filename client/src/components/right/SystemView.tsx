@@ -252,7 +252,7 @@ export interface SystemViewHandle {
   /** Reverse lookup by path: find the best-matching node/edge by file or folder path.
    *  Score 2 = exact file match, 1 = file is inside the given folder.
    *  Returns true if a match was found. */
-  lookupByPath: (path: string) => boolean;
+  lookupByPath: (path: string) => string | null;
   /** Like lookupByPath but only updates the selection — no pan/zoom. Safe to call
    *  while the SVG is hidden (display:none) since it doesn't read clientWidth.
    *  Returns the matched node/edge name, or null if nothing matched. */
@@ -587,8 +587,8 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
       return true;
     },
 
-    lookupByPath: (path: string): boolean => {
-      if (!localGraph.nodes.length && !localGraph.edges.length) return false;
+    lookupByPath: (path: string): string | null => {
+      if (!localGraph.nodes.length && !localGraph.edges.length) return null;
 
       // Score 2 = exact file match, 1 = file lives inside the given folder path
       const scoreRefs = (files: GraphFileRef[] | undefined): number => {
@@ -614,7 +614,7 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
         if (s > 0) hits.push({ type: 'edge', idx: i, score: s });
       }
 
-      if (!hits.length) return false;
+      if (!hits.length) return null;
 
       hits.sort((a, b) => b.score - a.score);
       const best = hits[0];
@@ -628,6 +628,7 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
       if (best.type === 'node') {
         const pos = posMap[best.id];
         if (pos) { setScale(TARGET_SCALE); setPan({ x: cx - pos.x * TARGET_SCALE, y: cy - pos.y * TARGET_SCALE }); }
+        return localGraph.nodes.find(n => n.id === best.id)?.name ?? null;
       } else {
         const edge = localGraph.edges[best.idx];
         if (edge) {
@@ -637,9 +638,8 @@ function SystemView({ workspacePath, provider, model, onNavigateToLine }, ref) {
             setPan({ x: cx - (src.x + tgt.x) / 2 * TARGET_SCALE, y: cy - (src.y + tgt.y) / 2 * TARGET_SCALE });
           }
         }
+        return edge?.label ?? null;
       }
-
-      return true;
     },
 
     selectByPath: (path: string): string | null => {

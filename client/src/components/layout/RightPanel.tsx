@@ -86,7 +86,11 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
     },
     syncActiveFile: (path: string | null) => {
       if (!path || !systemViewRef.current?.hasGraph()) return null;
-      // selectByPath only updates the selection — no pan — safe while SVG is hidden.
+      if (activeTab === 'system') {
+        // Tab is visible — lookupByPath does select + pan with live SVG dimensions.
+        return systemViewRef.current.lookupByPath(path);
+      }
+      // Tab hidden — select only (can't pan; SVG has no rendered dimensions).
       return systemViewRef.current.selectByPath(path);
     },
     injectProactiveMessage: (message, collectContext) => {
