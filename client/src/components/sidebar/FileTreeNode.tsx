@@ -271,6 +271,7 @@ export function FileTreeNode({
       <div
         onClick={handleClick}
         title={node.path}
+        data-path={node.path}
         style={{
           position: 'relative',
           display: 'flex',

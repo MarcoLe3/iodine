@@ -94,6 +94,7 @@ export function FileExplorer({
   const [createError, setCreateError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Select all text when the create input first appears
   useEffect(() => {
@@ -102,18 +103,24 @@ export function FileExplorer({
     }
   }, [creatingType]);
 
-  // Auto-expand parent folders when the active file path changes.
-  // We intentionally exclude expandedPaths from the deps so that the user
-  // can manually collapse a folder without it immediately re-opening.
+  // Auto-expand parent folders when the active file path changes, then scroll
+  // the active file row into view. We intentionally exclude expandedPaths from
+  // the deps so the user can manually collapse a folder without it re-opening.
   useEffect(() => {
     if (!expandToPath || !tree) return;
 
     const pathParts = expandToPath.split('/');
     for (let i = 1; i < pathParts.length - 1; i++) {
       const parentPath = pathParts.slice(0, i + 1).join('/');
-      // toggleExpand is a no-op if already expanded (checked inside useFileTree)
       toggleExpand(parentPath, true /* forceExpand */);
     }
+
+    // Wait one animation frame for React to flush the expanded state and render
+    // the newly visible rows before querying the DOM.
+    requestAnimationFrame(() => {
+      const el = scrollContainerRef.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(expandToPath)}"]`);
+      el?.scrollIntoView({ block: 'nearest' });
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandToPath, tree]);
 
@@ -362,7 +369,7 @@ export function FileExplorer({
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflow: 'auto' }}>
         {!workspacePath && !localTree ? (
           <div style={{ padding: '24px 16px' }}>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: 12, lineHeight: 1.6, textAlign: 'center' }}>
