@@ -471,15 +471,15 @@ User presses a key in the Monaco editor
 
 ## Merge Conflict Resolver
 
-Files containing git merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) show an **⚠ Conflicts** button in the editor's floating button group. Clicking it replaces the editor with a three-pane resolver.
+Files containing git merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) show an **⚠ Conflicts** button in the editor's floating button group. Clicking it opens a three-pane resolver as an absolute overlay (the Monaco editor stays mounted underneath, preserving AI visual context).
 
 | File | Role |
 |------|------|
-| `client/src/utils/mergeConflict.ts` | `hasConflictMarkers`, `extractBranchNames`, `buildOursVersion`, `buildTheirsVersion`, `conflictResultKey` utilities. |
-| `client/src/components/editor/MergeConflictView.tsx` | Three-pane layout: left (OURS, read-only Monaco), center (RESULT, `DiffEditor` in inline mode with `original=oursVersion`), right (THEIRS, read-only Monaco). In-progress edits auto-save to `localStorage` keyed by file path; the key is cleared on a successful disk write. Branch names are extracted from the `<<<<<<< <name>` / `>>>>>>> <name>` markers. |
-| `client/src/components/layout/EditorArea.tsx` | `EditorView` type includes `'conflicts'`. `showConflictsButton` is true when `hasConflictMarkers(activeFile.content)`. The conflict view renders in an absolute overlay so Monaco stays mounted (preserving AI visual context). The existing `useEffect` on `activeFile.path` resets the view to `'source'` on tab switch. |
+| `client/src/utils/mergeConflict.ts` | Pure utilities: `hasConflictMarkers` (detection), `extractBranchNames` (reads branch names from `<<<<<<< name` / `>>>>>>> name` lines), `buildOursVersion` / `buildTheirsVersion` (produce the full file with every conflict resolved to one side), `conflictResultKey` (localStorage key). |
+| `client/src/components/editor/MergeConflictView.tsx` | Three-pane layout rendered in a full-height flex column. **OURS** (left, teal `#4ec9b0`) and **THEIRS** (right, blue `#569cd6`) panes are read-only Monaco editors showing the full file with all conflicts resolved to each respective side. **RESULT** (center) is a `DiffEditor` with `renderSideBySide: false` (inline mode); `original` is `oursContent` so diffs highlight what the user has changed from the ours baseline. Branch names from the markers label each pane header. In-progress edits auto-persist to `localStorage` (keyed by `conflictResultKey(filePath)`) on every keystroke; the entry is removed on a successful save. |
+| `client/src/components/layout/EditorArea.tsx` | `EditorView` union includes `'conflicts'`. `showConflictsButton` is computed from `hasConflictMarkers(activeFile.content ?? '')`. Button toggles between `'source'` and `'conflicts'`; it is hidden for images, PDFs, URL tabs, and directories. The overlay div uses `position: absolute; inset: 0; zIndex: 5` so it sits above Monaco without unmounting it. The existing `useEffect` keyed on `activeFile.path` resets `editorView` to `'source'` on tab switch. |
 
-**Save flow:** RESULT pane changes update `resultContent` state via `onDidChangeModelContent`. Clicking **Save** calls `putFileContent`, clears the localStorage draft, then calls `onSaved(resolved)` which updates the editor's in-memory content and switches back to source view.
+**Save flow:** `DiffEditor.onMount` wires the modified editor's `onDidChangeModelContent` to update `resultContent` state. Clicking **Save** calls `putFileContent(filePath, resultContent)`, removes the localStorage draft, then calls `onSaved(resolved)` which propagates the resolved content back through `onContentChange` and switches the view to `'source'`. Clicking **⌨ Source** without saving calls `onClose()` which just sets `editorView` back to `'source'`, leaving the conflicted file unchanged on disk.
 
 ## External File Open
 
