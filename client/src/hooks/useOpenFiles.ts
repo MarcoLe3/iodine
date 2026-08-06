@@ -2,24 +2,6 @@ import { useState, useCallback, useRef } from 'react';
 import { fetchFileContent, putFileContent, fetchExternalFileContent, putExternalFileContent } from '../api/files';
 import type { FileNode, OpenFile } from '../types';
 
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/');
-}
-
-function insertFileByStructure(files: OpenFile[], file: OpenFile): OpenFile[] {
-  const path = normalizePath(file.path);
-  const directory = path.slice(0, path.lastIndexOf('/'));
-  const sameDirectory = files
-    .map((existing, index) => ({ existing, index }))
-    .filter(({ existing }) => normalizePath(existing.path).slice(0, normalizePath(existing.path).lastIndexOf('/')) === directory);
-
-  if (sameDirectory.length === 0) return [...files, file];
-  const before = sameDirectory.find(({ existing }) => normalizePath(existing.path).localeCompare(path) > 0);
-  const result = [...files];
-  result.splice(before?.index ?? sameDirectory[sameDirectory.length - 1].index + 1, 0, file);
-  return result;
-}
-
 const EXT_TO_LANGUAGE: Record<string, string> = {
   ts: 'typescript', tsx: 'typescript',
   js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
