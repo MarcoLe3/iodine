@@ -14,6 +14,7 @@ import { useSourceControl } from '../../hooks/useSourceControl';
 import { getWorkspace, closeWorkspace, rephraseProactiveMessage } from '../../api/files';
 import { useProactiveHelp } from '../../hooks/useProactiveHelp';
 import { createIdleChurnSignal } from '../../services/proactiveSignals';
+import { usePanelExpansion, DEFAULT_PANEL_EXPANSION_CONFIG } from '../../hooks/usePanelExpansion';
 import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL } from '../../providers';
 import type { Provider } from '../../providers';
 import type { FileNode, SidebarView } from '../../types';
@@ -53,6 +54,19 @@ export function WorkbenchLayout() {
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [rightPanelWidth, setRightPanelWidth] = useState(RIGHT_PANEL_DEFAULT);
+  const { isExpanded, animated: panelAnimated, onAssistantReply, onOpenFile: onPanelShrinkForFile, resetExpansion } = usePanelExpansion(DEFAULT_PANEL_EXPANSION_CONFIG);
+  const effectiveRightWidth = isExpanded
+    ? Math.max(rightPanelWidth, DEFAULT_PANEL_EXPANSION_CONFIG.expandedWidth)
+    : rightPanelWidth;
+
+  // Pulse the panel border when the LLM triggers expansion, stop it when it shrinks back.
+  useEffect(() => {
+    if (isExpanded) {
+      rightPanelRef.current?.triggerPulse();
+    } else {
+      rightPanelRef.current?.stopPulse();
+    }
+  }, [isExpanded]);
   const [trayHeight, setTrayHeight] = useState(TRAY_DEFAULT);
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
@@ -163,6 +177,7 @@ export function WorkbenchLayout() {
 
   /** Open a file and navigate the Monaco editor to a specific line range (used by Tutor Mode). */
   const handleNavigateToLine = useCallback((filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => {
+    onPanelShrinkForFile();
     const name = filePath.split('/').pop() ?? filePath;
     openFile({ path: filePath, name, type: 'file', children: null });
     // Delay slightly so the tab activates and the editor mounts before we apply the highlight
@@ -442,8 +457,8 @@ export function WorkbenchLayout() {
           />
 
           <ResizeDivider
-            currentWidth={rightPanelWidth}
-            onResize={setRightPanelWidth}
+            currentWidth={effectiveRightWidth}
+            onResize={(w) => { setRightPanelWidth(w); resetExpansion(); }}
             min={RIGHT_MIN}
             max={RIGHT_MAX}
             side="right"
@@ -451,7 +466,8 @@ export function WorkbenchLayout() {
 
           <RightPanel
             ref={rightPanelRef}
-            width={rightPanelWidth}
+            width={effectiveRightWidth}
+            animated={panelAnimated}
             workspacePath={workspacePath}
             activeFilePath={activeFilePath}
             onWorkspaceOpen={handleWorkspaceOpen}
@@ -469,6 +485,7 @@ export function WorkbenchLayout() {
             activeSystemNode={activeSystemNode}
             onMessageSent={recordAction}
             onWatchTrigger={() => { playBell(); rightPanelRef.current?.triggerPulse(); }}
+            onAssistantReply={onAssistantReply}
           />
         </div>
 

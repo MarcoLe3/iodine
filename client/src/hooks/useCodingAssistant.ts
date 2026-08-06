@@ -20,6 +20,7 @@ export function useCodingAssistant(
   model: string,
   onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void,
   onWatchTrigger?: () => void,
+  onAssistantReply?: (text: string, hadToolUse: boolean) => void,
 ) {
   const [uiMessages, setUiMessages] = useState<UIMessage[]>([]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
@@ -33,6 +34,12 @@ export function useCodingAssistant(
 
   const onWatchTriggerRef = useRef(onWatchTrigger);
   onWatchTriggerRef.current = onWatchTrigger;
+
+  const onAssistantReplyRef = useRef(onAssistantReply);
+  onAssistantReplyRef.current = onAssistantReply;
+
+  // Tracks whether any tool was called in the current turn; reset at start of sendMessage.
+  const toolUsedInTurnRef = useRef(false);
 
   // Refs that accumulate text/thought tokens between animation frames.
   // Prevents per-token re-renders when providers like OpenAI stream very fast.
@@ -269,6 +276,7 @@ export function useCodingAssistant(
     watchControllerRef.current?.abort();
     setIsWatching(false);
     streamingTextRef.current = '';
+    toolUsedInTurnRef.current = false;
 
     const userMsg: UIMessage = { id: uid(), role: 'user', content: text };
     const assistantId = uid();
@@ -408,6 +416,7 @@ export function useCodingAssistant(
             if (rafRef.current === null) rafRef.current = requestAnimationFrame(flushBufs);
           } else if (eventName === 'tool_call') {
             flushNow();
+            toolUsedInTurnRef.current = true;
             const toolBlock: UIBlock = {
               type: 'tool',
               id: payload.id as string,
@@ -457,6 +466,8 @@ export function useCodingAssistant(
               setHistory(h => [...h, { role: 'assistant', content: capturedText }]);
               return { ...msg, isStreaming: false };
             });
+            // Notify expansion hook so it can grow/shrink the right panel.
+            onAssistantReplyRef.current?.(capturedText, toolUsedInTurnRef.current);
             // Start 30-second progress watch if the reply had content
             // Arm the watch — it will start when the user next types in the editor.
             if (capturedText.trim()) {

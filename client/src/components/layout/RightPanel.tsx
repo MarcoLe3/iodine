@@ -30,6 +30,7 @@ export interface RightPanelHandle {
 
 interface RightPanelProps {
   width: number;
+  animated?: boolean;
   workspacePath: string | null;
   activeFilePath: string | null;
   onWorkspaceOpen: (path: string) => void;
@@ -47,10 +48,11 @@ interface RightPanelProps {
   activeSystemNode?: string | null;
   onMessageSent?: () => void;
   onWatchTrigger?: () => void;
+  onAssistantReply?: (text: string, hadToolUse: boolean) => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent, onWatchTrigger }, ref) {
+function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent, onWatchTrigger, onAssistantReply }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const panelRef             = useRef<HTMLDivElement>(null);
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -171,6 +173,7 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
         flexDirection: 'column',
         overflow: 'hidden',
         flexShrink: 0,
+        transition: animated ? 'width 320ms cubic-bezier(0.4, 0, 0.2, 1)' : undefined,
       }}
     >
       {/* Tab strip */}
@@ -233,7 +236,8 @@ function RightPanel({ width, workspacePath, activeFilePath, onWorkspaceOpen, pro
           onNavigateToLine={onNavigateToLine} onOpenNode={handleOpenNode} activeSystemNode={activeSystemNode}
           onUserTyping={() => { if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current); panelRef.current?.classList.remove('proactive-pulse'); }}
           onMessageSent={onMessageSent}
-          onWatchTrigger={onWatchTrigger} />
+          onWatchTrigger={onWatchTrigger}
+          onAssistantReply={onAssistantReply} />
       </div>
     </div>
   );
