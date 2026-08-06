@@ -2,6 +2,24 @@ import { useState, useCallback, useRef } from 'react';
 import { fetchFileContent, putFileContent, fetchExternalFileContent, putExternalFileContent } from '../api/files';
 import type { FileNode, OpenFile } from '../types';
 
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function insertFileByStructure(files: OpenFile[], file: OpenFile): OpenFile[] {
+  const path = normalizePath(file.path);
+  const directory = path.slice(0, path.lastIndexOf('/'));
+  const sameDirectory = files
+    .map((existing, index) => ({ existing, index }))
+    .filter(({ existing }) => normalizePath(existing.path).slice(0, normalizePath(existing.path).lastIndexOf('/')) === directory);
+
+  if (sameDirectory.length === 0) return [...files, file];
+  const before = sameDirectory.find(({ existing }) => normalizePath(existing.path).localeCompare(path) > 0);
+  const result = [...files];
+  result.splice(before?.index ?? sameDirectory[sameDirectory.length - 1].index + 1, 0, file);
+  return result;
+}
+
 const EXT_TO_LANGUAGE: Record<string, string> = {
   ts: 'typescript', tsx: 'typescript',
   js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
@@ -42,6 +60,28 @@ function isImageFile(filename: string): boolean {
 function isPdfFile(filename: string): boolean {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   return PDF_EXTENSIONS.has(ext);
+}
+
+/** Insert a file beside its closest path match, preserving path order within that group. */
+function insertFileByStructure(files: OpenFile[], file: OpenFile): OpenFile[] {
+  const next = [...files];
+  let insertAt = -1;
+  let bestScore = -1;
+  const fileParts = file.path.split(/[/\\]/);
+
+  for (let i = 0; i < next.length; i++) {
+    const parts = next[i].path.split(/[/\\]/);
+    let score = 0;
+    while (score < fileParts.length && score < parts.length && fileParts[score] === parts[score]) score++;
+    if (score > bestScore) {
+      bestScore = score;
+      insertAt = i + (file.path.localeCompare(next[i].path, undefined, { sensitivity: 'base', numeric: true }) > 0 ? 1 : 0);
+    }
+  }
+
+  if (insertAt < 0) next.push(file);
+  else next.splice(insertAt, 0, file);
+  return next;
 }
 
 export function useOpenFiles() {
@@ -111,7 +151,7 @@ export function useOpenFiles() {
         };
         setOpenFiles(prev => {
           if (prev.some(f => f.path === node.path)) return prev;
-          return [...prev, newFile];
+          return insertFileByStructure(prev, newFile);
         });
         setActiveFilePath(node.path);
         return;
@@ -130,7 +170,7 @@ export function useOpenFiles() {
         };
         setOpenFiles(prev => {
           if (prev.some(f => f.path === node.path)) return prev;
-          return [...prev, newFile];
+          return insertFileByStructure(prev, newFile);
         });
         setActiveFilePath(node.path);
         return;
@@ -156,7 +196,7 @@ export function useOpenFiles() {
       };
       setOpenFiles(prev => {
         if (prev.some(f => f.path === node.path)) return prev;
-        return [...prev, newFile];
+        return insertFileByStructure(prev, newFile);
       });
       setActiveFilePath(node.path);
     } catch (err) {
@@ -188,7 +228,7 @@ export function useOpenFiles() {
       };
       setOpenFiles(prev => {
         if (prev.some(f => f.path === absolutePath)) return prev;
-        return [...prev, newFile];
+        return insertFileByStructure(prev, newFile);
       });
       setActiveFilePath(absolutePath);
     } catch (err) {
