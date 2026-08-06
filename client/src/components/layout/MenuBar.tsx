@@ -262,15 +262,16 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
           height: 30,
           background: 'var(--color-bg-sidebar)',
           borderBottom: '1px solid var(--color-border)',
-          display: 'flex',
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
           alignItems: 'center',
           padding: '0 4px',
           flexShrink: 0,
           zIndex: 100,
         }}
       >
-        {/* Project menu */}
-        <div style={{ position: 'relative' }}>
+        <div style={{display: 'flex', alignItems: 'center', gap:0}}>
+          <div style={{ position: 'relative' }}>
           <button
             onClick={() => setProjectMenuOpen(v => !v)}
             onBlur={() => setTimeout(() => setProjectMenuOpen(false), 150)}
@@ -582,16 +583,17 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
             {projectStatus.message}
           </span>
         )}
-
+        </div>
+        
         {/* Centered workspace search — only shown when a project is open */}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
           {workspacePath && (
             <button
               onClick={() => { setOpenFileMode('workspace'); setShowOpenFileDialog(true); }}
               title="Search files in workspace (⌘P)"
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                padding: '0 12px', height: 22, borderRadius: 4,
+                padding: '0 12px', height: 22, width: '40vw', borderRadius: 4,
                 background: 'var(--color-bg-editor)',
                 border: '1px solid var(--color-border)',
                 color: 'var(--color-text-secondary)',
@@ -606,21 +608,23 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
             </button>
           )}
         </div>
-        <button
-          onClick={onToggleTheme}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          style={{
-            width: 28,
-            height: 24,
-            borderRadius: 3,
-            color: 'var(--color-text-primary)',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-        >
-          {theme === 'dark' ? '☀' : '☾'}
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onToggleTheme}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            style={{
+              width: 28,
+              height: 24,
+              borderRadius: 3,
+              color: 'var(--color-text-primary)',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+          >
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
+        </div>
       </div>
 
       {/* Fallback: manual path input shown when auto-detect fails */}
@@ -847,7 +851,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
             style={{
               background: 'var(--color-bg-sidebar)',
               border: '1px solid var(--color-border)',
-              borderRadius: 6, width: 580,
+              borderRadius: 6, width: '40vw',
               boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
               overflow: 'hidden',
             }}

@@ -4,6 +4,7 @@ interface ActivityBarProps {
   activeView: SidebarView | null;
   onViewChange: (view: SidebarView) => void;
   gitChangeCount?: number;
+  canPreview?: boolean;
 }
 
 interface NavItem {
