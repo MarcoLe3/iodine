@@ -562,6 +562,22 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
               >
                 Contribute
               </button>
+              <button
+                onMouseDown={() => { setHelpMenuOpen(false); window.open('https://github.com/hyunwookshin/iodine/issues/new', '_blank'); }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '5px 16px',
+                  textAlign: 'left',
+                  color: 'var(--color-text-primary)',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                File a Bug
+              </button>
             </div>
           )}
         </div>
