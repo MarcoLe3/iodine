@@ -353,12 +353,12 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       return abs;
     };
 
-    const handleSwitchToSummary = useCallback(async () => {
+    const handleSwitchToSummary = useCallback(async (skipCache = false) => {
       if (!activeFile || (!workspacePath && !activeFile.isExternal)) return;
       setEditorView('summary');
 
       // If we already have content for this session, just show it
-      if (summaryContent) return;
+      if (summaryContent && !skipCache) return;
 
       setSummaryLoading(true);
       setSummaryError(null);
@@ -374,20 +374,22 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         :toRelPath(activeFile.path);
       const isDir = !!activeFile.isDirectory;
 
-      // 1. Check cache
-      try {
-        const wsParam = isExternal ? `&workspacePath=${encodeURIComponent(externalWs!)}` : '';
-        const cacheUrl = isDir
-          ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}${wsParam}`
-          : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}${wsParam}`;
-        const resp = await fetch(cacheUrl);
-        const data = await resp.json() as { content: string | null };
-        if (data.content) {
-          setSummaryContent(data.content);
-          setSummaryLoading(false);
-          return;
-        }
-      } catch { /* fall through to generation */ }
+      // 1. Check cache (skipped when regenerating)
+      if (!skipCache) {
+        try {
+          const wsParam = isExternal ? `&workspacePath=${encodeURIComponent(externalWs!)}` : '';
+          const cacheUrl = isDir
+            ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}${wsParam}`
+            : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}${wsParam}`;
+          const resp = await fetch(cacheUrl);
+          const data = await resp.json() as { content: string | null };
+          if (data.content) {
+            setSummaryContent(data.content);
+            setSummaryLoading(false);
+            return;
+          }
+        } catch { /* fall through to generation */ }
+      }
 
       // 2. Generate via SSE
       try {
@@ -450,10 +452,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const handleRegenerateSummary = useCallback(() => {
       setSummaryContent('');
       setSummaryError(null);
-      // handleSwitchToSummary will re-run once summaryContent is cleared
-      // but we're already in summary view, so call it directly
-      setSummaryLoading(false); // reset so the effect triggers
-    }, []);
+      handleSwitchToSummary(true); // skip cache, force fresh generation
+    }, [handleSwitchToSummary]);
 
     // Re-trigger generation after clearing content (for regenerate)
     useEffect(() => {
