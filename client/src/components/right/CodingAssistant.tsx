@@ -89,27 +89,38 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useImperativeHandle(ref, () => ({ injectProactiveMessage, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, notifyEditorActivity]);
   const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(false); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
   const [pastConversations, setPastConversations] = useState<ConversationRecord[]>([]);
+  const [showConversations, setShowConversations] = useState(false);
   const prevIsLoadingRef = useRef(false);
-  useEffect(() => { if (prevIsLoadingRef.current && !isLoading) { textareaRef.current?.focus(); } prevIsLoadingRef.current = isLoading; }, [isLoading]);
+  const refreshConversations = (ws: string) => fetchConversations(ws).then(setPastConversations).catch(() => {});
+  useEffect(() => {
+    if (prevIsLoadingRef.current && !isLoading) {
+      textareaRef.current?.focus();
+      if (workspacePath) refreshConversations(workspacePath);
+    }
+    prevIsLoadingRef.current = isLoading;
+  }, [isLoading, workspacePath]);
   // Fetch past conversations on mount and whenever the workspace changes
   useEffect(() => {
     if (!workspacePath) { setPastConversations([]); return; }
-    fetchConversations(workspacePath).then(setPastConversations).catch(() => setPastConversations([]));
+    refreshConversations(workspacePath);
   }, [workspacePath]);
   // Refresh list when chat is cleared (returns to empty state)
   useEffect(() => {
-    if (uiMessages.length === 0 && workspacePath) {
-      fetchConversations(workspacePath).then(setPastConversations).catch(() => {});
-    }
+    if (uiMessages.length === 0 && workspacePath) refreshConversations(workspacePath);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uiMessages.length === 0, workspacePath]);
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages]);
+  useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
   const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; setInput(''); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode); onMessageSent?.(); };
   const handleClearAll = async () => {
     await clearAllConversations();
     setPastConversations([]);
+    setShowConversations(false);
+  };
+  const handleLoadConversation = (conv: ConversationRecord) => {
+    loadConversation(conv);
+    setShowConversations(false);
   };
   const handleSuggestion = (text: string) => { setInput(text); onUserTyping?.(); };
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
@@ -118,40 +129,42 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         {PROVIDERS.length === 1 ? <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', flexShrink: 0 }}>{provider.label}</span> : <select value={provider.id} onChange={e => setProvider(e.target.value)} style={{ background: 'var(--color-bg-sidebar)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', fontSize: 11, padding: '2px 6px', cursor: 'pointer' }}>{PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select>}
         <select value={model} onChange={e => setModel(e.target.value)} style={{ flex: 1, minWidth: 0, background: 'var(--color-bg-sidebar)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-primary)', fontSize: 11, padding: '2px 6px', cursor: 'pointer' }}>{provider.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
         <button onClick={() => setShowHelp(v => !v)} title="API key setup" style={{ width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--color-border)', background: showHelp ? 'var(--color-bg-hover)' : 'none', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 600, lineHeight: 1 }}>?</button>
-        {uiMessages.length > 0 && <button onClick={clearMessages} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 10, padding: '2px 4px', flexShrink: 0 }} title="Clear chat">✕</button>}
+        {pastConversations.length > 0 && <button onClick={() => setShowConversations(v => !v)} title="Browse past conversations" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: showConversations ? 'var(--color-bg-hover)' : 'none', border: '1px solid var(--color-border)', borderRadius: 999, padding: '2px 7px', fontSize: 10, color: showConversations ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', cursor: 'pointer', flexShrink: 0 }}>Conversations <span style={{ background: 'var(--color-bg-subtle)', borderRadius: 999, padding: '0 4px', fontSize: 10 }}>{pastConversations.length}</span></button>}
+        {uiMessages.length > 0 && <button onClick={() => { clearMessages(); setShowConversations(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 10, padding: '2px 4px', flexShrink: 0 }} title="Clear chat">✕</button>}
       </div>
       {showHelp && <div style={{ margin: 0, padding: '10px 12px', background: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border)', fontSize: 12, flexShrink: 0 }}><div style={{ fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 6 }}>{provider.setupTitle}</div><pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', color: 'var(--color-text-secondary)', fontSize: 12, lineHeight: 1.6 }}>{provider.setupInstructions}</pre></div>}
       {apiConfigured === false && <div style={{ margin: '8px 8px 0', padding: '8px 10px', background: '#f487710a', border: '1px solid #f4877140', borderRadius: 4, fontSize: 12, color: '#f48771', flexShrink: 0 }}>No {provider.label} API key configured. Click <strong>?</strong> above for setup instructions.</div>}
       {apiConfigured === true && !workspacePath && <div style={{ margin: '8px 8px 0', padding: '8px 10px', background: '#e7c5470a', border: '1px solid #e7c54740', borderRadius: 4, fontSize: 12, color: '#e7c547', flexShrink: 0 }}><div style={{ marginBottom: 6 }}>No workspace set. Enter an absolute path so the assistant can read and write files.</div><div style={{ display: 'flex', gap: 6 }}><input type="text" value={wsInput} onChange={e => setWsInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSetWorkspace(); }} placeholder="/absolute/path/to/project" style={{ flex: 1, background: 'var(--color-bg-input)', border: '1px solid #e7c54760', borderRadius: 6, color: 'var(--color-text-primary)', padding: '4px 8px', fontSize: 12, outline: 'none' }} /><button onClick={handleSetWorkspace} disabled={wsOpening || !wsInput.trim()} style={{ background: '#e7c547', color: '#1e1e1e', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: wsOpening || !wsInput.trim() ? 'default' : 'pointer', opacity: wsOpening || !wsInput.trim() ? .6 : 1 }}>{wsOpening ? '…' : 'Open'}</button></div>{wsError && <div style={{ marginTop: 4, color: '#f48771', fontSize: 11 }}>{wsError}</div>}</div>}
       {workspacePath && <div style={{ margin: '6px 8px 0', padding: '4px 8px', background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-secondary)', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={workspacePath}>{workspacePath}</div>}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: uiMessages.length === 0 ? '0' : '12px 10px' }}>
-        {uiMessages.length === 0 && (
-          pastConversations.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 8px', flexShrink: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent</span>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: showConversations || uiMessages.length === 0 ? '0' : '12px 10px' }}>
+        {showConversations || (uiMessages.length === 0 && pastConversations.length > 0) ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 8px', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent</span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <button onClick={handleClearAll} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 11, padding: '2px 4px' }}>Clear all</button>
-              </div>
-              <div style={{ flex: 1, overflowY: 'auto' }}>
-                {pastConversations.map(conv => (
-                  <button key={conv.id} onClick={() => loadConversation(conv)}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderTop: '1px solid var(--color-border)', cursor: 'pointer' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{formatConversationDate(conv.timestamp)}</div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.history.length} message{conv.history.length !== 1 ? 's' : ''}</div>
-                  </button>
-                ))}
+                {showConversations && uiMessages.length > 0 && <button onClick={() => setShowConversations(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 13, padding: '2px 4px', lineHeight: 1 }} title="Close">✕</button>}
               </div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--color-text-secondary)', textAlign: 'center', padding: '12px 10px' }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .4 }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2 2z" /></svg>
-              <p style={{ fontSize: 12, margin: 0 }}>Ask about your code</p>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {pastConversations.map(conv => (
+                <button key={conv.id} onClick={() => handleLoadConversation(conv)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderTop: '1px solid var(--color-border)', cursor: 'pointer' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{formatConversationDate(conv.timestamp)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.history.length} message{conv.history.length !== 1 ? 's' : ''}</div>
+                </button>
+              ))}
             </div>
-          )
-        )}
-        {uiMessages.map((msg, i) => <MessageBubble key={msg.id} msg={msg} isLast={i === uiMessages.length - 1} sendApproval={sendApproval} onSuggestion={handleSuggestion} />)}
+          </div>
+        ) : uiMessages.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--color-text-secondary)', textAlign: 'center', padding: '12px 10px' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .4 }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2 2z" /></svg>
+            <p style={{ fontSize: 12, margin: 0 }}>Ask about your code</p>
+          </div>
+        ) : null}
+        {!showConversations && uiMessages.map((msg, i) => <MessageBubble key={msg.id} msg={msg} isLast={i === uiMessages.length - 1} sendApproval={sendApproval} onSuggestion={handleSuggestion} />)}
       </div>
       <div style={{ borderTop: '1px solid var(--color-border)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
         {activeSystemNode && onOpenNode && <button onClick={() => onOpenNode(activeSystemNode)} title="Navigate to this node in System View" style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1px solid var(--color-accent, #0e639c)', borderRadius: 999, padding: '2px 8px', fontSize: 11, color: 'var(--color-accent, #0e639c)', cursor: 'pointer', flexShrink: 0 }}>◎ {activeSystemNode}</button>}

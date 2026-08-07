@@ -259,6 +259,23 @@ The right panel contains three tabs: **Coding Assistant**, **Build**, and **Syst
 |------|------|
 | `client/src/components/layout/RightPanel.tsx` | Conditionally renders the Provider/Model info box only when `activeTab !== 'assistant'`. The callout is hidden for the Coding Assistant tab to avoid redundancy. |
 
+#### Conversation History Persistence
+
+Completed conversations are automatically saved to disk and surfaced in the empty state so the user can resume them after a browser refresh.
+
+**Storage:** Each conversation is a JSON file at `~/.iodine/<workspace-md5>/conversations/<conversationId>.json`. The workspace hash is the same MD5 used elsewhere in the cache hierarchy. Up to 3 most-recent conversations (by `timestamp`) are returned by the server; there is no automatic pruning of older files beyond what the user explicitly clears.
+
+**Empty state UI:** When there are no UI messages and at least one past conversation exists, the chat area shows a "Recent" list instead of the default "Ask about your code" placeholder. Each row displays a formatted timestamp (e.g. "Today at 2:34 PM" or "Aug 6, 2026 at 11:00 AM") and a message count. Clicking a row restores the full conversation. A "Clear all" button removes all saved conversations for the current workspace. Typing and sending a new message starts a fresh conversation with a new ID.
+
+**Save trigger:** Conversation is written to disk inside the `done` SSE handler, after the assistant message is finalized. A nested `setUiMessages(prev => { ...; return prev })` pattern reads the latest state without causing an extra render. Transient flags (`isStreaming`, `pending`, approval `status: 'pending' → 'rejected'`) are stripped via `normalizeForSave()` before writing.
+
+| File | Role |
+|------|------|
+| `client/src/api/conversations.ts` | `fetchConversations(workspacePath)`, `saveConversation(workspacePath, record)`, `clearConversations(workspacePath)` — thin wrappers around the REST API. |
+| `client/src/hooks/useCodingAssistant.ts` | Accepts `workspacePath` as a 3rd parameter. Owns `conversationIdRef` (reset on `clearMessages`, reused on `loadConversation`). Saves on every completed reply. Exposes `loadConversation(record)` and `clearAllConversations()`. |
+| `client/src/components/right/CodingAssistant.tsx` | `pastConversations` state fetched on mount and on workspace change. `handleClearAll` calls `clearAllConversations` and resets local state. Renders conversation list or default placeholder based on `pastConversations.length`. |
+| `server/src/routes/conversations.ts` | `GET /api/conversations?workspacePath=` returns last 3 sorted by timestamp. `POST /api/conversations` writes `<id>.json`. `DELETE /api/conversations?workspacePath=` removes all `.json` files in the workspace's conversations dir. |
+
 ### Workspace Management
 
 #### Project Metadata (Download / Import / Clear)
