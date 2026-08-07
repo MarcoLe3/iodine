@@ -38,6 +38,8 @@ interface EditorAreaProps {
   /** Called whenever the AI summary text changes (streaming or cached load), so the
    *  parent can feed it to the outline panel without duplicating summary state. */
   onSummaryContentChange?: (content: string) => void;
+  /** Called as the user scrolls preview/summary, reporting the heading currently at the top. */
+  onActiveHeadingChange?: (id: string | null) => void;
 }
 
 export interface EditorAreaHandle {
@@ -101,7 +103,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -208,6 +210,26 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       }
     }, [editorView]);
 
+    /** Walk heading elements in the container and report which one is at the top of the viewport.
+     *  Deduplicates ids the same way parseHeadings does (append -N for Nth duplicate). */
+    const trackActiveHeading = useCallback((container: HTMLDivElement) => {
+      if (!onActiveHeadingChange) return;
+      const containerTop = container.getBoundingClientRect().top;
+      const threshold = containerTop + 60;
+      const headings = container.querySelectorAll<HTMLElement>('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]');
+      let activeId: string | null = null;
+      const seen = new Map<string, number>();
+      for (const h of headings) {
+        const base = h.id;
+        const n = seen.get(base) ?? 0;
+        seen.set(base, n + 1);
+        const uniqueId = n === 0 ? base : `${base}-${n}`;
+        if (h.getBoundingClientRect().top <= threshold) activeId = uniqueId;
+        else break;
+      }
+      onActiveHeadingChange(activeId);
+    }, [onActiveHeadingChange]);
+
     /** Restore the captured scroll position in the newly visible view. */
     const restoreScrollPercentage = useCallback((view: EditorView) => {
       const percentage = scrollPercentageRef.current;
@@ -265,7 +287,17 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       scrollToHeading: (id: string) => {
         const container = editorView === 'summary' ? summaryRef.current : previewRef.current;
         if (!container) return;
-        const target = container.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+        // Walk headings with the same dedup logic as parseHeadings to find the right element.
+        const headings = container.querySelectorAll<HTMLElement>('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]');
+        const seen = new Map<string, number>();
+        let target: HTMLElement | null = null;
+        for (const h of headings) {
+          const base = h.id;
+          const n = seen.get(base) ?? 0;
+          seen.set(base, n + 1);
+          const uniqueId = n === 0 ? base : `${base}-${n}`;
+          if (uniqueId === id) { target = h; break; }
+        }
         if (!target) return;
         const offset = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
         container.scrollTo({ top: offset - 16, behavior: 'smooth' });
@@ -557,6 +589,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               /* AI Summary view */
               <div
                 ref={summaryRef}
+                onScroll={e => trackActiveHeading(e.currentTarget)}
                 className="md-preview"
                 style={{
                   height: '100%', overflow: 'auto',
@@ -635,7 +668,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               activeFile.path.endsWith('.md') ? (
                 <div
                   ref={previewRef}
-                  onScroll={captureScrollPercentage}
+                  onScroll={e => { captureScrollPercentage(); trackActiveHeading(e.currentTarget); }}
                   className="md-preview"
                   style={{
                     height: '100%', overflow: 'auto',

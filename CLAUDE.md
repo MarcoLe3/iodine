@@ -80,25 +80,26 @@ The content hash means the cache auto-invalidates when the file/directory struct
 
 ## Outline / Table-of-Contents Sidebar Panel
 
-When a file is in **Preview** or **AI Summary** mode the activity bar's third icon (document outline) becomes active and the sidebar automatically switches to the **Outline** panel. The panel lists all headings from the rendered content, indented by level. Clicking a heading scrolls to it; the active heading is bolded and accent-coloured, its ancestors are semi-bold.
+When a file is in **Preview** or **AI Summary** mode the activity bar's third icon (document outline) becomes active and the sidebar automatically switches to the **Outline** panel. The panel lists all headings from the rendered content, indented by level. Clicking a heading scrolls to it; the active heading updates automatically as the user scrolls.
 
 | File | Role |
 |------|------|
 | `client/src/types/index.ts` | `SidebarView` union includes `'outline'` as the third value. |
 | `client/src/components/layout/ActivityBar.tsx` | Adds `OutlineIcon` (document SVG) as the 3rd nav item. |
-| `client/src/components/sidebar/OutlinePanel.tsx` | Parses Markdown content into `HeadingEntry[]` with `parseHeadings` (regex on `#`-prefixed lines). Renders each heading as a button indented by `(level − minLevel) × 14 + 12` px. Active heading gets `fontWeight: 700`, accent colour, and a `▸` prefix; ancestor headings get `fontWeight: 600`. Shows "No headings found." when the file has no headings. |
+| `client/src/components/sidebar/OutlinePanel.tsx` | Parses Markdown content into `HeadingEntry[]` with `parseHeadings` (regex on `#`-prefixed lines, deduplicates same-text ids by appending `-N`). Renders flat full-width rows; active item gets accent background (`var(--color-accent)22`) + 3px inset left bar + `--color-text-active` (white/black) bold text; hover fills the row with `--color-bg-hover`. No bullet prefix. |
 | `client/src/components/layout/Sidebar.tsx` | Renders `<OutlinePanel>` when `activeView === 'outline'`. Accepts `outlineContent`, `onOutlineNavigate`, and `activeHeadingId` props. |
-| `client/src/components/layout/EditorArea.tsx` | Fires `onEditorViewChange` on view change. Fires `onSummaryContentChange` whenever `summaryContent` updates (each streamed chunk) so the parent can feed it to the outline without duplicating state. `scrollToHeading(id)` picks `summaryRef` or `previewRef` based on current `editorView`, queries for `#<CSS.escape(id)>`, and smooth-scrolls. Both preview and summary `ReactMarkdown` renders use `makeHeadingId` on h1–h6 so ids are present in the DOM. |
-| `client/src/components/layout/WorkbenchLayout.tsx` | `handleEditorViewChange` switches sidebar to `'outline'` on both `'preview'` and `'summary'`, reverts to `'explorer'` otherwise. Holds `summaryOutlineContent` state (fed by `onSummaryContentChange`); resets it on file change. `outlineContent` passed to Sidebar is `summaryOutlineContent` in summary view and the source file content in preview view. |
+| `client/src/components/layout/EditorArea.tsx` | Fires `onEditorViewChange` on view change. Fires `onSummaryContentChange` per streamed chunk. `onActiveHeadingChange` prop receives the dedup-resolved heading id on every scroll event. `trackActiveHeading(container)` walks heading elements, counting occurrences to produce the same dedup ids as `parseHeadings`. `scrollToHeading(id)` applies the same walk to locate the Nth-occurrence element rather than querying by DOM id directly (DOM ids may be non-unique). |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Passes `onActiveHeadingChange={setActiveHeadingId}` to EditorArea so scroll events update the highlighted heading. `handleEditorViewChange` switches sidebar to `'outline'` on both `'preview'` and `'summary'`. |
 
-**Slug algorithm (`slugify`):** lowercase → strip inline Markdown punctuation (`*_\`~[]()!`) → strip non-word characters → collapse spaces to `-` → trim. Identical in `OutlinePanel` and `makeHeadingId` so outline entries always map to the correct heading element `id`.
+**Deduplication:** `parseHeadings`, `trackActiveHeading`, and `scrollToHeading` all apply the same algorithm — walk headings in document order, count occurrences of each base id, emit `base` for the first and `base-N` for the Nth duplicate. This ensures the outline ids, the scroll tracker, and the element finder all agree even when a document has repeated heading text.
 
 **Auto-switch flow:**
 1. User clicks **👁 Preview** or **✨ Summary** → `EditorArea` fires `onEditorViewChange('preview'|'summary')`.
 2. `WorkbenchLayout.handleEditorViewChange` sets `activeView = 'outline'` → sidebar switches panels.
-3. For summary: `onSummaryContentChange` streams generated text into `summaryOutlineContent` → outline updates live as generation proceeds.
-4. User clicks a heading → `handleOutlineNavigate(id)` → `scrollToHeading(id)` → correct container scrolls smoothly.
-5. User clicks **⌨ Source** → sidebar reverts to `'explorer'`.
+3. For summary: `onSummaryContentChange` streams generated text into `summaryOutlineContent` → outline populates live.
+4. User scrolls → `trackActiveHeading` fires → `setActiveHeadingId` → active item highlights in the outline.
+5. User clicks a heading → `handleOutlineNavigate(id)` → `scrollToHeading(id)` → correct container scrolls smoothly.
+6. User clicks **⌨ Source** → sidebar reverts to `'explorer'`.
 
 ## Source / Preview Scroll Sync
 

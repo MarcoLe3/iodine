@@ -15,11 +15,16 @@ function slugify(text: string): string {
 }
 
 function parseHeadings(content: string): HeadingEntry[] {
+  const seen = new Map<string, number>();
   return content.split('\n').flatMap(line => {
     const m = line.match(/^(#{1,6})\s+(.+)$/);
     if (!m) return [];
     const text = m[2].trim().replace(/[*_`~[\]()]/g, '');
-    return [{ level: m[1].length, text, id: slugify(text) }];
+    const base = slugify(text);
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    const id = n === 0 ? base : `${base}-${n}`;
+    return [{ level: m[1].length, text, id }];
   });
 }
 
@@ -55,26 +60,28 @@ export function OutlinePanel({ content, activeHeadingId, onNavigate }: OutlinePa
       {/* Header */}
       <div style={{
         padding: '8px 12px 6px',
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: 700,
-        letterSpacing: '0.08em',
+        letterSpacing: '0.12em',
         color: 'var(--color-text-secondary)',
         textTransform: 'uppercase',
         userSelect: 'none',
         flexShrink: 0,
         borderBottom: '1px solid var(--color-border)',
+        opacity: 0.6,
       }}>
-        Outline
+        Document Outline
       </div>
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
         {headings.length === 0 ? (
           <div style={{
-            padding: '12px 16px',
+            padding: '16px',
             fontSize: 12,
             color: 'var(--color-text-secondary)',
             fontStyle: 'italic',
+            opacity: 0.6,
           }}>
             No headings found.
           </div>
@@ -82,50 +89,47 @@ export function OutlinePanel({ content, activeHeadingId, onNavigate }: OutlinePa
           headings.map((heading, idx) => {
             const isActive = heading.id === activeHeadingId;
             const isAncestor = ancestorIds.has(heading.id);
-            const indent = (heading.level - minLevel) * 14 + 12;
+            const depth = heading.level - minLevel;
+            const indent = depth * 13 + 8;
+
             return (
               <button
                 key={`${heading.id}-${idx}`}
                 onClick={() => onNavigate?.(heading.id)}
                 title={heading.text}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
+                  display: 'block',
                   width: '100%',
                   paddingLeft: indent,
-                  paddingRight: 8,
-                  paddingTop: 3,
-                  paddingBottom: 3,
+                  paddingRight: 10,
+                  paddingTop: 5,
+                  paddingBottom: 5,
                   fontSize: 12,
                   textAlign: 'left',
                   background: isActive ? 'var(--color-accent)22' : 'transparent',
+                  boxShadow: isActive ? 'inset 3px 0 0 var(--color-accent)' : 'none',
                   color: isActive
-                    ? 'var(--color-accent)'
+                    ? 'var(--color-text-active)'
                     : 'var(--color-text-primary)',
-                  fontWeight: isActive ? 700 : isAncestor ? 600 : 400,
+                  fontWeight: isActive ? 700 : isAncestor ? 500 : 400,
                   cursor: 'pointer',
                   border: 'none',
                   borderRadius: 0,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  transition: 'background 0.1s',
-                  gap: 4,
-                  lineHeight: 1.5,
+                  transition: 'background 0.1s, color 0.1s, box-shadow 0.1s',
+                  lineHeight: 1.6,
+                  userSelect: 'none',
                 }}
                 onMouseEnter={e => {
-                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-bg-hover, rgba(255,255,255,0.05))';
+                  if (!isActive) e.currentTarget.style.background = 'var(--color-bg-hover)';
                 }}
                 onMouseLeave={e => {
-                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                  if (!isActive) e.currentTarget.style.background = 'transparent';
                 }}
               >
-                {isActive && (
-                  <span style={{ fontSize: 9, flexShrink: 0, marginRight: 2 }}>▸</span>
-                )}
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {heading.text}
-                </span>
+                {heading.text}
               </button>
             );
           })

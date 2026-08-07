@@ -454,6 +454,7 @@ export function WorkbenchLayout() {
             onActivity={recordAction}
             onEditorViewChange={handleEditorViewChange}
             onSummaryContentChange={setSummaryOutlineContent}
+            onActiveHeadingChange={setActiveHeadingId}
             workspacePath={workspacePath}
             provider={provider}
             model={model}
