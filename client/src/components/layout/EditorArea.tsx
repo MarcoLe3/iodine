@@ -44,6 +44,8 @@ interface EditorAreaProps {
   onOpenFile?: (path: string) => void;
   /** Called when a markdown link navigates to another .md file — parent should set previewRequestPath. */
   onPreviewRequest?: (path: string) => void;
+  /** Called when a wiki-link target has a cached AI summary — parent should set summaryRequestPath. */
+  onSummaryRequest?: (path: string) => void;
   /** When set to a file path, switches that file to preview once it becomes active. */
   previewRequestPath?: string | null;
   /** Called once the preview request has been consumed. */
@@ -124,7 +126,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -385,9 +387,34 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     };
 
     /**
+     * Wiki-style navigation: open absPath as a tab, then — if in preview/summary context —
+     * prefer showing a cached AI summary, fall back to preview for .md files.
+     */
+    const wikiNavigate = useCallback(async (absPath: string) => {
+      const existing = openFiles.find(f => f.path === absPath);
+      if (existing) onTabClick(existing.path);
+      else onOpenFile?.(absPath);
+
+      // Check server cache for an AI summary
+      const relPath = workspacePath && absPath.startsWith(workspacePath + '/')
+        ? absPath.slice(workspacePath.length + 1)
+        : absPath;
+      try {
+        const resp = await fetch(`${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}`);
+        const data = await resp.json() as { content: string | null };
+        if (data.content) {
+          onSummaryRequest?.(absPath);
+          return;
+        }
+      } catch { /* fall through */ }
+      // No cached summary — preview markdown files
+      if (/\.(md|markdown)$/i.test(absPath)) onPreviewRequest?.(absPath);
+    }, [openFiles, onTabClick, onOpenFile, workspacePath, onSummaryRequest, onPreviewRequest]);
+
+    /**
      * Inline-code component for ReactMarkdown.
      * If the text looks like a relative file path (no spaces, contains /, e.g. "client/src/App.tsx")
-     * it renders as a clickable link with dotted underline, opening the file as an editor tab.
+     * it renders as a clickable link with dotted underline, opening via wikiNavigate.
      * Block code (className="language-xxx") is passed through unchanged.
      */
     const inlineCodeComponent = useCallback(
@@ -405,11 +432,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               {...props}
               style={{ cursor: 'pointer', textDecorationLine: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px' }}
               title={`Open ${text}`}
-              onClick={() => {
-                const target = openFiles.find(f => f.path === absPath);
-                if (target) onTabClick(target.path);
-                else onOpenFile?.(absPath);
-              }}
+              onClick={() => { wikiNavigate(absPath); }}
             >
               {children}
             </code>
@@ -417,7 +440,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         }
         return <code {...props} className={className}>{children}</code>;
       },
-      [activeFile, openFiles, onTabClick, onOpenFile],
+      [activeFile, wikiNavigate],
     );
 
     const handleSwitchToSummary = useCallback(async (skipCache = false) => {
@@ -769,14 +792,14 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                           event.preventDefault();
                           const [pathPart, hash] = target.split('#', 2);
                           const absPath = resolveWorkspacePath(pathPart, activeFile.path);
-                          const targetFile = openFiles.find(f => f.path === absPath);
-                          const wikiPreview = editorView === 'preview' && /\.(md|markdown)$/i.test(absPath);
-                          if (targetFile) {
-                            onTabClick(targetFile.path);
+                          const isWiki = editorView === 'preview' || editorView === 'summary';
+                          if (isWiki) {
+                            void wikiNavigate(absPath);
                           } else {
-                            onOpenFile?.(absPath);
+                            const targetFile = openFiles.find(f => f.path === absPath);
+                            if (targetFile) onTabClick(targetFile.path);
+                            else onOpenFile?.(absPath);
                           }
-                          if (wikiPreview) onPreviewRequest?.(absPath);
                           if (hash) {
                             window.setTimeout(() => {
                               const heading = document.getElementById(hash);

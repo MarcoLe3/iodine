@@ -130,16 +130,17 @@ Relative links in Markdown preview are intercepted so they open the target file 
 
 **Path resolution — Windows support:** `resolveWorkspacePath` normalises both `activeFilePath` and `relativePath` to forward slashes before processing, then re-attaches the correct root prefix (`/` on Unix, `C:/` on Windows) so the resolved absolute path matches the values stored in `openFiles`.
 
-**Wiki preview flow:**
-1. User is in **preview** mode on `docs/index.md` and clicks `[Guide](guide/setup.md)`.
-2. Link handler resolves to the absolute path, opens the file via `onOpenFile`, and calls `onPreviewRequest(absPath)`.
-3. WorkbenchLayout sets `previewRequestPath = absPath`.
-4. EditorArea's file-switch reset effect fires → `editorView = 'source'`. Then the preview request effect fires (declared after reset, so it runs last) → `editorView = 'preview'`. `onPreviewHandled` clears `previewRequestPath`.
-5. The destination file opens already in preview, giving a wiki-like navigation experience.
+**Wiki navigation flow** (applies to both explicit links and inline code path clicks):
+1. User is in **preview** or **summary** mode and activates a relative link/path.
+2. `wikiNavigate(absPath)` (a `useCallback` in `EditorArea`) opens or switches to the file, then fetches `GET /api/ai-summary?path=<relPath>`.
+3. **If a cached summary exists** → calls `onSummaryRequest(absPath)` → WorkbenchLayout sets `summaryRequestPath` → EditorArea's summary request effect fires, opening the file in summary view.
+4. **If no cached summary and target is `.md`/`.markdown`** → calls `onPreviewRequest(absPath)` → WorkbenchLayout sets `previewRequestPath` → EditorArea's preview request effect fires, opening in preview view.
+5. **Otherwise** (no summary, non-markdown) → file opens in source view.
+6. Both request effects are declared after the file-switch reset effect, so they reliably override the `'source'` reset.
 
-If the user navigates from **source** view, the link still opens the file in source mode — the auto-preview only triggers when the originating view is preview.
+If the user navigates from **source** view, `wikiNavigate` is not called — links open the file in source mode as normal.
 
-**Inline code path auto-linking:** In both preview and summary views, any inline backtick span whose text matches a relative file path pattern (no spaces, contains `/`, only path-safe characters — e.g. `` `client/src/hooks/useOpenFiles.ts` ``) is automatically rendered as a clickable link with a dotted underline. No special markdown syntax is required in the source; the renderer detects paths at render time. Clicking resolves the path via `resolveWorkspacePath` relative to the current file's directory, then opens or switches to the target tab. Block code fences are unaffected (they carry a `className` and pass through unchanged). The detection is handled by `inlineCodeComponent` (a `useCallback` in `EditorArea`) passed as `code:` to both ReactMarkdown instances (preview and summary).
+**Inline code path auto-linking:** In both preview and summary views, any inline backtick span whose text matches a relative file path pattern (no spaces, contains `/`, only path-safe characters — e.g. `` `client/src/hooks/useOpenFiles.ts` ``) is automatically rendered as a clickable link with a dotted underline. No special markdown syntax is required in the source; the renderer detects paths at render time. Clicking calls `wikiNavigate` (same as explicit link navigation — prefers cached summary, falls back to preview for `.md`). Block code fences are unaffected (they carry a `className` and pass through unchanged). The detection is handled by `inlineCodeComponent` (a `useCallback` in `EditorArea`) passed as `code:` to both ReactMarkdown instances (preview and summary).
 
 ## Build Assistant
 

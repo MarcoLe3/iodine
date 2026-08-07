@@ -464,6 +464,7 @@ export function WorkbenchLayout() {
             onSummaryHandled={() => setSummaryRequestPath(null)}
             onOpenFile={(path) => openFile({ path, name: path.split(/[/\\]/).pop() ?? path, type: 'file', children: null })}
             onPreviewRequest={setPreviewRequestPath}
+            onSummaryRequest={setSummaryRequestPath}
             previewRequestPath={previewRequestPath}
             onPreviewHandled={() => setPreviewRequestPath(null)}
           />
