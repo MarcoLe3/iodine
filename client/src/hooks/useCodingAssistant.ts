@@ -2,9 +2,28 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { UIMessage, UIBlock, HistoryMessage } from '../types';
 import type { Provider } from '../providers';
 import { fetchOverallDiff } from '../api/files';
+import { saveConversation, clearConversations, type ConversationRecord } from '../api/conversations';
 
 function uid() {
   return Math.random().toString(36).slice(2);
+}
+
+/** Prepare UIMessages for disk persistence: clear transient flags. */
+function normalizeForSave(msgs: UIMessage[]): UIMessage[] {
+  return msgs.map(msg => {
+    if (msg.role !== 'assistant') return msg;
+    return {
+      ...msg,
+      isStreaming: false,
+      blocks: msg.blocks.map(block => {
+        if (block.type === 'tool') return { ...block, pending: false };
+        if (block.type === 'command-approval' && block.status === 'pending') {
+          return { ...block, status: 'rejected' as const };
+        }
+        return block;
+      }),
+    };
+  });
 }
 
 // Go directly to the Express server for SSE requests rather than through the Vite proxy.
@@ -18,6 +37,7 @@ const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 export function useCodingAssistant(
   provider: Provider,
   model: string,
+  workspacePath: string | null,
   onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void,
   onWatchTrigger?: () => void,
   onAssistantReply?: (text: string, hadToolUse: boolean) => void,
@@ -52,6 +72,13 @@ export function useCodingAssistant(
   // Accumulates all text_delta text for the current send (reset at start of sendMessage).
   // Used to capture final text synchronously in the done handler without reading React state.
   const streamingTextRef = useRef('');
+
+  // Stable conversation ID for the current session. Reset on clearMessages / set on loadConversation.
+  const conversationIdRef = useRef<string>(uid());
+
+  // Keep workspacePath current without adding it to sendMessage's dependency array.
+  const workspacePathRef = useRef(workspacePath);
+  workspacePathRef.current = workspacePath;
 
   // Holds a context collector installed by the proactive help system.
   // Awaited and prepended (API-side only, not in the UI) on the next user reply.
@@ -463,13 +490,28 @@ export function useCodingAssistant(
           } else if (eventName === 'done') {
             flushNow();
             const capturedText = streamingTextRef.current;
+            const finalHistory: HistoryMessage[] = [...newHistory, { role: 'assistant', content: capturedText }];
             updateAssistant(msg => {
-              setHistory(h => [...h, { role: 'assistant', content: capturedText }]);
-              return { ...msg, isStreaming: false };
+              const completedMsg = { ...msg, isStreaming: false };
+              // Save to disk (fire-and-forget) — read latest uiMessages state via nested setter
+              const ws = workspacePathRef.current;
+              if (ws && capturedText.trim()) {
+                setUiMessages(prev => {
+                  const withCompleted = prev.map(m => m.id === assistantId ? completedMsg : m);
+                  void saveConversation(ws, {
+                    id: conversationIdRef.current,
+                    timestamp: Date.now(),
+                    history: finalHistory,
+                    uiMessages: normalizeForSave(withCompleted),
+                  }).catch(() => {});
+                  return prev; // no state change — reading only
+                });
+              }
+              setHistory(finalHistory);
+              return completedMsg;
             });
             // Notify expansion hook so it can grow/shrink the right panel.
             onAssistantReplyRef.current?.(capturedText, toolUsedInTurnRef.current);
-            // Start 30-second progress watch if the reply had content
             // Arm the watch — it will start when the user next types in the editor.
             if (capturedText.trim()) {
               armedReplyRef.current = capturedText;
@@ -520,9 +562,28 @@ export function useCodingAssistant(
     abortControllerRef.current?.abort();
     watchControllerRef.current?.abort();
     setIsWatching(false);
+    conversationIdRef.current = uid(); // fresh ID for the next conversation
     setUiMessages([]);
     setHistory([]);
   }, []);
 
-  return { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity };
+  /** Restore a saved conversation into the chat (replaces current state). */
+  const loadConversation = useCallback((record: ConversationRecord) => {
+    armedReplyRef.current = null;
+    abortControllerRef.current?.abort();
+    watchControllerRef.current?.abort();
+    setIsWatching(false);
+    conversationIdRef.current = record.id;
+    setUiMessages(record.uiMessages);
+    setHistory(record.history);
+  }, []);
+
+  /** Delete all saved conversations for the current workspace. */
+  const clearAllConversations = useCallback(async () => {
+    const ws = workspacePathRef.current;
+    if (!ws) return;
+    try { await clearConversations(ws); } catch { /* best-effort */ }
+  }, []);
+
+  return { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, clearAllConversations };
 }

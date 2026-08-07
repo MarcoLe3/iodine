@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useCodingAssistant } from '../../hooks/useCodingAssistant';
 import { openWorkspace } from '../../api/files';
+import { fetchConversations, clearConversations as apiClearConversations, type ConversationRecord } from '../../api/conversations';
 import { UIMessage, UIBlock } from '../../types';
 import { PROVIDERS } from '../../providers';
 import type { Provider } from '../../providers';
@@ -59,6 +60,15 @@ function formatTime(ts: number): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatConversationDate(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (isToday) return `Today at ${time}`;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + time;
+}
+
 function MessageBubble({ msg, isLast, sendApproval, onSuggestion }: { msg: UIMessage; isLast: boolean; sendApproval: (id: string, approved: boolean) => void; onSuggestion: (text: string) => void }) {
   if (msg.role === 'user') return <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-end' }}><div style={{ display: 'inline-flex', flexDirection: 'column', maxWidth: '100%' }}><div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 4, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>You</span><span style={{ fontWeight: 400, fontSize: 10 }}>{formatTime(msg.timestamp)}</span></div><div style={{ background: 'var(--color-bg-user-bubble)', borderRadius: 16, padding: '8px 10px', fontSize: 13, color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', textAlign: 'left' }}>{msg.content}</div></div></div>;
   const isStreaming = msg.isStreaming;
@@ -74,16 +84,33 @@ export interface CodingAssistantHandle {
 interface CodingAssistantProps { workspacePath: string | null; activeFilePath: string | null; onWorkspaceOpen: (path: string) => void; provider: Provider; model: string; setProvider: (id: string) => void; setModel: (id: string) => void; getEditorContext?: () => string | null; contextNodes: FileNode[]; onRemoveContextNode: (path: string) => void; onClearContextNodes: () => void; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void; onOpenNode?: (nodeName: string, nodeId?: string) => void; activeSystemNode?: string | null; onUserTyping?: () => void; onMessageSent?: () => void; onWatchTrigger?: () => void; onAssistantReply?: (text: string, hadToolUse: boolean) => void; }
 
 export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onWatchTrigger, onAssistantReply }, ref) {
-  const { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity } = useCodingAssistant(provider, model, onNavigateToLine, onWatchTrigger, onAssistantReply);
+  const { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({ injectProactiveMessage, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, notifyEditorActivity]);
   const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(false); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
+  const [pastConversations, setPastConversations] = useState<ConversationRecord[]>([]);
   const prevIsLoadingRef = useRef(false);
   useEffect(() => { if (prevIsLoadingRef.current && !isLoading) { textareaRef.current?.focus(); } prevIsLoadingRef.current = isLoading; }, [isLoading]);
+  // Fetch past conversations on mount and whenever the workspace changes
+  useEffect(() => {
+    if (!workspacePath) { setPastConversations([]); return; }
+    fetchConversations(workspacePath).then(setPastConversations).catch(() => setPastConversations([]));
+  }, [workspacePath]);
+  // Refresh list when chat is cleared (returns to empty state)
+  useEffect(() => {
+    if (uiMessages.length === 0 && workspacePath) {
+      fetchConversations(workspacePath).then(setPastConversations).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiMessages.length === 0, workspacePath]);
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages]);
   const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; setInput(''); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode); onMessageSent?.(); };
+  const handleClearAll = async () => {
+    await clearAllConversations();
+    setPastConversations([]);
+  };
   const handleSuggestion = (text: string) => { setInput(text); onUserTyping?.(); };
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
   return <div className={isWatching ? 'assistant-panel assistant-panel-attention' : 'assistant-panel'} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}><style>{`@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } } @keyframes watching-pulse { 0%, 100% { opacity: .4; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.15); } } @keyframes assistant-attention { 0%, 100% { box-shadow: inset 0 0 0 1px #e7c54770, 0 0 0 0 #e7c54700, 0 0 10px #e7c54745; } 50% { box-shadow: inset 0 0 0 2px #e7c547, 0 0 0 7px #e7c54735, 0 0 30px #e7c547aa; } } .assistant-panel-attention { animation: assistant-attention 1.15s ease-in-out infinite; } .watching-dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#e7c547; box-shadow:0 0 0 3px #e7c54745, 0 0 14px #e7c547; animation:watching-pulse .7s ease-in-out infinite; flex-shrink:0; } .watching-alert { color:#e7c547; font-weight:700; font-style:normal; text-shadow:0 0 8px #e7c54780; } .md-body { font-size:13px; color:var(--color-text-primary); line-height:1.6; word-break:break-word; margin-bottom:4px; } .md-body > *:first-child { margin-top:0; } .md-body > *:last-child { margin-bottom:0; } .md-body h1,.md-body h2,.md-body h3,.md-body h4 { font-weight:600; margin:10px 0 4px; } .md-body h1 { font-size:16px; } .md-body h2 { font-size:14px; } .md-body h3,.md-body h4 { font-size:13px; } .md-body p { margin:4px 0; } .md-body ul,.md-body ol { margin:4px 0; padding-left:18px; } .md-body li { margin:2px 0; } .md-body strong { font-weight:600; } .md-body em { font-style:italic; } .md-body blockquote { border-left:3px solid var(--color-border); margin:6px 0; padding:2px 10px; color:var(--color-text-secondary); } .md-body hr { border:none; border-top:1px solid var(--color-border); margin:8px 0; } .md-body a { color:#4fc1ff; text-decoration:underline; } .md-body table { border-collapse:collapse; font-size:12px; margin:6px 0; width:100%; } .md-body th,.md-body td { border:1px solid var(--color-border); padding:4px 8px; text-align:left; } .md-body th { background:#ffffff0a; font-weight:600; } .md-pre { background:var(--color-bg-editor); border:1px solid var(--color-border); border-radius:5px; padding:8px 10px; overflow-x:auto; margin:6px 0; font-size:12px; font-family:monospace; white-space:pre; } .md-code-inline { background:#ffffff12; border-radius:5px; padding:1px 4px; font-size:12px; font-family:monospace; }`}</style>
@@ -97,7 +124,35 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       {apiConfigured === false && <div style={{ margin: '8px 8px 0', padding: '8px 10px', background: '#f487710a', border: '1px solid #f4877140', borderRadius: 4, fontSize: 12, color: '#f48771', flexShrink: 0 }}>No {provider.label} API key configured. Click <strong>?</strong> above for setup instructions.</div>}
       {apiConfigured === true && !workspacePath && <div style={{ margin: '8px 8px 0', padding: '8px 10px', background: '#e7c5470a', border: '1px solid #e7c54740', borderRadius: 4, fontSize: 12, color: '#e7c547', flexShrink: 0 }}><div style={{ marginBottom: 6 }}>No workspace set. Enter an absolute path so the assistant can read and write files.</div><div style={{ display: 'flex', gap: 6 }}><input type="text" value={wsInput} onChange={e => setWsInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSetWorkspace(); }} placeholder="/absolute/path/to/project" style={{ flex: 1, background: 'var(--color-bg-input)', border: '1px solid #e7c54760', borderRadius: 6, color: 'var(--color-text-primary)', padding: '4px 8px', fontSize: 12, outline: 'none' }} /><button onClick={handleSetWorkspace} disabled={wsOpening || !wsInput.trim()} style={{ background: '#e7c547', color: '#1e1e1e', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: wsOpening || !wsInput.trim() ? 'default' : 'pointer', opacity: wsOpening || !wsInput.trim() ? .6 : 1 }}>{wsOpening ? '…' : 'Open'}</button></div>{wsError && <div style={{ marginTop: 4, color: '#f48771', fontSize: 11 }}>{wsError}</div>}</div>}
       {workspacePath && <div style={{ margin: '6px 8px 0', padding: '4px 8px', background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-secondary)', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={workspacePath}>{workspacePath}</div>}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>{uiMessages.length === 0 && <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--color-text-secondary)', textAlign: 'center' }}><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .4 }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2 2z" /></svg><p style={{ fontSize: 12, margin: 0 }}>Ask about your code</p></div>}{uiMessages.map((msg, i) => <MessageBubble key={msg.id} msg={msg} isLast={i === uiMessages.length - 1} sendApproval={sendApproval} onSuggestion={handleSuggestion} />)}</div>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: uiMessages.length === 0 ? '0' : '12px 10px' }}>
+        {uiMessages.length === 0 && (
+          pastConversations.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 8px', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent</span>
+                <button onClick={handleClearAll} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 11, padding: '2px 4px' }}>Clear all</button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {pastConversations.map(conv => (
+                  <button key={conv.id} onClick={() => loadConversation(conv)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderTop: '1px solid var(--color-border)', cursor: 'pointer' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{formatConversationDate(conv.timestamp)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.history.length} message{conv.history.length !== 1 ? 's' : ''}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--color-text-secondary)', textAlign: 'center', padding: '12px 10px' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .4 }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2 2z" /></svg>
+              <p style={{ fontSize: 12, margin: 0 }}>Ask about your code</p>
+            </div>
+          )
+        )}
+        {uiMessages.map((msg, i) => <MessageBubble key={msg.id} msg={msg} isLast={i === uiMessages.length - 1} sendApproval={sendApproval} onSuggestion={handleSuggestion} />)}
+      </div>
       <div style={{ borderTop: '1px solid var(--color-border)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
         {activeSystemNode && onOpenNode && <button onClick={() => onOpenNode(activeSystemNode)} title="Navigate to this node in System View" style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1px solid var(--color-accent, #0e639c)', borderRadius: 999, padding: '2px 8px', fontSize: 11, color: 'var(--color-accent, #0e639c)', cursor: 'pointer', flexShrink: 0 }}>◎ {activeSystemNode}</button>}
         {contextNodes.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{contextNodes.map(node => <div key={node.path} style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border)', borderRadius: 999, padding: '2px 6px 2px 7px', fontSize: 11, color: 'var(--color-text-secondary)', maxWidth: '100%' }}><span style={{ fontSize: 10, flexShrink: 0 }}>{node.type === 'directory' ? '📁' : '📄'}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.name}</span><button onClick={() => onRemoveContextNode(node.path)} title="Remove from context" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 12, lineHeight: 1, padding: '0 1px', flexShrink: 0 }}>×</button></div>)}</div>}
