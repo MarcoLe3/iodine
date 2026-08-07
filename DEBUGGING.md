@@ -664,3 +664,34 @@ const cy = svgEl && svgEl.clientHeight > 0 ? svgEl.clientHeight / 2 : 320;
 
 The passive sync path (`syncActiveFile` → `selectByPath`) never reads dimensions,
 so it is safe to call at any time including while the SVG is hidden.
+
+---
+
+## AI Assistant Agent Loop Stops After `edit_file` (Dogfooding Scenario)
+
+### Symptom
+
+When asking the Coding Assistant to edit a TypeScript source file, the agent loop stops immediately after the `edit_file` tool completes — no further text or tool calls appear, and the response ends as if finished. Editing markdown files does not trigger this.
+
+### Root Cause
+
+The server runs with `tsx watch src/index.ts`. When any TypeScript file imported by the server (anything under `server/src/`) is modified on disk, `tsx watch` restarts the Node process. This kills the active SSE connection for the ongoing agent loop. The client's `reader.read()` resolves with `done: true`, the stream handler exits, and `isLoading` is set to `false` — identical to a normal response end.
+
+Markdown files are fine because `tsx watch` only restarts on changes to files it imports (TypeScript/JavaScript). `.md` files are never imported.
+
+This only manifests in the **dogfooding scenario**: using iodine to edit iodine's own server source files while running `npm run dev` on the same project.
+
+### Files involved
+
+| File | Role |
+|------|------|
+| `server/package.json` | `"dev": "tsx watch src/index.ts"` — the watcher |
+| `server/src/routes/agent.ts` | `res.on('close', () => { abortSignal.aborted = true; })` — abort on connection close |
+| `server/src/services/anthropicAgent.ts` | Agent loop checks `abortSignal.aborted` and returns early |
+| `client/src/hooks/useCodingAssistant.ts` | SSE reader exits on `done: true`; no reconnect logic |
+
+### Workarounds
+
+1. **Run the built server** — `npm run build && node server/dist/index.js` — no hot reload, agent edits no longer restart the server.
+2. **Batch edits into one turn** — if the agent must touch multiple server files, ask it to do them all at once so the tsx restart happens at the end rather than mid-turn.
+3. **Use Claude Code CLI for server-side edits** — the CLI runs outside the iodine process so server restarts do not affect it.
