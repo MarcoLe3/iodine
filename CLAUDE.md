@@ -1,6 +1,10 @@
 # Iodine — IDE for Open-source Development — Developer Notes
 
-## Naming Convention — Marketing Names vs. Internal Identifiers
+This document is organized from project-wide conventions and architecture to feature-specific implementation details. For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`.
+
+## Project Conventions
+
+### Naming Convention — Marketing Names vs. Internal Identifiers
 
 Several features have branded display names shown in the UI. These names must **never** be used for internal technical objects (variables, functions, props, types, CSS classes, API routes, or file names). Always use the plain descriptive technical name internally.
 
@@ -18,7 +22,11 @@ Examples of correct usage:
 
 The display label string (e.g. `'Iogram'`) is the only place the marketing name appears.
 
-## Light / Dark Mode
+## Client Architecture
+
+### Shared UI Behavior
+
+#### Light / Dark Mode
 
 Theme support is client-side and uses shared CSS variables so components do not need separate light and dark implementations.
 
@@ -36,7 +44,9 @@ Theme support is client-side and uses shared CSS variables so components do not 
 
 When adding or changing UI, use the existing `--color-*` variables rather than hard-coded dark colors. Add a semantic token to both `:root` and `:root[data-theme='light']` when no suitable variable exists. Canvas-rendered or third-party widgets such as xterm and Monaco do not automatically inherit CSS colors; explicitly update their theme when `data-theme` changes.
 
-## Editor Tabs
+### Editor Experience
+
+#### Editor Tabs
 
 Open files render as tabs in a strip above the editor. The strip supports drag-to-reorder and horizontal scrolling (VS Code-style).
 
@@ -46,7 +56,7 @@ Open files render as tabs in a strip above the editor. The strip supports drag-t
 | `client/src/components/layout/EditorArea.tsx` | Accepts the optional `onTabReorder?: (fromIndex, toIndex) => void` prop and threads it (along with `openFiles`, `activeFilePath`, `onTabClick`, `onTabClose`) into `EditorTabs`. |
 | `client/src/hooks/useOpenFiles.ts` | `reorderFiles(fromIndex, toIndex)` is the state updater: it bounds-checks the indices then splices the moved entry into its new position in `openFiles`. Exposed from the hook and wired to `EditorArea`'s `onTabReorder` in `WorkbenchLayout`. |
 
-## Editor Menu — Tab Management
+#### Editor Menu — Tab Management
 
 The **Editor** menu in the menu bar provides three tab-management actions:
 
@@ -63,7 +73,7 @@ These actions are wired in `MenuBar.tsx` via callbacks from `WorkbenchLayout.tsx
 
 The "Close All Tabs" action requires confirmation. "Close Unedited Files" runs immediately with no dialog since it only affects clean files. All three buttons are disabled when no tabs are open.
 
-## Image & PDF Viewers
+#### Image & PDF Viewers
 
 Binary files (images and PDFs) are displayed in dedicated viewers instead of being loaded into the text editor.
 
@@ -78,7 +88,9 @@ Binary files (images and PDFs) are displayed in dedicated viewers instead of bei
 
 **Key behavior:** Images and PDFs do not appear in the editor pane as source code; they render in purpose-built viewers. Neither format supports the AI Summary feature (image and PDF analysis is out of scope). The "Preview" button is also hidden for these file types.
 
-## AI Summary
+### Content Views
+
+#### AI Summary
 
 The editor pane has a three-way view toggle: **source / preview / summary**.
 
@@ -96,7 +108,7 @@ The content hash means the cache auto-invalidates when the file/directory struct
 
 **Provider/model state** is owned by `WorkbenchLayout` and passed down to `RightPanel`, `CodingAssistant`, `SystemView`, and `EditorArea` so all features share the same selection.
 
-## Outline / Table-of-Contents Sidebar Panel
+#### Outline / Table-of-Contents Sidebar Panel
 
 When a file is in **Preview** or **AI Summary** mode the activity bar's third icon (document outline) becomes active and the sidebar automatically switches to the **Outline** panel. The panel lists all headings from the rendered content, indented by level. Clicking a heading scrolls to it; the active heading updates automatically as the user scrolls.
 
@@ -119,7 +131,7 @@ When a file is in **Preview** or **AI Summary** mode the activity bar's third ic
 5. User clicks a heading → `handleOutlineNavigate(id)` → `scrollToHeading(id)` → correct container scrolls smoothly.
 6. User clicks **⌨ Source** → sidebar reverts to `'explorer'`.
 
-## Source / Preview Scroll Sync
+#### Source / Preview Scroll Sync
 
 When toggling between the **source** (Monaco) and **preview** (rendered Markdown) views of a `.md` file, the editor preserves the approximate reading position using a scroll-percentage approach.
 
@@ -137,7 +149,7 @@ When toggling between the **source** (Monaco) and **preview** (rendered Markdown
 
 **Key design:** Scroll percentage (not line number) is used because the preview renders Markdown differently from the source — a 30% scroll in source maps to roughly 30% of the rendered output regardless of heading sizes or image heights.
 
-## Markdown Link Navigation (Wiki-style)
+#### Markdown Link Navigation (Wiki-style)
 
 Relative links in Markdown preview are intercepted so they open the target file as an editor tab rather than navigating the browser to a broken URL. External (`https://`, `mailto:`) links open in a new browser tab. Hash-only links (`#section`) scroll the current preview as normal.
 
@@ -160,7 +172,7 @@ If the user navigates from **source** view, `wikiNavigate` is not called — lin
 
 **Inline code path auto-linking:** In both preview and summary views, any inline backtick span whose text matches a relative file path pattern (no spaces, contains `/`, only path-safe characters — e.g. `` `client/src/hooks/useOpenFiles.ts` ``) is automatically rendered as a clickable link with a dotted underline. No special markdown syntax is required in the source; the renderer detects paths at render time. Clicking calls `wikiNavigate` (same as explicit link navigation — prefers cached summary, falls back to preview for `.md`). Block code fences are unaffected (they carry a `className` and pass through unchanged). The detection is handled by `inlineCodeComponent` (a `useCallback` in `EditorArea`) passed as `code:` to both ReactMarkdown instances (preview and summary).
 
-## Editor View Persistence & Back/Forward Navigation
+#### Editor View Persistence & Back/Forward Navigation
 
 The editor remembers which view (source / preview / summary) the user last used for each file, and restores both the view and the scroll position when they return. A `←` / `→` pill pair in the breadcrumb bar lets users navigate backward and forward through their file-visit history (up to 20 entries).
 
@@ -180,7 +192,9 @@ useEffect([activeFilePath]) fires
 ```
 This guarantees that navigating back/forward never adds a new entry to the stack.
 
-## Build Assistant
+### Workspace and Tooling Features
+
+#### Build Assistant
 
 The **Build** tab in the right panel provides three sections — **Test**, **Build**, and **Build & Run** — each with an editable command field, an AI **Generate** button, and an **Execute** button. A **Save** button at the bottom persists all three commands to disk and reloads them automatically on the next workspace open. An **Open URL** section at the bottom of the scrollable area lets the user open any URL as an iframe tab in the editor.
 
@@ -195,7 +209,7 @@ The **Build** tab in the right panel provides three sections — **Test**, **Bui
 
 **Persistence path:** `~/.iodine/{MD5(workspacePath)}/build-config.json`
 
-## URL Iframe Tabs
+#### URL Iframe Tabs
 
 Any URL can be opened as a tab in the editor area, rendering an `<iframe>` instead of source code. This is useful for viewing local dev servers, documentation, or any web content alongside the code.
 
@@ -208,7 +222,9 @@ Any URL can be opened as a tab in the editor area, rendering an `<iframe>` inste
 
 **Tab key:** URL tabs use `__url__:<url>` as their `path` to avoid collisions with real file paths. Opening the same URL twice activates the existing tab rather than creating a duplicate.
 
-## User Visual Context in Coding Assistant
+### Coding Assistant
+
+#### User Visual Context in Coding Assistant
 
 When the user sends a message, the coding assistant automatically appends the currently visible lines (or selected text) from the Monaco editor to the API request as a **User Visual Context** block. The UI displays only the user's typed message; the context is invisible to the user but available to the LLM.
 
@@ -221,7 +237,7 @@ When the user sends a message, the coding assistant automatically appends the cu
 | `client/src/components/right/CodingAssistant.tsx` | Calls `getEditorContext()` in `handleSend` and passes the result to `sendMessage`. |
 | `client/src/hooks/useCodingAssistant.ts` | `sendMessage` accepts `editorContext?: string \| null`. If present, appends it as a fenced code block under `**User Visual Context**` in the API history entry only (not in the UI message). |
 
-## Coding Assistant Context Chips ("Add to Context")
+#### Coding Assistant Context Chips ("Add to Context")
 
 Files and folders can be pinned to the Coding Assistant via the `+` hover menu in the file tree. Pinned items appear as chips above the chat input and inject a **Relevant paths hint** block into the API message when the user sends, guiding the LLM to those paths first.
 
@@ -235,7 +251,7 @@ Files and folders can be pinned to the Coding Assistant via the `+` hover menu i
 | `client/src/components/right/CodingAssistant.tsx` | Renders chips above the textarea. In `handleSend` converts nodes to workspace-relative paths, clears chips, and passes paths to `sendMessage`. |
 | `client/src/hooks/useCodingAssistant.ts` | `sendMessage` accepts `contextPaths?: string[]`. If present, prepends a `**Relevant paths hint**` block to the API content (before User Visual Context). |
 
-## Right Panel & Provider/Model Display
+#### Right Panel & Provider/Model Display
 
 The right panel contains three tabs: **Coding Assistant**, **Build**, and **System View**. Each tab can use a different LLM provider and model. The **Provider/Model callout** (showing current provider name and model label) appears above all three tabs *except* the Coding Assistant tab, where the provider and model are set directly within the chat UI and displaying them would be redundant.
 
@@ -243,7 +259,9 @@ The right panel contains three tabs: **Coding Assistant**, **Build**, and **Syst
 |------|------|
 | `client/src/components/layout/RightPanel.tsx` | Conditionally renders the Provider/Model info box only when `activeTab !== 'assistant'`. The callout is hidden for the Coding Assistant tab to avoid redundancy. |
 
-## Project Metadata (Download / Import / Clear)
+### Workspace Management
+
+#### Project Metadata (Download / Import / Clear)
 
 The **Project** menu (visible only when a workspace is open) manages the workspace's `~/.iodine/<workspace-md5>/` cache directory, which holds AI summaries and build config.
 
@@ -255,7 +273,9 @@ The **Project** menu (visible only when a workspace is open) manages the workspa
 
 The server route is in `server/src/routes/project.ts`, registered at `/api/project` in `server/src/app.ts`. The Project menu is in `client/src/components/layout/MenuBar.tsx`; "Clear Metadata" shows a custom confirm dialog before deleting.
 
-## Agent File Editing Tools
+### Agent Runtime
+
+#### Agent File Editing Tools
 
 The coding assistant has two tools for writing files, each suited to a different use case:
 
@@ -278,7 +298,7 @@ The system prompt lives in **one place** — `systemPrompt.ts`'s `buildSystemPro
 - `old_string not found` → model re-reads the file and retries with exact text
 - `old_string matches N locations` → model adds more surrounding lines to make the match unique
 
-## Tutor Mode
+#### Tutor Mode
 
 The **Tutor** toggle in the Coding Assistant (left of the Send button) switches the AI into a read-only guidance mode: it walks through the codebase, points to relevant lines, and tells the user what to change without writing any code itself.
 
@@ -304,7 +324,9 @@ The **Tutor** toggle in the Coding Assistant (left of the Send button) switches 
 2. Turn 2+ — on each user reply, opens exactly ONE file, highlights the relevant lines, explains, then stops.
 Never more than one `open_file` call per response turn.
 
-## File Explorer Auto-Expand
+### Navigation and System View
+
+#### File Explorer Auto-Expand
 
 When a file becomes active in the editor (opened by click, Tutor Mode navigation, or any other means), the file explorer automatically expands all ancestor folders so the file is visible in the tree.
 
@@ -317,7 +339,7 @@ When a file becomes active in the editor (opened by click, Tutor Mode navigation
 
 **Key design:** Passing `activeFilePath` as `expandToPath` means every tab switch triggers a one-way expand (never collapse). The `forceExpand` flag in `toggleExpand` ensures the expand effect is idempotent and cannot fight user-initiated collapses.
 
-## System View — Reverse Lookup (File Explorer → Diagram)
+#### System View — Reverse Lookup (File Explorer → Diagram)
 
 When a system graph is loaded, **clicking any file or folder in the file explorer** automatically finds the best-matching node or edge in the diagram, selects it, and (if the user is not on the Coding Assistant tab) switches the right panel to System View and zooms to centre on the match.
 
@@ -341,7 +363,7 @@ Match priority for `lookupByPosition(absoluteFilePath, line)` (line-level, avail
 
 **Key design:** `hasGraph()` lets `RightPanel` distinguish "no graph loaded" (call is skipped entirely) from "graph loaded but no specific match found" (tab still switches so the user can see the diagram). The Coding Assistant tab guard means exploratory file clicks never disrupt an active chat session.
 
-## System View — Node/Edge Click → File References
+#### System View — Node/Edge Click → File References
 
 Clicking a node or edge in the System View graph highlights it and opens a bottom drawer listing the source files associated with that element. Clicking a file entry navigates the editor to the specified line (same mechanism as Tutor Mode's `open_file`).
 
@@ -357,7 +379,9 @@ Clicking a node or edge in the System View graph highlights it and opens a botto
 
 **Click-vs-drag:** A `Math.hypot` check at `mouseUp` ensures moves of ≥ 5 CSS pixels are treated as drags, not clicks. The SVG `onMouseLeave` fires `handleMouseUp` (which also clears refs) so stale press refs are never left behind.
 
-## Terminal (PTY) Lifecycle & Cleanup
+### Server Runtime and Reliability
+
+#### Terminal (PTY) Lifecycle & Cleanup
 
 Each terminal tab opens a WebSocket to `ws://localhost:3001/terminal?cwd=…&cmd=…`. The server uses **node-pty** to spawn a pseudo-terminal (PTY) for the requested shell. Robust cleanup is critical because `tsx watch` kills and restarts the Node process on every file save, which would otherwise orphan PTY children and leak OS file descriptors until `posix_spawnp` starts failing.
 
@@ -369,7 +393,7 @@ Each terminal tab opens a WebSocket to `ws://localhost:3001/terminal?cwd=…&cmd
 
 **Shell selection:** `process.env.SHELL` → `/bin/zsh` → `/bin/bash` → `/bin/sh`, with `existsSync` validation at each step.
 
-## System View — Active File Chip
+#### System View — Active File Chip
 
 When a System View graph is loaded, switching editor tabs automatically highlights the matching architecture node in the diagram *and* surfaces a `◎ NodeName` chip at the top of the Coding Assistant input area. Clicking the chip switches to System View and pans to the selected node.
 
@@ -399,7 +423,7 @@ activeFilePath changes (editor tab switch)
 - **Two-step select+focus:** `selectByPath` (no DOM reads, safe while SVG is `display:none`) + `focusSelected` (reads live `clientWidth`/`clientHeight` after `flushSync` makes the tab visible). Avoids the zero-dimension bug from panning a hidden SVG.
 - `activeSystemNode` flows through component props so the chip appears without touching the message history.
 
-## System View — Auto-open on AI Summary
+#### System View — Auto-open on AI Summary
 
 Whenever the user opens the AI summary view (clicks **Generate Summary** or **View Summary** in the editor), the right panel automatically switches to the System View (Iogram) tab. This happens regardless of whether a system diagram has been generated — the tab simply becomes visible so the user can see it.
 
@@ -409,7 +433,9 @@ Whenever the user opens the AI summary view (clicks **Generate Summary** or **Vi
 | `client/src/components/layout/RightPanel.tsx` | `RightPanelHandle.openSystemView()` calls `setActiveTab('system')`. |
 | `client/src/components/layout/WorkbenchLayout.tsx` | Passes `onSummaryOpen={() => rightPanelRef.current?.openSystemView()}` to EditorArea. |
 
-## Proactive Help System
+### Proactive Assistance
+
+#### Proactive Help System
 
 The proactive help system monitors user activity and automatically offers assistance when it detects the user is churning — taking many actions but producing little diff output. It is designed to be modular: new signal types can be registered alongside the existing one without touching the hook.
 
@@ -499,7 +525,7 @@ React state is not involved. The animation loops at 2 s until `stopPulse()` is c
 
 Visible whenever a workspace is open. Forward-looking: evaluates `shouldFire` against the current live action count and the last check's `diffLineDelta` to show what the next check would do — not what the previous check did. The `describe()` method on each signal provides the human-readable reason.
 
-## Progress Watch
+#### Progress Watch
 
 After the AI replies, the assistant arms a **progress watch** that fires once the user starts typing in the editor. The watch captures three git diff snapshots, then streams a follow-up message reviewing what changed — calling out any nits, syntax issues, or next steps.
 
