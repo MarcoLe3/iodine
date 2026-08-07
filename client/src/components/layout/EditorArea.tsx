@@ -163,6 +163,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const decorationIdsRef = useRef<string[]>([]);
     // Remembers the last editor view per file path so navigating back restores it.
     const viewByPathRef = useRef<Map<string, EditorView>>(new Map());
+    // Remembers the scroll position (0–1 ratio) per file path.
+    const scrollByPathRef = useRef<Map<string, number>>(new Map());
 
     // Reset view & summary when switching files.
     // Restores the last view the user was in for this file (unless it was 'conflicts').
@@ -180,8 +182,19 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       setSummaryError(null);
       setSummaryLoading(false);
       setHasCachedSummary(false);
-      scrollPercentageRef.current = 0;
+      // Restore the saved scroll position for this file (0 if first visit).
+      scrollPercentageRef.current = activeFile?.path
+        ? (scrollByPathRef.current.get(activeFile.path) ?? 0)
+        : 0;
       previousViewRef.current = view;
+      // Preview and summary have no onMount hook like Monaco's onEditorMount, so
+      // restoreScrollPercentage must be called here. The double-rAF inside it waits
+      // for React to render the new file content before applying scrollTop.
+      // Source view is handled by onEditorMount — no call needed here.
+      if (view === 'preview' || view === 'summary') {
+        restoreScrollPercentage(view);
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeFile?.path]);
 
     // Persist the current view per file so navigating back restores it.
@@ -256,20 +269,25 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       }]);
     }, []);
 
-    /** Capture the current scroll position as a 0–1 ratio before switching views. */
+    /** Capture the current scroll position as a 0–1 ratio before switching views,
+     *  and persist it to scrollByPathRef so navigation back restores the same spot. */
     const captureScrollPercentage = useCallback(() => {
       const editor = monacoEditorRef.current;
       if (editor && editorView === 'source') {
         const scrollable = editor.getScrollHeight() - editor.getLayoutInfo().height;
-        scrollPercentageRef.current = scrollable > 0 ? editor.getScrollTop() / scrollable : 0;
+        const pct = scrollable > 0 ? editor.getScrollTop() / scrollable : 0;
+        scrollPercentageRef.current = pct;
+        if (activeFile?.path) scrollByPathRef.current.set(activeFile.path, pct);
         return;
       }
       const el = previewRef.current;
       if (el && editorView === 'preview') {
         const scrollable = el.scrollHeight - el.clientHeight;
-        scrollPercentageRef.current = scrollable > 0 ? el.scrollTop / scrollable : 0;
+        const pct = scrollable > 0 ? el.scrollTop / scrollable : 0;
+        scrollPercentageRef.current = pct;
+        if (activeFile?.path) scrollByPathRef.current.set(activeFile.path, pct);
       }
-    }, [editorView]);
+    }, [editorView, activeFile?.path]);
 
     /** Walk heading elements in the container and report which one is at the top of the viewport.
      *  Deduplicates ids the same way parseHeadings does (append -N for Nth duplicate). */
@@ -305,6 +323,13 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         }
         if (view === 'preview') {
           const el = previewRef.current;
+          if (!el) return false;
+          const scrollable = el.scrollHeight - el.clientHeight;
+          el.scrollTop = Math.max(0, scrollable * percentage);
+          return true;
+        }
+        if (view === 'summary') {
+          const el = summaryRef.current;
           if (!el) return false;
           const scrollable = el.scrollHeight - el.clientHeight;
           el.scrollTop = Math.max(0, scrollable * percentage);
@@ -752,7 +777,14 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               /* AI Summary view */
               <div
                 ref={summaryRef}
-                onScroll={e => trackActiveHeading(e.currentTarget)}
+                onScroll={e => {
+                  trackActiveHeading(e.currentTarget);
+                  const el = e.currentTarget;
+                  const scrollable = el.scrollHeight - el.clientHeight;
+                  const pct = scrollable > 0 ? el.scrollTop / scrollable : 0;
+                  scrollPercentageRef.current = pct;
+                  if (activeFile?.path) scrollByPathRef.current.set(activeFile.path, pct);
+                }}
                 className="md-preview"
                 style={{
                   height: '100%', overflow: 'auto',
@@ -927,6 +959,15 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                 onActivity={onActivity}
                 onEditorMount={editor => {
                   monacoEditorRef.current = editor;
+                  // Track Monaco scroll continuously so the position is saved
+                  // to scrollByPathRef before this editor instance unmounts.
+                  const filePath = activeFile.path;
+                  editor.onDidScrollChange(() => {
+                    const scrollable = editor.getScrollHeight() - editor.getLayoutInfo().height;
+                    const pct = scrollable > 0 ? editor.getScrollTop() / scrollable : 0;
+                    scrollPercentageRef.current = pct;
+                    scrollByPathRef.current.set(filePath, pct);
+                  });
                   // Apply any pending navigation for this file
                   const nav = pendingNavigationRef.current;
                   if (nav && nav.filePath === activeFile.path) {
