@@ -42,7 +42,20 @@ File references (files array):
   Omit "files" only if no relevant file was found.
 
 Group every component into the tier that best matches its role.
-Edges should generally point downward (smaller layer → larger layer number).
+
+Layout and relationship guidance:
+  - Structure the graph as a strict tree wherever possible: a single root entry point that branches down into children, and those children into their own children. Avoid dense webs, cross-links, and cycles. Each node should ideally have exactly one parent.
+  - Lay the tree out so it reads like a family tree / org chart flowing downward from the root, with sibling branches spread horizontally and kept parallel. Attach children directly beneath or beside their parent.
+  - Every arrow should point DOWN, LEFT, or RIGHT — never up and never diagonally. Model each edge as an orthogonal "elbow" connection made of straight horizontal and vertical segments joined by right-angle bends:
+      * elbow-down: leave the parent from the bottom, drop vertically, then turn left or right into the child.
+      * elbow-right: leave the parent from the right side, run horizontally, then turn down into a child placed to the right.
+      * elbow-left: leave the parent from the left side, run horizontally, then turn down into a child placed to the left.
+    Prefer these three elbow shapes for essentially all connections.
+  - Choose the direction of a directed edge from the real dependency or data-flow direction, but arrange node placement so that direction naturally resolves to a down/left/right elbow.
+  - Use bidirectional edges only when communication is genuinely two-way; otherwise use a single directed edge. Avoid duplicate, redundant, or back-pointing edges that would force an upward or diagonal arrow.
+  - Keep the root or primary entry point at the top center. Place its immediate children in the next row down, and continue expanding the tree downward and outward level by level, with terminal resources (databases, external systems) as the lowest leaves.
+
+Edges should generally point from a smaller layer number to a larger layer number, while preserving the real dependency/data-flow direction.
 
 Edge types:
   directed      — arrow pointing at the target (A calls B)
