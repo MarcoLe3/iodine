@@ -1,5 +1,23 @@
 # Iodine — IDE for Open-source Development — Developer Notes
 
+## Naming Convention — Marketing Names vs. Internal Identifiers
+
+Several features have branded display names shown in the UI. These names must **never** be used for internal technical objects (variables, functions, props, types, CSS classes, API routes, or file names). Always use the plain descriptive technical name internally.
+
+| UI display name | Internal technical name to use |
+|-----------------|-------------------------------|
+| **Iogram** | `systemView` / `system` / `SystemView` |
+| **IOPEDIA** | `outline` / `OutlinePanel` |
+| **Coding Assistant** | `codingAssistant` / `CodingAssistant` |
+
+Examples of correct usage:
+- Tab id: `'system'` ✓ — not `'iogram'`
+- Method: `openSystemView()` ✓ — not `openIogram()`
+- Component: `<SystemView>` ✓ — not `<Iogram>`
+- Prop: `onSummaryOpen` ✓ — describes the event, not the brand
+
+The display label string (e.g. `'Iogram'`) is the only place the marketing name appears.
+
 ## Light / Dark Mode
 
 Theme support is client-side and uses shared CSS variables so components do not need separate light and dark implementations.
@@ -380,6 +398,16 @@ activeFilePath changes (editor tab switch)
 **Key design decisions:**
 - **Two-step select+focus:** `selectByPath` (no DOM reads, safe while SVG is `display:none`) + `focusSelected` (reads live `clientWidth`/`clientHeight` after `flushSync` makes the tab visible). Avoids the zero-dimension bug from panning a hidden SVG.
 - `activeSystemNode` flows through component props so the chip appears without touching the message history.
+
+## System View — Auto-open on AI Summary
+
+Whenever the user opens the AI summary view (clicks **Generate Summary** or **View Summary** in the editor), the right panel automatically switches to the System View (Iogram) tab. This happens regardless of whether a system diagram has been generated — the tab simply becomes visible so the user can see it.
+
+| File | Role |
+|------|------|
+| `client/src/components/layout/EditorArea.tsx` | `onSummaryOpen?: () => void` prop; called at the top of `handleSwitchToSummary` before any async work, so the tab switches immediately on click. |
+| `client/src/components/layout/RightPanel.tsx` | `RightPanelHandle.openSystemView()` calls `setActiveTab('system')`. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Passes `onSummaryOpen={() => rightPanelRef.current?.openSystemView()}` to EditorArea. |
 
 ## Proactive Help System
 
