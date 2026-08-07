@@ -63,6 +63,7 @@ export function useCodingAssistant(
       role: 'assistant',
       blocks: [{ type: 'text', content: message }],
       isStreaming: false,
+      timestamp: Date.now(),
     };
     setUiMessages(prev => [...prev, proactiveMsg]);
     pendingProactiveContextRef.current = collectContext;
@@ -111,7 +112,7 @@ export function useCodingAssistant(
     watchController: AbortController,
   ) => {
     const assistantId = uid();
-    const assistantMsg: UIMessage = { id: assistantId, role: 'assistant', blocks: [], isStreaming: true };
+    const assistantMsg: UIMessage = { id: assistantId, role: 'assistant', blocks: [], isStreaming: true, timestamp: Date.now() };
 
     setUiMessages(prev => [...prev, assistantMsg]);
     setIsLoading(true);
@@ -278,9 +279,9 @@ export function useCodingAssistant(
     streamingTextRef.current = '';
     toolUsedInTurnRef.current = false;
 
-    const userMsg: UIMessage = { id: uid(), role: 'user', content: text };
+    const userMsg: UIMessage = { id: uid(), role: 'user', content: text, timestamp: Date.now() };
     const assistantId = uid();
-    const assistantMsg: UIMessage = { id: assistantId, role: 'assistant', blocks: [], isStreaming: true };
+    const assistantMsg: UIMessage = { id: assistantId, role: 'assistant', blocks: [], isStreaming: true, timestamp: Date.now() };
 
     // Collect proactive context if a signal fired before this message.
     // Injected into the API content only — the UI shows only the user's typed text.

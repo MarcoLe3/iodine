@@ -39,8 +39,8 @@ export type UIBlock =
       longRunning: boolean; status: 'pending' | 'approved' | 'rejected'; output: string };
 
 export type UIMessage =
-  | { id: string; role: 'user'; content: string }
-  | { id: string; role: 'assistant'; blocks: UIBlock[]; isStreaming: boolean };
+  | { id: string; role: 'user'; content: string; timestamp: number }
+  | { id: string; role: 'assistant'; blocks: UIBlock[]; isStreaming: boolean; timestamp: number };
 
 export interface HistoryMessage { role: 'user' | 'assistant'; content: string; }
 
