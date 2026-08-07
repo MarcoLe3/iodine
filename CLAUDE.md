@@ -119,6 +119,26 @@ When toggling between the **source** (Monaco) and **preview** (rendered Markdown
 
 **Key design:** Scroll percentage (not line number) is used because the preview renders Markdown differently from the source — a 30% scroll in source maps to roughly 30% of the rendered output regardless of heading sizes or image heights.
 
+## Markdown Link Navigation (Wiki-style)
+
+Relative links in Markdown preview are intercepted so they open the target file as an editor tab rather than navigating the browser to a broken URL. External (`https://`, `mailto:`) links open in a new browser tab. Hash-only links (`#section`) scroll the current preview as normal.
+
+| File | Role |
+|------|------|
+| `client/src/components/layout/EditorArea.tsx` | `resolveWorkspacePath(relativePath, activeFilePath)` resolves relative paths against the active file's directory, handling `..` traversal and normalising backslashes for Windows. `resolveImageSrc` uses the same helper. The `a` component in `ReactMarkdown` intercepts clicks: external links → `window.open`; hash links → default browser behaviour; relative paths → resolve, find in `openFiles`, call `onTabClick` (already open) or `onOpenFile` (new file). If the current view is **preview** and the target ends in `.md`/`.markdown`, it also fires `onPreviewRequest(absPath)` so the destination opens in preview too. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Owns `previewRequestPath` state. Passes `onOpenFile` (calls `openFile` with a synthetic `FileNode`), `onPreviewRequest` (sets `previewRequestPath`), `previewRequestPath`, and `onPreviewHandled` (clears it) to EditorArea. |
+
+**Path resolution — Windows support:** `resolveWorkspacePath` normalises both `activeFilePath` and `relativePath` to forward slashes before processing, then re-attaches the correct root prefix (`/` on Unix, `C:/` on Windows) so the resolved absolute path matches the values stored in `openFiles`.
+
+**Wiki preview flow:**
+1. User is in **preview** mode on `docs/index.md` and clicks `[Guide](guide/setup.md)`.
+2. Link handler resolves to the absolute path, opens the file via `onOpenFile`, and calls `onPreviewRequest(absPath)`.
+3. WorkbenchLayout sets `previewRequestPath = absPath`.
+4. EditorArea's file-switch reset effect fires → `editorView = 'source'`. Then the preview request effect fires (declared after reset, so it runs last) → `editorView = 'preview'`. `onPreviewHandled` clears `previewRequestPath`.
+5. The destination file opens already in preview, giving a wiki-like navigation experience.
+
+If the user navigates from **source** view, the link still opens the file in source mode — the auto-preview only triggers when the originating view is preview.
+
 ## Build Assistant
 
 The **Build** tab in the right panel provides three sections — **Test**, **Build**, and **Build & Run** — each with an editable command field, an AI **Generate** button, and an **Execute** button. A **Save** button at the bottom persists all three commands to disk and reloads them automatically on the next workspace open. An **Open URL** section at the bottom of the scrollable area lets the user open any URL as an iframe tab in the editor.
