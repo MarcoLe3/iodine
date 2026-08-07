@@ -102,7 +102,9 @@ The editor pane has a three-way view toggle: **source / preview / summary**.
 
 **File cache path:** `~/.iodine/<workspace-md5>/<relpath-md5>/<file-content-md5>_ai_summary.md`
 **Directory cache path:** `~/.iodine/<workspace-md5>/<relpath-md5>/<dir-contents-md5>_ai_dir_summary.md`
-The content hash means the cache auto-invalidates when the file/directory structure changes.
+Each file/directory gets its own directory (keyed by `<relpath-md5>`), so the `latest` symlink is per-file, not global.
+
+**Obsolete summary handling:** After generating a new summary, the server removes all other `*_ai_summary.md` files in that directory (keeping exactly one hash file), then creates/updates a `latest_ai_summary.md` symlink pointing to it. On `GET`, if the exact content hash misses, the server falls back to the `latest` symlink and returns `{ content, obsolete: true }`. The client uses this flag to show the "📖 View Summary" button with an amber background and the "↺ Regenerate (Obsolete)" button in orange inside the summary view. Both indicators clear after a fresh generation completes.
 
 **Directory summary** is accessible via the `+` hover menu on any folder in the file tree ("View/Generate Summary"). Directories open as synthetic tabs with `isDirectory: true`; `WorkbenchLayout` calls `handleDirSummary` which opens the tab and sets `summaryRequestPath`, triggering `EditorArea` to auto-switch to summary view and start generation.
 

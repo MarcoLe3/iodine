@@ -155,7 +155,9 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const [summaryContent,   setSummaryContent]   = useState('');
     const [summaryLoading,   setSummaryLoading]   = useState(false);
     const [summaryError,     setSummaryError]     = useState<string | null>(null);
-    const [hasCachedSummary, setHasCachedSummary] = useState(false);
+    const [hasCachedSummary,     setHasCachedSummary]     = useState(false);
+    const [cachedSummaryObsolete, setCachedSummaryObsolete] = useState(false);
+    const [summaryObsolete,      setSummaryObsolete]      = useState(false);
 
     // Pending navigation request: open a file at a line and highlight a range.
     // Stored in a ref so it can be applied when the Monaco editor mounts for the target file.
@@ -182,6 +184,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       setSummaryError(null);
       setSummaryLoading(false);
       setHasCachedSummary(false);
+      setCachedSummaryObsolete(false);
+      setSummaryObsolete(false);
       // Restore the saved scroll position for this file (0 if first visit).
       scrollPercentageRef.current = activeFile?.path
         ? (scrollByPathRef.current.get(activeFile.path) ?? 0)
@@ -223,7 +227,10 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}${wsParam}`;
       fetch(url)
         .then(r => r.json())
-        .then((data: { content: string | null }) => setHasCachedSummary(!!data.content))
+        .then((data: { content: string | null; obsolete?: boolean }) => {
+          setHasCachedSummary(!!data.content);
+          setCachedSummaryObsolete(!!data.content && data.obsolete === true);
+        })
         .catch(() => {});
     }, [activeFile?.path, workspacePath]);
 
@@ -523,9 +530,10 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
             ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}${wsParam}`
             : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}${wsParam}`;
           const resp = await fetch(cacheUrl);
-          const data = await resp.json() as { content: string | null };
+          const data = await resp.json() as { content: string | null; obsolete?: boolean };
           if (data.content) {
             setSummaryContent(data.content);
+            setSummaryObsolete(data.obsolete === true);
             setSummaryLoading(false);
             return;
           }
@@ -576,6 +584,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               } else if (eventName === 'done') {
                 setSummaryLoading(false);
                 setHasCachedSummary(true);
+                setCachedSummaryObsolete(false);
+                setSummaryObsolete(false);
               } else if (eventName === 'error') {
                 setSummaryError(payload.message as string);
                 setSummaryLoading(false);
@@ -748,8 +758,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   onClick={() => editorView === 'summary'
                     ? setEditorView('source')
                     : handleSwitchToSummary()}
-                  title={editorView === 'summary' ? 'Back to source' : hasCachedSummary ? 'View cached summary' : 'Generate AI summary'}
-                  style={{ ...btnStyle, background: editorView === 'summary' ? '#007acc' : '#3a3d41' }}
+                  title={editorView === 'summary' ? 'Back to source' : hasCachedSummary ? (cachedSummaryObsolete ? 'Cached summary is outdated — file has changed' : 'View cached summary') : 'Generate AI summary'}
+                  style={{ ...btnStyle, background: editorView === 'summary' ? '#007acc' : cachedSummaryObsolete ? '#7a5500' : '#3a3d41' }}
                 >
                   {editorView === 'summary' ? '⌨ Source' : hasCachedSummary ? '📖 View Summary' : '✨ Generate Summary'}
                 </button>
@@ -811,14 +821,16 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   {!summaryLoading && (summaryContent || summaryError) && (
                     <button
                       onClick={handleRegenerateSummary}
-                      title="Regenerate summary"
+                      title={summaryObsolete ? 'Summary is outdated — file has changed since it was generated' : 'Regenerate summary'}
                       style={{
-                        background: 'none', border: '1px solid var(--color-border)',
-                        borderRadius: 4, color: 'var(--color-text-secondary)',
+                        background: 'none',
+                        border: `1px solid ${summaryObsolete ? '#e9b44c' : 'var(--color-border)'}`,
+                        borderRadius: 4,
+                        color: summaryObsolete ? '#e9b44c' : 'var(--color-text-secondary)',
                         fontSize: 11, padding: '2px 8px', cursor: 'pointer', flexShrink: 0,
                       }}
                     >
-                      ↺ Regenerate
+                      ↺ Regenerate{summaryObsolete ? ' (Obsolete)' : ''}
                     </button>
                   )}
                 </div>

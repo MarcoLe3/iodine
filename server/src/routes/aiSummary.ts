@@ -117,6 +117,13 @@ router.get('/ai-summary', async (req, res) => {
   try {
     const cached = await fs.promises.readFile(sfp, 'utf-8');
     return res.json({ content: cached });
+  } catch { /* exact hash miss — fall through to latest symlink */ }
+
+  // Check the "latest" symlink for an obsolete (but existing) summary
+  const latestLink = path.join(dir, 'latest_ai_summary.md');
+  try {
+    const cached = await fs.promises.readFile(latestLink, 'utf-8');
+    return res.json({ content: cached, obsolete: true });
   } catch {
     return res.json({ content: null });
   }
@@ -239,10 +246,22 @@ router.post('/ai-summary/generate', async (req, res) => {
       }
     }
 
-    // Persist to cache
+    // Persist to cache and update "latest" symlink
     if (!abortSignal.aborted && accumulated) {
       await fs.promises.mkdir(dir, { recursive: true });
+      // Remove stale hash files before writing the new one
+      try {
+        const existing = await fs.promises.readdir(dir);
+        await Promise.all(
+          existing
+            .filter(f => f.endsWith('_ai_summary.md') && f !== `${contentHash}_ai_summary.md`)
+            .map(f => fs.promises.unlink(path.join(dir, f)).catch(() => {}))
+        );
+      } catch { /* dir may be empty or unreadable */ }
       await fs.promises.writeFile(sfp, accumulated, 'utf-8');
+      const latestLink = path.join(dir, 'latest_ai_summary.md');
+      try { await fs.promises.unlink(latestLink); } catch { /* didn't exist */ }
+      await fs.promises.symlink(`${contentHash}_ai_summary.md`, latestLink);
     }
 
     if (!abortSignal.aborted) res.write(`event: done\ndata: {}\n\n`);
@@ -345,6 +364,12 @@ router.get('/ai-directory-summary', async (req, res) => {
   try {
     const cached = await fs.promises.readFile(sfp, 'utf-8');
     return res.json({ content: cached });
+  } catch { /* exact hash miss — fall through to latest symlink */ }
+
+  const latestLink = path.join(dir, 'latest_ai_dir_summary.md');
+  try {
+    const cached = await fs.promises.readFile(latestLink, 'utf-8');
+    return res.json({ content: cached, obsolete: true });
   } catch {
     return res.json({ content: null });
   }
@@ -453,7 +478,18 @@ router.post('/ai-directory-summary/generate', async (req, res) => {
 
     if (!abortSignal.aborted && accumulated) {
       await fs.promises.mkdir(dir, { recursive: true });
+      try {
+        const existing = await fs.promises.readdir(dir);
+        await Promise.all(
+          existing
+            .filter(f => f.endsWith('_ai_dir_summary.md') && f !== `${contentsHash}_ai_dir_summary.md`)
+            .map(f => fs.promises.unlink(path.join(dir, f)).catch(() => {}))
+        );
+      } catch { /* dir may be empty or unreadable */ }
       await fs.promises.writeFile(sfp, accumulated, 'utf-8');
+      const latestLink = path.join(dir, 'latest_ai_dir_summary.md');
+      try { await fs.promises.unlink(latestLink); } catch { /* didn't exist */ }
+      await fs.promises.symlink(`${contentsHash}_ai_dir_summary.md`, latestLink);
     }
 
     if (!abortSignal.aborted) res.write(`event: done\ndata: {}\n\n`);
