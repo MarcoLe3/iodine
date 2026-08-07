@@ -35,6 +35,9 @@ interface EditorAreaProps {
   onActivity?: () => void;
   /** Called whenever the editor view switches between source / preview / summary. */
   onEditorViewChange?: (view: string) => void;
+  /** Called whenever the AI summary text changes (streaming or cached load), so the
+   *  parent can feed it to the outline panel without duplicating summary state. */
+  onSummaryContentChange?: (content: string) => void;
 }
 
 export interface EditorAreaHandle {
@@ -98,7 +101,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -108,6 +111,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const scrollPercentageRef = useRef(0);
     const previousViewRef = useRef<EditorView>('source');
     const previewRef = useRef<HTMLDivElement | null>(null);
+    const summaryRef = useRef<HTMLDivElement | null>(null);
 
     const [editorView,       setEditorView]       = useState<EditorView>('source');
     const [summaryContent,   setSummaryContent]   = useState('');
@@ -242,6 +246,11 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       onEditorViewChange?.(editorView);
     }, [editorView, onEditorViewChange]);
 
+    // Notify parent whenever summary text changes so it can drive the outline panel.
+    useEffect(() => {
+      onSummaryContentChange?.(summaryContent);
+    }, [summaryContent, onSummaryContentChange]);
+
     useImperativeHandle(ref, () => ({
       save: () => {},
       navigateToLine: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => {
@@ -254,7 +263,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         }
       },
       scrollToHeading: (id: string) => {
-        const container = previewRef.current;
+        const container = editorView === 'summary' ? summaryRef.current : previewRef.current;
         if (!container) return;
         const target = container.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
         if (!target) return;
@@ -292,7 +301,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         }
         return `File: ${fileName} (visible lines ${startLine}-${endLine})\n${lines.join('\n')}`;
       },
-    }), [applyNavigation, activeFilePath, activeFile]);
+    }), [applyNavigation, activeFilePath, activeFile, editorView]);
 
     const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
     const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && (!!workspacePath || !!activeFile.isExternal) && !activeFile.path.endsWith('.md');
@@ -547,6 +556,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
             ) : editorView === 'summary' ? (
               /* AI Summary view */
               <div
+                ref={summaryRef}
                 className="md-preview"
                 style={{
                   height: '100%', overflow: 'auto',
@@ -604,7 +614,17 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
                 {/* Streaming / cached markdown */}
                 {summaryContent && (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ children, ...p }) => <h1 id={makeHeadingId(children)} {...p}>{children}</h1>,
+                      h2: ({ children, ...p }) => <h2 id={makeHeadingId(children)} {...p}>{children}</h2>,
+                      h3: ({ children, ...p }) => <h3 id={makeHeadingId(children)} {...p}>{children}</h3>,
+                      h4: ({ children, ...p }) => <h4 id={makeHeadingId(children)} {...p}>{children}</h4>,
+                      h5: ({ children, ...p }) => <h5 id={makeHeadingId(children)} {...p}>{children}</h5>,
+                      h6: ({ children, ...p }) => <h6 id={makeHeadingId(children)} {...p}>{children}</h6>,
+                    }}
+                  >
                     {summaryContent}
                   </ReactMarkdown>
                 )}

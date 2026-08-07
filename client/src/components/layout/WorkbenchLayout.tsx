@@ -52,6 +52,7 @@ export function WorkbenchLayout() {
   const [activeView, setActiveView] = useState<SidebarView>('explorer');
   const [currentEditorView, setCurrentEditorView] = useState('source');
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  const [summaryOutlineContent, setSummaryOutlineContent] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [rightPanelWidth, setRightPanelWidth] = useState(RIGHT_PANEL_DEFAULT);
   const { isExpanded, animated: panelAnimated, onAssistantReply, onOpenFile: onPanelShrinkForFile, resetExpansion } = usePanelExpansion(DEFAULT_PANEL_EXPANSION_CONFIG);
@@ -168,6 +169,7 @@ export function WorkbenchLayout() {
     if (activeFilePath) recordAction();
     // Reset outline state when the active file changes
     setActiveHeadingId(null);
+    setSummaryOutlineContent('');
   }, [activeFilePath, recordAction]);
 
   /** Open a URL as an iframe tab in the editor area. */
@@ -238,7 +240,7 @@ export function WorkbenchLayout() {
 
   const handleEditorViewChange = useCallback((view: string) => {
     setCurrentEditorView(view);
-    if (view === 'preview') {
+    if (view === 'preview' || view === 'summary') {
       setActiveView('outline');
       setActiveHeadingId(null);
     } else {
@@ -423,7 +425,9 @@ export function WorkbenchLayout() {
             onNodeSelect={handleNodeSelect}
             expandToPath={activeFilePath}
             outlineContent={
-              currentEditorView === 'preview' && openFiles.some(f => f.path === activeFilePath && /\.(md|markdown)$/i.test(f.path))
+              currentEditorView === 'summary' && activeFilePath
+                ? (summaryOutlineContent || null)
+                : currentEditorView === 'preview' && activeFilePath
                 ? (openFiles.find(f => f.path === activeFilePath)?.content ?? null)
                 : null
             }
@@ -449,6 +453,7 @@ export function WorkbenchLayout() {
             onContentChange={(path, content) => { updateContent(path, content); recordAction(); rightPanelRef.current?.notifyEditorActivity(); }}
             onActivity={recordAction}
             onEditorViewChange={handleEditorViewChange}
+            onSummaryContentChange={setSummaryOutlineContent}
             workspacePath={workspacePath}
             provider={provider}
             model={model}
