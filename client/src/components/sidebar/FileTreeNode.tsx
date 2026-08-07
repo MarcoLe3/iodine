@@ -83,9 +83,11 @@ const TrashIcon = () => (
   </svg>
 );
 
-const PlusIcon = () => (
+const DotsIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" style={{ flexShrink: 0 }}>
-    <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <circle cx="2" cy="6" r="1.2" />
+    <circle cx="6" cy="6" r="1.2" />
+    <circle cx="10" cy="6" r="1.2" />
   </svg>
 );
 
@@ -136,10 +138,8 @@ export function FileTreeNode({
   const canSummarizeFile = !isDir && !isImage && isSummarizable(node.name) && !!onFileSummary;
   const canSummarize = canSummarizeDir || canSummarizeFile;
 
-  // Which nodes get the "+" dropdown button: directories (new file/folder + summary + context)
-  // and files that have summary or context actions.
   const canAddToContext = !!onAddToContext;
-  const hasDropdown = isDir || canSummarizeFile || (!isDir && canAddToContext);
+  const hasDropdown = true; // every node has at minimum Rename
 
   const gs = gitStatus[node.path];
   const nameFontWeight = (gs === 'unstaged' || gs === 'both') ? 'bold' : undefined;
@@ -211,8 +211,8 @@ export function FileTreeNode({
     else onFileSummary?.(node);
   };
 
-  const startRenaming = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const startRenaming = () => {
+    setDropdownOpen(false);
     setRenaming(true);
     setRenameName(node.name);
     setRenameError(null);
@@ -338,7 +338,6 @@ export function FileTreeNode({
           />
         ) : (
           <span
-            onDoubleClick={startRenaming}
             style={{
               fontSize: 13,
               flex: 1,
@@ -371,7 +370,7 @@ export function FileTreeNode({
               /* Wrapper div is position:relative so the dropdown positions correctly */
               <div style={{ position: 'relative' }}>
                 <button
-                  title={isDir ? 'New file or folder' : 'Generate summary'}
+                  title="More actions"
                   onClick={e => {
                     e.stopPropagation();
                     setDropdownOpen(v => !v);
@@ -388,7 +387,7 @@ export function FileTreeNode({
                   onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent)')}
                   onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
                 >
-                  <PlusIcon />
+                  <DotsIcon />
                 </button>
 
                 {dropdownOpen && (
@@ -410,6 +409,18 @@ export function FileTreeNode({
                       boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
                       overflow: 'hidden',
                     }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); startRenaming(); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: 'transparent', color: 'var(--color-text-primary)', fontSize: 12, textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <span style={{ fontSize: 11 }}>✏</span>
+                        Rename
+                      </button>
+                      {(isDir || canSummarize || canAddToContext) && (
+                        <div style={{ height: 1, background: 'var(--color-border)', margin: '2px 0' }} />
+                      )}
                       {isDir && (['file', 'directory'] as const).map(type => (
                         <button
                           key={type}
