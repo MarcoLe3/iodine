@@ -291,7 +291,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       scrollToHeading: (id: string) => {
         const container = editorView === 'summary' ? summaryRef.current : previewRef.current;
         if (!container) return;
-        suppressTrackingUntilRef.current = Date.now() + 600;
+        suppressTrackingUntilRef.current = Date.now() + 1200;
         // Walk headings with the same dedup logic as parseHeadings to find the right element.
         const headings = container.querySelectorAll<HTMLElement>('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]');
         const seen = new Map<string, number>();

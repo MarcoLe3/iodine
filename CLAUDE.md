@@ -97,7 +97,7 @@ When a file is in **Preview** or **AI Summary** mode the activity bar's third ic
 1. User clicks **👁 Preview** or **✨ Summary** → `EditorArea` fires `onEditorViewChange('preview'|'summary')`.
 2. `WorkbenchLayout.handleEditorViewChange` sets `activeView = 'outline'` → sidebar switches panels.
 3. For summary: `onSummaryContentChange` streams generated text into `summaryOutlineContent` → outline populates live.
-4. User scrolls → `trackActiveHeading` fires → `setActiveHeadingId` → active item highlights in the outline.
+4. User scrolls → `trackActiveHeading` fires → `setActiveHeadingId` → active item highlights in the outline. Suppressed for 1200 ms after a programmatic `scrollToHeading` call (`suppressTrackingUntilRef`) so the outline doesn't jerk through intermediate positions during smooth scroll.
 5. User clicks a heading → `handleOutlineNavigate(id)` → `scrollToHeading(id)` → correct container scrolls smoothly.
 6. User clicks **⌨ Source** → sidebar reverts to `'explorer'`.
 
