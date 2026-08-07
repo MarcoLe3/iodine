@@ -5,7 +5,9 @@ import { fetchOverallDiff } from '../api/files';
 import { saveConversation, clearConversations, type ConversationRecord } from '../api/conversations';
 
 function uid() {
-  return Math.random().toString(36).slice(2);
+  return typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
 }
 
 /** Prepare UIMessages for disk persistence: clear transient flags. */
@@ -46,6 +48,9 @@ export function useCodingAssistant(
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isWatching, setIsWatching] = useState(false);
+  const [conversationPersistenceError, setConversationPersistenceError] = useState<string | null>(null);
+  const [canRetryConversationSave, setCanRetryConversationSave] = useState(false);
+  const [conversationSaveRevision, setConversationSaveRevision] = useState(0);
 
   // Keep a ref to the latest callback so sendMessage's useCallback closure
   // never goes stale (onNavigateToLine is not in the dependency array).
@@ -75,14 +80,79 @@ export function useCodingAssistant(
 
   // Stable conversation ID for the current session. Reset on clearMessages / set on loadConversation.
   const conversationIdRef = useRef<string>(uid());
+  const sessionGenerationRef = useRef(0);
+  const previousWorkspacePathRef = useRef(workspacePath);
+
+  type PendingConversationSave = {
+    workspacePath: string;
+    conversationId: string;
+    generation: number;
+    history: HistoryMessage[];
+  };
+  const pendingSaveRef = useRef<PendingConversationSave | null>(null);
+  const failedSaveRef = useRef<PendingConversationSave | null>(null);
+  const pendingProactiveContextRef = useRef<(() => Promise<string>) | null>(null);
+  const armedReplyRef = useRef<string | null>(null);
 
   // Keep workspacePath current without adding it to sendMessage's dependency array.
   const workspacePathRef = useRef(workspacePath);
   workspacePathRef.current = workspacePath;
 
-  // Holds a context collector installed by the proactive help system.
-  // Awaited and prepended (API-side only, not in the UI) on the next user reply.
-  const pendingProactiveContextRef = useRef<(() => Promise<string>) | null>(null);
+  // A conversation belongs to exactly one workspace. Reset all in-memory
+  // session state when that scope changes so history cannot cross projects.
+  useEffect(() => {
+    if (previousWorkspacePathRef.current === workspacePath) return;
+    previousWorkspacePathRef.current = workspacePath;
+    sessionGenerationRef.current += 1;
+    abortControllerRef.current?.abort();
+    watchControllerRef.current?.abort();
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    textBufRef.current = '';
+    thoughtBufRef.current = '';
+    pendingProactiveContextRef.current = null;
+    armedReplyRef.current = null;
+    pendingSaveRef.current = null;
+    failedSaveRef.current = null;
+    conversationIdRef.current = uid();
+    setIsLoading(false);
+    setIsWatching(false);
+    setConversationPersistenceError(null);
+    setCanRetryConversationSave(false);
+    setUiMessages([]);
+    setHistory([]);
+  }, [workspacePath]);
+
+  // Persist only after the completed assistant message has committed to React
+  // state. Clearing the pending ref before awaiting makes this safe when
+  // StrictMode runs effects more than once in development.
+  useEffect(() => {
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    if (pending.generation !== sessionGenerationRef.current) return;
+
+    const record: ConversationRecord = {
+      id: pending.conversationId,
+      timestamp: Date.now(),
+      history: pending.history,
+      uiMessages: normalizeForSave(uiMessages),
+    };
+    void saveConversation(pending.workspacePath, record)
+      .then(() => {
+        if (pending.generation !== sessionGenerationRef.current) return;
+        failedSaveRef.current = null;
+        setConversationPersistenceError(null);
+        setCanRetryConversationSave(false);
+        setConversationSaveRevision(revision => revision + 1);
+      })
+      .catch(error => {
+        if (pending.generation !== sessionGenerationRef.current) return;
+        failedSaveRef.current = pending;
+        setCanRetryConversationSave(true);
+        setConversationPersistenceError(error instanceof Error ? error.message : 'Failed to save conversation');
+      });
+  }, [conversationSaveRevision, uiMessages]);
 
   const injectProactiveMessage = useCallback((message: string, collectContext: () => Promise<string>) => {
     const proactiveMsg: UIMessage = {
@@ -125,6 +195,9 @@ export function useCodingAssistant(
   }, []);
 
   useEffect(() => () => {
+    sessionGenerationRef.current += 1;
+    pendingSaveRef.current = null;
+    failedSaveRef.current = null;
     abortControllerRef.current?.abort();
     watchControllerRef.current?.abort();
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -138,6 +211,7 @@ export function useCodingAssistant(
     diffs: string[],
     watchController: AbortController,
   ) => {
+    const watchGeneration = sessionGenerationRef.current;
     const assistantId = uid();
     const assistantMsg: UIMessage = { id: assistantId, role: 'assistant', blocks: [], isStreaming: true, timestamp: Date.now() };
 
@@ -146,6 +220,7 @@ export function useCodingAssistant(
     onWatchTriggerRef.current?.(); // bell + pulse
 
     const updateWatchMsg = (updater: (msg: UIMessage & { role: 'assistant' }) => UIMessage) => {
+      if (watchGeneration !== sessionGenerationRef.current) return;
       setUiMessages(prev => prev.map(m =>
         m.id === assistantId && m.role === 'assistant'
           ? updater(m as UIMessage & { role: 'assistant' })
@@ -170,6 +245,7 @@ export function useCodingAssistant(
       let buf = '';
 
       while (true) {
+        if (watchGeneration !== sessionGenerationRef.current) return;
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
@@ -228,7 +304,7 @@ export function useCodingAssistant(
         return prev.map(m => m.id === assistantId ? { ...m, isStreaming: false } : m);
       });
     } finally {
-      setIsLoading(false);
+      if (watchGeneration === sessionGenerationRef.current) setIsLoading(false);
     }
   }, [model, provider]);
 
@@ -283,9 +359,6 @@ export function useCodingAssistant(
   const startProgressWatchRef = useRef(startProgressWatch);
   startProgressWatchRef.current = startProgressWatch;
 
-  // Holds the last AI reply text when the watch is armed but waiting for editor activity.
-  const armedReplyRef = useRef<string | null>(null);
-
   // Called when the user types in the editor. If a reply is armed, starts the watch window.
   const notifyEditorActivity = useCallback(() => {
     const reply = armedReplyRef.current;
@@ -298,6 +371,10 @@ export function useCodingAssistant(
 
   const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[], tutorMode?: boolean) => {
     if (!text.trim() || isLoading) return;
+
+    const sendWorkspacePath = workspacePathRef.current;
+    const sendConversationId = conversationIdRef.current;
+    const sendGeneration = sessionGenerationRef.current;
 
     // Cancel any in-progress watch and clear any armed reply before starting a new message.
     armedReplyRef.current = null;
@@ -318,6 +395,8 @@ export function useCodingAssistant(
     if (collectProactive) {
       try { proactiveContext = await collectProactive(); } catch { /* ignore — context is best-effort */ }
     }
+
+    if (sendGeneration !== sessionGenerationRef.current) return;
 
     let apiContent = text;
     if (proactiveContext) {
@@ -354,6 +433,7 @@ export function useCodingAssistant(
       let buffer = '';
 
       const updateAssistant = (updater: (msg: UIMessage & { role: 'assistant' }) => UIMessage) => {
+        if (sendGeneration !== sessionGenerationRef.current) return;
         setUiMessages(prev => prev.map(m =>
           m.id === assistantId && m.role === 'assistant'
             ? updater(m as UIMessage & { role: 'assistant' })
@@ -366,6 +446,7 @@ export function useCodingAssistant(
       // structural events (tool_call, done, etc.) to preserve block ordering.
       const flushBufs = () => {
         rafRef.current = null;
+        if (sendGeneration !== sessionGenerationRef.current) return;
         const txt = textBufRef.current;
         const tht = thoughtBufRef.current;
         textBufRef.current = '';
@@ -403,6 +484,7 @@ export function useCodingAssistant(
         buffer = chunks.pop() ?? '';
 
         for (const chunk of chunks) {
+          if (sendGeneration !== sessionGenerationRef.current) return;
           if (!chunk.trim()) continue;
 
           const lines = chunk.split('\n');
@@ -491,25 +573,17 @@ export function useCodingAssistant(
             flushNow();
             const capturedText = streamingTextRef.current;
             const finalHistory: HistoryMessage[] = [...newHistory, { role: 'assistant', content: capturedText }];
-            updateAssistant(msg => {
-              const completedMsg = { ...msg, isStreaming: false };
-              // Save to disk (fire-and-forget) — read latest uiMessages state via nested setter
-              const ws = workspacePathRef.current;
-              if (ws && capturedText.trim()) {
-                setUiMessages(prev => {
-                  const withCompleted = prev.map(m => m.id === assistantId ? completedMsg : m);
-                  void saveConversation(ws, {
-                    id: conversationIdRef.current,
-                    timestamp: Date.now(),
-                    history: finalHistory,
-                    uiMessages: normalizeForSave(withCompleted),
-                  }).catch(() => {});
-                  return prev; // no state change — reading only
-                });
-              }
-              setHistory(finalHistory);
-              return completedMsg;
-            });
+            updateAssistant(msg => ({ ...msg, isStreaming: false }));
+            setHistory(finalHistory);
+            if (sendWorkspacePath && capturedText.trim()) {
+              pendingSaveRef.current = {
+                workspacePath: sendWorkspacePath,
+                conversationId: sendConversationId,
+                generation: sendGeneration,
+                history: finalHistory,
+              };
+              setConversationSaveRevision(revision => revision + 1);
+            }
             // Notify expansion hook so it can grow/shrink the right panel.
             onAssistantReplyRef.current?.(capturedText, toolUsedInTurnRef.current);
             // Arm the watch — it will start when the user next types in the editor.
@@ -528,6 +602,7 @@ export function useCodingAssistant(
         }
       }
     } catch (err) {
+      if (sendGeneration !== sessionGenerationRef.current) return;
       if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
       const bufferedText = textBufRef.current;
       const bufferedThought = thoughtBufRef.current;
@@ -553,14 +628,22 @@ export function useCodingAssistant(
       }));
     } finally {
       if (abortControllerRef.current === controller) abortControllerRef.current = null;
-      setIsLoading(false);
+      if (sendGeneration === sessionGenerationRef.current) setIsLoading(false);
     }
   }, [history, isLoading, model, provider]);
 
   const clearMessages = useCallback(() => {
+    sessionGenerationRef.current += 1;
     armedReplyRef.current = null;
     abortControllerRef.current?.abort();
     watchControllerRef.current?.abort();
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    pendingSaveRef.current = null;
+    failedSaveRef.current = null;
+    setConversationPersistenceError(null);
+    setCanRetryConversationSave(false);
+    setIsLoading(false);
     setIsWatching(false);
     conversationIdRef.current = uid(); // fresh ID for the next conversation
     setUiMessages([]);
@@ -569,21 +652,59 @@ export function useCodingAssistant(
 
   /** Restore a saved conversation into the chat (replaces current state). */
   const loadConversation = useCallback((record: ConversationRecord) => {
+    sessionGenerationRef.current += 1;
     armedReplyRef.current = null;
     abortControllerRef.current?.abort();
     watchControllerRef.current?.abort();
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    pendingSaveRef.current = null;
+    failedSaveRef.current = null;
+    setConversationPersistenceError(null);
+    setCanRetryConversationSave(false);
+    setIsLoading(false);
     setIsWatching(false);
     conversationIdRef.current = record.id;
     setUiMessages(record.uiMessages);
     setHistory(record.history);
   }, []);
 
+  const retryConversationSave = useCallback(() => {
+    const failed = failedSaveRef.current;
+    if (!failed || failed.generation !== sessionGenerationRef.current) return;
+    setCanRetryConversationSave(false);
+    pendingSaveRef.current = failed;
+    setConversationSaveRevision(revision => revision + 1);
+  }, []);
+
   /** Delete all saved conversations for the current workspace. */
   const clearAllConversations = useCallback(async () => {
     const ws = workspacePathRef.current;
     if (!ws) return;
-    try { await clearConversations(ws); } catch { /* best-effort */ }
+    try {
+      await clearConversations(ws);
+      setConversationPersistenceError(null);
+    } catch (error) {
+      setConversationPersistenceError(error instanceof Error ? error.message : 'Failed to clear conversations');
+      throw error;
+    }
   }, []);
 
-  return { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, clearAllConversations };
+  return {
+    uiMessages,
+    isLoading,
+    isWatching,
+    conversationPersistenceError,
+    canRetryConversationSave,
+    conversationSaveRevision,
+    sendMessage,
+    stopExecution,
+    clearMessages,
+    sendApproval,
+    injectProactiveMessage,
+    notifyEditorActivity,
+    loadConversation,
+    retryConversationSave,
+    clearAllConversations,
+  };
 }

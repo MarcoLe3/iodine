@@ -369,7 +369,7 @@ export function WorkbenchLayout() {
   /** Open a workspace file by absolute path (routes through workspace API, not external). */
   const openWorkspaceFile = useCallback((absolutePath: string) => {
     const name = absolutePath.split(/[/\\]/).pop() ?? absolutePath;
-    openFile({ path: absolutePath, name, type: 'file' });
+    openFile({ path: absolutePath, name, type: 'file', children: null });
   }, [openFile]);
 
   // Check if preview button should be enabled
@@ -452,9 +452,6 @@ export function WorkbenchLayout() {
             activeView={activeView}
             onViewChange={handleViewChange}
             gitChangeCount={gitChangeCount}
-            canPreview={canPreview}
-            previewActive={currentEditorView === 'preview'}
-            onPreview={handlePreview}
           />
 
           <Sidebar
