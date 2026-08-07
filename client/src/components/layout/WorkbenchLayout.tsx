@@ -511,6 +511,7 @@ export function WorkbenchLayout() {
             onSummaryRequest={setSummaryRequestPath}
             previewRequestPath={previewRequestPath}
             onPreviewHandled={() => setPreviewRequestPath(null)}
+            onSummaryOpen={() => rightPanelRef.current?.openSystemView()}
             canGoBack={nav.index > 0}
             canGoForward={nav.index < nav.stack.length - 1}
             onGoBack={goBack}

@@ -50,6 +50,8 @@ interface EditorAreaProps {
   previewRequestPath?: string | null;
   /** Called once the preview request has been consumed. */
   onPreviewHandled?: () => void;
+  /** Called whenever the user opens the AI summary view (generate or view cached). */
+  onSummaryOpen?: () => void;
   /** Whether the navigation stack has a previous entry to go back to. */
   canGoBack?: boolean;
   /** Whether the navigation stack has a forward entry. */
@@ -134,7 +136,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, canGoBack, canGoForward, onGoBack, onGoForward }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, onSummaryOpen, canGoBack, canGoForward, onGoBack, onGoForward }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -469,6 +471,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const handleSwitchToSummary = useCallback(async (skipCache = false) => {
       if (!activeFile || (!workspacePath && !activeFile.isExternal)) return;
       setEditorView('summary');
+      onSummaryOpen?.();
 
       // If we already have content for this session, just show it
       if (summaryContent && !skipCache) return;

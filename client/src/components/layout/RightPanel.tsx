@@ -26,6 +26,8 @@ export interface RightPanelHandle {
   stopPulse: () => void;
   /** Forward an editor keypress to the Coding Assistant to arm the progress watch. */
   notifyEditorActivity: () => void;
+  /** Switch the right panel to the System View tab. */
+  openSystemView: () => void;
 }
 
 interface RightPanelProps {
@@ -117,6 +119,9 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
     },
     notifyEditorActivity: () => {
       codingAssistantRef.current?.notifyEditorActivity();
+    },
+    openSystemView: () => {
+      setActiveTab('system');
     },
   }), [activeTab]);
 
