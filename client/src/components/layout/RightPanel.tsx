@@ -189,7 +189,7 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
         {([
           { id: 'assistant', label: 'Coding Assistant' },
           { id: 'build',     label: 'Build' },
-          { id: 'system',    label: 'System View' },
+          { id: 'system',    label: 'IO Drawing' },
         ] as { id: RightTab; label: string }[]).map(tab => (
           <button
             key={tab.id}
