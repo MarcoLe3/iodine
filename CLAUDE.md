@@ -139,6 +139,8 @@ Relative links in Markdown preview are intercepted so they open the target file 
 
 If the user navigates from **source** view, the link still opens the file in source mode — the auto-preview only triggers when the originating view is preview.
 
+**Inline code path auto-linking:** In both preview and summary views, any inline backtick span whose text matches a relative file path pattern (no spaces, contains `/`, only path-safe characters — e.g. `` `client/src/hooks/useOpenFiles.ts` ``) is automatically rendered as a clickable link with a dotted underline. No special markdown syntax is required in the source; the renderer detects paths at render time. Clicking resolves the path via `resolveWorkspacePath` relative to the current file's directory, then opens or switches to the target tab. Block code fences are unaffected (they carry a `className` and pass through unchanged). The detection is handled by `inlineCodeComponent` (a `useCallback` in `EditorArea`) passed as `code:` to both ReactMarkdown instances (preview and summary).
+
 ## Build Assistant
 
 The **Build** tab in the right panel provides three sections — **Test**, **Build**, and **Build & Run** — each with an editable command field, an AI **Generate** button, and an **Execute** button. A **Save** button at the bottom persists all three commands to disk and reloads them automatically on the next workspace open. An **Open URL** section at the bottom of the scrollable area lets the user open any URL as an iframe tab in the editor.

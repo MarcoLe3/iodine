@@ -384,6 +384,42 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       return abs;
     };
 
+    /**
+     * Inline-code component for ReactMarkdown.
+     * If the text looks like a relative file path (no spaces, contains /, e.g. "client/src/App.tsx")
+     * it renders as a clickable link with dotted underline, opening the file as an editor tab.
+     * Block code (className="language-xxx") is passed through unchanged.
+     */
+    const inlineCodeComponent = useCallback(
+      ({ children, className, ...props }: React.ComponentPropsWithoutRef<'code'>) => {
+        const text = String(children);
+        const isBlock = !!className;
+        // Path heuristic: no spaces, at least one /, only path-safe chars, not a URL
+        const isPath = !isBlock
+          && /^(?:[a-zA-Z0-9_@.\-]+\/)+[a-zA-Z0-9_@.\-]+$/.test(text)
+          && activeFile != null;
+        if (isPath) {
+          const absPath = resolveWorkspacePath(text, activeFile!.path);
+          return (
+            <code
+              {...props}
+              style={{ cursor: 'pointer', textDecorationLine: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px' }}
+              title={`Open ${text}`}
+              onClick={() => {
+                const target = openFiles.find(f => f.path === absPath);
+                if (target) onTabClick(target.path);
+                else onOpenFile?.(absPath);
+              }}
+            >
+              {children}
+            </code>
+          );
+        }
+        return <code {...props} className={className}>{children}</code>;
+      },
+      [activeFile, openFiles, onTabClick, onOpenFile],
+    );
+
     const handleSwitchToSummary = useCallback(async (skipCache = false) => {
       if (!activeFile || (!workspacePath && !activeFile.isExternal)) return;
       setEditorView('summary');
@@ -687,6 +723,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
+                      code: inlineCodeComponent,
                       h1: ({ children, ...p }) => <h1 id={makeHeadingId(children)} {...p}>{children}</h1>,
                       h2: ({ children, ...p }) => <h2 id={makeHeadingId(children)} {...p}>{children}</h2>,
                       h3: ({ children, ...p }) => <h3 id={makeHeadingId(children)} {...p}>{children}</h3>,
@@ -749,6 +786,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                         };
                         return <a href={href} onClick={handleClick} {...props}>{children}</a>;
                       },
+                      code: inlineCodeComponent,
                       img({ src, alt, ...props }) {
                         const resolvedSrc = resolveImageSrc(src ?? '', activeFile.path);
                         return <img src={resolvedSrc} alt={alt ?? ''} {...props} style={{ maxWidth: '100%' }} />;
