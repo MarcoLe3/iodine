@@ -1,4 +1,4 @@
-import { useState, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { useState, useRef, useImperativeHandle, forwardRef, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { CodingAssistant } from '../right/CodingAssistant';
 import type { CodingAssistantHandle } from '../right/CodingAssistant';
@@ -60,6 +60,12 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const systemViewRef        = useRef<SystemViewHandle>(null);
   const codingAssistantRef   = useRef<CodingAssistantHandle>(null);
+
+  useEffect(() => {
+    if (activeTab === 'assistant') {
+      codingAssistantRef.current?.focus();
+    }
+  }, [activeTab]);
 
   const handleOpenNode = useCallback((_nodeName: string, _nodeId?: string) => {
     // flushSync commits the tab switch synchronously so the SVG has real
