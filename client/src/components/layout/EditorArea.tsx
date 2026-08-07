@@ -40,6 +40,14 @@ interface EditorAreaProps {
   onSummaryContentChange?: (content: string) => void;
   /** Called as the user scrolls preview/summary, reporting the heading currently at the top. */
   onActiveHeadingChange?: (id: string | null) => void;
+  /** Called when a relative markdown link points to a file not yet open — should open it as a tab. */
+  onOpenFile?: (path: string) => void;
+  /** Called when a markdown link navigates to another .md file — parent should set previewRequestPath. */
+  onPreviewRequest?: (path: string) => void;
+  /** When set to a file path, switches that file to preview once it becomes active. */
+  previewRequestPath?: string | null;
+  /** Called once the preview request has been consumed. */
+  onPreviewHandled?: () => void;
 }
 
 export interface EditorAreaHandle {
@@ -75,18 +83,31 @@ function makeHeadingId(children: React.ReactNode): string {
   return slugify(extract(children));
 }
 
+/** Resolve a relative markdown link path against the active file's directory.
+ *  Normalises backslashes to forward slashes first so Windows paths work. */
+function resolveWorkspacePath(relativePath: string, activeFilePath: string): string {
+  // Normalise to forward slashes for uniform processing.
+  const normActive = activeFilePath.replace(/\\/g, '/');
+  const normRel    = relativePath.replace(/\\/g, '/');
+  const dir = normActive.substring(0, normActive.lastIndexOf('/'));
+  const parts = `${dir}/${normRel}`.split('/');
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (!part || part === '.') continue;
+    if (part === '..') resolved.pop();
+    else resolved.push(part);
+  }
+  // Re-attach the root prefix ('/' on Unix, 'C:/' on Windows).
+  const root = normActive.match(/^([A-Za-z]:[/\\]|\/)/)?.[0] ?? '';
+  const sep = root.endsWith('/') ? '' : '/';
+  return root + sep + resolved.join('/');
+}
+
 /** Resolve a potentially relative image src to an API URL that the server can serve. */
 function resolveImageSrc(src: string, activeFilePath: string | null): string {
   if (/^https?:\/\//.test(src) || src.startsWith('data:')) return src;
   if (!activeFilePath) return src;
-  const dir = activeFilePath.substring(0, activeFilePath.lastIndexOf('/'));
-  const parts = `${dir}/${src}`.split('/');
-  const resolved: string[] = [];
-  for (const part of parts) {
-    if (part === '..') resolved.pop();
-    else if (part !== '.') resolved.push(part);
-  }
-  return `http://localhost:3001/api/files/image?path=${encodeURIComponent(resolved.join('/'))}`;
+  return `http://localhost:3001/api/files/image?path=${encodeURIComponent(resolveWorkspacePath(src, activeFilePath))}`;
 }
 
 const btnStyle: React.CSSProperties = {
@@ -103,7 +124,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -176,6 +197,16 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       onSummaryHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [summaryRequestPath, activeFile?.path]);
+
+    // Honor an external request to show the preview for the active file (e.g. markdown wiki navigation).
+    // Runs after the file-switch reset effect so it reliably overrides 'source'.
+    useEffect(() => {
+      if (!previewRequestPath || !activeFile) return;
+      if (activeFile.path !== previewRequestPath) return;
+      if (isPreviewable(activeFile.path)) setEditorView('preview');
+      onPreviewHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [previewRequestPath, activeFile?.path]);
 
     /** Apply a stored navigation request to the given Monaco editor instance. */
     const applyNavigation = useCallback((editor: MonacoEditorAPI.IStandaloneCodeEditor, line: number, endLine: number, startCol?: number, endCol?: number) => {
@@ -510,21 +541,22 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               fontSize: 12,
               fontFamily: "'Cascadia Code', 'Fira Code', Menlo, monospace",
             }}>
-              {segments.map((seg, i) => (
-                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                  {i > 0 && (
-                    <span style={{ color: 'var(--color-text-secondary)', opacity: 0.4, userSelect: 'none' }}>›</span>
-                  )}
-                  <span style={{
-                    color: i === segments.length - 1
-                      ? 'var(--color-text-primary)'
-                      : 'var(--color-text-secondary)',
-                    fontWeight: i === segments.length - 1 ? 500 : 400,
-                  }}>
-                    {seg}
+              {segments.map((seg, i) => {
+                const isLast = i === segments.length - 1;
+                return (
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    {i > 0 && (
+                      <span style={{ color: 'var(--color-text-secondary)', opacity: 0.4, userSelect: 'none' }}>›</span>
+                    )}
+                    <span style={{
+                      color: isLast ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                      fontWeight: isLast ? 500 : 400,
+                    }}>
+                      {seg}
+                    </span>
                   </span>
-                </span>
-              ))}
+                );
+              })}
             </div>
           );
         })()}
@@ -686,6 +718,37 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
+                      a({ href, children, ...props }) {
+                        const target = href ?? '';
+                        const isHash = target.startsWith('#');
+                        const isExternal = /^(https?:|mailto:)/i.test(target);
+                        const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+                          if (isExternal) {
+                            event.preventDefault();
+                            window.open(target, '_blank', 'noopener,noreferrer');
+                            return;
+                          }
+                          if (isHash || !activeFile.path) return;
+                          event.preventDefault();
+                          const [pathPart, hash] = target.split('#', 2);
+                          const absPath = resolveWorkspacePath(pathPart, activeFile.path);
+                          const targetFile = openFiles.find(f => f.path === absPath);
+                          const wikiPreview = editorView === 'preview' && /\.(md|markdown)$/i.test(absPath);
+                          if (targetFile) {
+                            onTabClick(targetFile.path);
+                          } else {
+                            onOpenFile?.(absPath);
+                          }
+                          if (wikiPreview) onPreviewRequest?.(absPath);
+                          if (hash) {
+                            window.setTimeout(() => {
+                              const heading = document.getElementById(hash);
+                              heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }, 0);
+                          }
+                        };
+                        return <a href={href} onClick={handleClick} {...props}>{children}</a>;
+                      },
                       img({ src, alt, ...props }) {
                         const resolvedSrc = resolveImageSrc(src ?? '', activeFile.path);
                         return <img src={resolvedSrc} alt={alt ?? ''} {...props} style={{ maxWidth: '100%' }} />;

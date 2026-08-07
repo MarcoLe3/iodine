@@ -74,6 +74,8 @@ export function WorkbenchLayout() {
 
   // When set, the EditorArea should switch to the AI summary view for this file path.
   const [summaryRequestPath, setSummaryRequestPath] = useState<string | null>(null);
+  // When set, the EditorArea should switch to preview for this file path (wiki-style md navigation).
+  const [previewRequestPath, setPreviewRequestPath] = useState<string | null>(null);
 
   // Custom confirm dialog for workspace switching (replaces window.confirm)
   const [workspaceConfirm, setWorkspaceConfirm] = useState<{
@@ -460,6 +462,10 @@ export function WorkbenchLayout() {
             model={model}
             summaryRequestPath={summaryRequestPath}
             onSummaryHandled={() => setSummaryRequestPath(null)}
+            onOpenFile={(path) => openFile({ path, name: path.split(/[/\\]/).pop() ?? path, type: 'file', children: null })}
+            onPreviewRequest={setPreviewRequestPath}
+            previewRequestPath={previewRequestPath}
+            onPreviewHandled={() => setPreviewRequestPath(null)}
           />
 
           <ResizeDivider
