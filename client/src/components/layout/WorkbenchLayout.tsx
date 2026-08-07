@@ -76,6 +76,9 @@ export function WorkbenchLayout() {
   const [summaryRequestPath, setSummaryRequestPath] = useState<string | null>(null);
   // When set, the EditorArea should switch to preview for this file path (wiki-style md navigation).
   const [previewRequestPath, setPreviewRequestPath] = useState<string | null>(null);
+  // Back/forward navigation stack (up to 20 entries).
+  const [nav, setNav] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
+  const navBypassRef = useRef(false);
 
   // Custom confirm dialog for workspace switching (replaces window.confirm)
   const [workspaceConfirm, setWorkspaceConfirm] = useState<{
@@ -94,6 +97,15 @@ export function WorkbenchLayout() {
     const p = PROVIDERS.find(p => p.id === id) ?? DEFAULT_PROVIDER;
     setProviderState(p);
     setModel(p.models[0].id);
+  }, []);
+
+  const pushNav = useCallback((path: string) => {
+    setNav(prev => {
+      const truncated = prev.stack.slice(0, prev.index + 1);
+      if (truncated[truncated.length - 1] === path) return prev;
+      const newStack = [...truncated, path].slice(-20);
+      return { stack: newStack, index: newStack.length - 1 };
+    });
   }, []);
 
   // Git status for badge
@@ -136,6 +148,30 @@ export function WorkbenchLayout() {
 
   useFileWatcher(workspacePath, refreshFile);
 
+  const goBack = useCallback(() => {
+    if (nav.index <= 0) return;
+    const newIndex = nav.index - 1;
+    const targetPath = nav.stack[newIndex];
+    if (targetPath === activeFilePath) { setNav(prev => ({ ...prev, index: newIndex })); return; }
+    navBypassRef.current = true;
+    setNav(prev => ({ ...prev, index: newIndex }));
+    const existing = openFiles.find(f => f.path === targetPath);
+    if (existing) setActiveFilePath(targetPath);
+    else openFile({ path: targetPath, name: targetPath.split(/[/\\]/).pop() ?? targetPath, type: 'file', children: null });
+  }, [nav, activeFilePath, openFiles, setActiveFilePath, openFile]);
+
+  const goForward = useCallback(() => {
+    if (nav.index >= nav.stack.length - 1) return;
+    const newIndex = nav.index + 1;
+    const targetPath = nav.stack[newIndex];
+    if (targetPath === activeFilePath) { setNav(prev => ({ ...prev, index: newIndex })); return; }
+    navBypassRef.current = true;
+    setNav(prev => ({ ...prev, index: newIndex }));
+    const existing = openFiles.find(f => f.path === targetPath);
+    if (existing) setActiveFilePath(targetPath);
+    else openFile({ path: targetPath, name: targetPath.split(/[/\\]/).pop() ?? targetPath, type: 'file', children: null });
+  }, [nav, activeFilePath, openFiles, setActiveFilePath, openFile]);
+
   // ── Proactive help ───────────────────────────────────────────────────────────
   const actionCountRef = useRef(0);
   const recordAction = useCallback(() => { actionCountRef.current++; }, []);
@@ -173,6 +209,14 @@ export function WorkbenchLayout() {
     setActiveHeadingId(null);
     setSummaryOutlineContent('');
   }, [activeFilePath, recordAction]);
+
+  // Push each user-initiated file navigation onto the back/forward stack.
+  // Back/forward navigations set navBypassRef to skip this push.
+  useEffect(() => {
+    if (!activeFilePath) return;
+    if (navBypassRef.current) { navBypassRef.current = false; return; }
+    pushNav(activeFilePath);
+  }, [activeFilePath, pushNav]);
 
   /** Open a URL as an iframe tab in the editor area. */
   const handleOpenUrl = useCallback((url: string) => {
@@ -467,6 +511,10 @@ export function WorkbenchLayout() {
             onSummaryRequest={setSummaryRequestPath}
             previewRequestPath={previewRequestPath}
             onPreviewHandled={() => setPreviewRequestPath(null)}
+            canGoBack={nav.index > 0}
+            canGoForward={nav.index < nav.stack.length - 1}
+            onGoBack={goBack}
+            onGoForward={goForward}
           />
 
           <ResizeDivider

@@ -142,6 +142,26 @@ If the user navigates from **source** view, `wikiNavigate` is not called — lin
 
 **Inline code path auto-linking:** In both preview and summary views, any inline backtick span whose text matches a relative file path pattern (no spaces, contains `/`, only path-safe characters — e.g. `` `client/src/hooks/useOpenFiles.ts` ``) is automatically rendered as a clickable link with a dotted underline. No special markdown syntax is required in the source; the renderer detects paths at render time. Clicking calls `wikiNavigate` (same as explicit link navigation — prefers cached summary, falls back to preview for `.md`). Block code fences are unaffected (they carry a `className` and pass through unchanged). The detection is handled by `inlineCodeComponent` (a `useCallback` in `EditorArea`) passed as `code:` to both ReactMarkdown instances (preview and summary).
 
+## Editor View Persistence & Back/Forward Navigation
+
+The editor remembers which view (source / preview / summary) the user last used for each file, and restores it when they return to that file. A `←` / `→` pill pair in the breadcrumb bar lets users navigate backward and forward through their file-visit history (up to 20 entries).
+
+| File | Role |
+|------|------|
+| `client/src/components/layout/EditorArea.tsx` | `viewByPathRef` (`useRef<Map<string, EditorView>>`) stores the last view per file path. A save effect (`[editorView, activeFile?.path]`) writes the current view on every change. The file-switch effect reads `viewByPathRef` on every tab change and restores the saved view; `'conflicts'` is never restored (always falls back to `'source'`); `'preview'` is only restored for previewable files (`.md`, `.html`). Props `canGoBack`, `canGoForward`, `onGoBack`, `onGoForward` are wired from WorkbenchLayout. The breadcrumb bar is split into a scrollable segment div (left, `flex: 1`) and a fixed pill group (right); active pills render with an accent border, accent background tint, bold weight, and full opacity; inactive pills are dimmed. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | `nav: { stack: string[], index: number }` state holds the history (capped at 20). `pushNav` truncates any forward history then appends the new path (no-op if the path equals the current head). `navBypassRef` (a `useRef<boolean>`) is set to `true` before a programmatic back/forward navigation so the push effect skips it. A `useEffect([activeFilePath])` pushes each user-initiated tab switch; it clears `navBypassRef` if it was set (back/forward case) or calls `pushNav` (normal case). `goBack` / `goForward` set the bypass ref, update the index, then call `setActiveFilePath` (file already open) or `openFile` (file was closed). |
+
+**Back/forward bypass pattern:**
+```
+goBack() called
+  → navBypassRef.current = true
+  → setNav({ index: newIndex })
+  → setActiveFilePath(targetPath)   ← triggers re-render + effect
+useEffect([activeFilePath]) fires
+  → navBypassRef.current is true → reset to false, skip pushNav
+```
+This guarantees that navigating back/forward never adds a new entry to the stack.
+
 ## Build Assistant
 
 The **Build** tab in the right panel provides three sections — **Test**, **Build**, and **Build & Run** — each with an editable command field, an AI **Generate** button, and an **Execute** button. A **Save** button at the bottom persists all three commands to disk and reloads them automatically on the next workspace open. An **Open URL** section at the bottom of the scrollable area lets the user open any URL as an iframe tab in the editor.

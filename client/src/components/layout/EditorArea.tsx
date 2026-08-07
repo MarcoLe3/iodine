@@ -50,6 +50,14 @@ interface EditorAreaProps {
   previewRequestPath?: string | null;
   /** Called once the preview request has been consumed. */
   onPreviewHandled?: () => void;
+  /** Whether the navigation stack has a previous entry to go back to. */
+  canGoBack?: boolean;
+  /** Whether the navigation stack has a forward entry. */
+  canGoForward?: boolean;
+  /** Navigate back in the file history stack. */
+  onGoBack?: () => void;
+  /** Navigate forward in the file history stack. */
+  onGoForward?: () => void;
 }
 
 export interface EditorAreaHandle {
@@ -126,7 +134,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, canGoBack, canGoForward, onGoBack, onGoForward }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -151,10 +159,20 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     // Stored in a ref so it can be applied when the Monaco editor mounts for the target file.
     const pendingNavigationRef = useRef<{ filePath: string; line: number; endLine: number; startCol?: number; endCol?: number } | null>(null);
     const decorationIdsRef = useRef<string[]>([]);
+    // Remembers the last editor view per file path so navigating back restores it.
+    const viewByPathRef = useRef<Map<string, EditorView>>(new Map());
 
-    // Reset view & summary when switching files; directories go straight to summary view
+    // Reset view & summary when switching files.
+    // Restores the last view the user was in for this file (unless it was 'conflicts').
+    // Directories always go straight to summary view.
     useEffect(() => {
-      const view: EditorView = activeFile?.isDirectory ? 'summary' : 'source';
+      const saved = activeFile?.path ? viewByPathRef.current.get(activeFile.path) : undefined;
+      const view: EditorView = (() => {
+        if (activeFile?.isDirectory) return 'summary';
+        if (!saved || saved === 'conflicts') return 'source';
+        if (saved === 'preview' && !isPreviewable(activeFile?.path ?? '')) return 'source';
+        return saved;
+      })();
       setEditorView(view);
       setSummaryContent('');
       setSummaryError(null);
@@ -163,6 +181,11 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       scrollPercentageRef.current = 0;
       previousViewRef.current = view;
     }, [activeFile?.path]);
+
+    // Persist the current view per file so navigating back restores it.
+    useEffect(() => {
+      if (activeFile?.path) viewByPathRef.current.set(activeFile.path, editorView);
+    }, [editorView, activeFile?.path]);
 
     // Probe cache whenever the active file/dir changes so the button label is accurate
     // PDFs and images are excluded from AI summary
@@ -587,35 +610,76 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              padding: '0 12px',
               height: 24,
               flexShrink: 0,
               background: 'var(--color-bg-editor)',
               borderBottom: '1px solid var(--color-border)',
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              scrollbarWidth: 'none',
-              whiteSpace: 'nowrap',
-              gap: 4,
-              fontSize: 12,
-              fontFamily: "'Cascadia Code', 'Fira Code', Menlo, monospace",
             }}>
-              {segments.map((seg, i) => {
-                const isLast = i === segments.length - 1;
-                return (
-                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    {i > 0 && (
-                      <span style={{ color: 'var(--color-text-secondary)', opacity: 0.4, userSelect: 'none' }}>›</span>
-                    )}
-                    <span style={{
-                      color: isLast ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                      fontWeight: isLast ? 500 : 400,
-                    }}>
-                      {seg}
+              {/* Scrollable path segments */}
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0 8px 0 12px',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                scrollbarWidth: 'none',
+                whiteSpace: 'nowrap',
+                gap: 4,
+                fontSize: 12,
+                fontFamily: "'Cascadia Code', 'Fira Code', Menlo, monospace",
+                minWidth: 0,
+              }}>
+                {segments.map((seg, i) => {
+                  const isLast = i === segments.length - 1;
+                  return (
+                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      {i > 0 && (
+                        <span style={{ color: 'var(--color-text-secondary)', opacity: 0.4, userSelect: 'none' }}>›</span>
+                      )}
+                      <span style={{
+                        color: isLast ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                        fontWeight: isLast ? 500 : 400,
+                      }}>
+                        {seg}
+                      </span>
                     </span>
-                  </span>
-                );
-              })}
+                  );
+                })}
+              </div>
+              {/* Back / forward navigation pills */}
+              <div style={{ display: 'flex', gap: 3, paddingRight: 8, flexShrink: 0 }}>
+                {([
+                  { dir: 'back', label: '←', title: 'Go back', enabled: !!canGoBack, handler: onGoBack },
+                  { dir: 'fwd',  label: '→', title: 'Go forward', enabled: !!canGoForward, handler: onGoForward },
+                ] as const).map(({ dir, label, title, enabled, handler }) => (
+                  <button
+                    key={dir}
+                    disabled={!enabled}
+                    onClick={handler}
+                    title={title}
+                    style={{
+                      background: enabled ? 'var(--color-accent, #0e639c)22' : 'none',
+                      border: `1px solid ${enabled ? 'var(--color-accent, #0e639c)' : 'var(--color-border)'}`,
+                      borderRadius: 10,
+                      color: enabled ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                      opacity: enabled ? 1 : 0.28,
+                      cursor: enabled ? 'pointer' : 'default',
+                      fontSize: 12,
+                      fontWeight: enabled ? 700 : 400,
+                      padding: '0 9px',
+                      height: 17,
+                      lineHeight: '15px',
+                      userSelect: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           );
         })()}
