@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
+import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react';
 import type { editor as MonacoEditorAPI } from 'monaco-editor';
 import type { Monaco } from '@monaco-editor/react';
 import type { OpenFile } from '../../types';
@@ -100,6 +100,54 @@ function revertHunk(editor: MonacoEditorAPI.IStandaloneCodeEditor, hunk: DiffHun
     text,
   }]);
 }
+
+// ── Monaco language configuration ─────────────────────────────────────────────
+
+/**
+ * Configures Monaco's TypeScript/JavaScript language service before any editor
+ * instance is created. Runs once (Monaco's global state is shared across all
+ * instances). Key settings:
+ *   - jsx: ReactJSX  → enables JSX/TSX syntax so angle-bracket elements are
+ *                       not flagged as errors in .tsx files.
+ *   - noSemanticValidation: true  → suppresses false-positive "cannot find
+ *       module" / "cannot find name" errors that arise because Monaco has no
+ *       access to the workspace's node_modules. Syntax errors are still shown.
+ */
+const configureMonacoLanguages: BeforeMount = (monaco: Monaco) => {
+  const compilerOptions: Monaco['languages']['typescript']['CompilerOptions'] = {
+    target: monaco.languages.typescript.ScriptTarget.ESNext,
+    module: monaco.languages.typescript.ModuleKind.ESNext,
+    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    allowNonTsExtensions: true,
+    allowJs: true,
+    allowSyntheticDefaultImports: true,
+    esModuleInterop: true,
+    noEmit: true,
+    jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+  };
+
+  const diagnosticsOptions = {
+    noSemanticValidation: false,
+    noSyntaxValidation: false,
+    // Suppress only the two codes that fire because Monaco has no access to
+    // the workspace's node_modules. All other semantic errors stay visible.
+    diagnosticCodesToIgnore: [
+      2307, // Cannot find module 'X' or its corresponding type declarations
+      7016, // Could not find a declaration file for module 'X'
+      8006, // 'type' aliases can only be used in TypeScript files
+      8009, // 'interface' declarations can only be used in TypeScript files
+      8010, // Type annotations can only be used in TypeScript files
+      8013, // Non-null assertions can only be used in TypeScript files
+      8016, // Type assertion expressions can only be used in TypeScript files
+    ],
+  };
+
+  monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
+  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions);
+
+  monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
+  monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions);
+};
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -232,6 +280,7 @@ export function MonacoEditor({ file, onContentChange, diffData, onEditorMount, o
         language={file.language}
         value={file.content}
         onChange={value => onContentChange(file.path, value ?? '')}
+        beforeMount={configureMonacoLanguages}
         onMount={handleMount}
         options={{
           fontSize: 14,
