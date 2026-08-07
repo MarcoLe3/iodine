@@ -70,7 +70,7 @@ export function OutlinePanel({ content, activeHeadingId, onNavigate }: OutlinePa
         borderBottom: '1px solid var(--color-border)',
         opacity: 0.6,
       }}>
-        Document Outline
+        IOPEDIA
       </div>
 
       {/* Content */}
