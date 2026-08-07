@@ -33,6 +33,7 @@ export function EditorTabs({ openFiles, activeFilePath, onTabClick, onTabClose, 
     <div
       ref={containerRef}
       onWheel={handleWheel}
+      className="editor-tabs-scrollbar"
       style={{
         display: 'flex',
         height: 'var(--tab-height)',
@@ -41,7 +42,8 @@ export function EditorTabs({ openFiles, activeFilePath, onTabClick, onTabClose, 
         overflowX: 'auto',
         overflowY: 'hidden',
         flexShrink: 0,
-        scrollbarWidth: 'thin',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
       }}
     >
       {openFiles.map((file, index) => {

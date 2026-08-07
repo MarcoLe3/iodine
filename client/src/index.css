@@ -136,6 +136,9 @@ input {
   background: var(--color-scrollbar-hover);
 }
 
+/* Hide the editor tab carousel scrollbar while preserving horizontal scrolling. */
+.editor-tabs-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Git diff gutter decorations */
 .git-added-line   { background: rgba(46, 160, 67, 0.12) !important; }
 .git-modified-line { background: rgba(233, 180, 76, 0.12) !important; }
