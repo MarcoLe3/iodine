@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class RoutingRequest(BaseModel):
     prompt: str = Field(..., description="User prompt")
-    models: list[str] = Field(..., min_length=2, description="User models")
+    models: list[str] = Field(..., min_length=2, description="User models from same provider")
     threshold: float = Field(default=0.11593, description="threshold for cost/quality")
 
 
@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Route model API", lifespan= lifespan)
 
+# TODO: create a check if the models are from the same provider
 @app.post("/route")
 def get_routing_decision(body: RoutingRequest) -> dict:
     try:
@@ -31,6 +32,7 @@ def get_routing_decision(body: RoutingRequest) -> dict:
 
         win_rate = float(router.calculate_strong_win_rate(body.prompt))
 
+        # TODO: latest model and least recently used model might not be the best choice ( should explore different options from same provider )
         if win_rate >= body.threshold:
             selected_model = body.models[-1]
         else:
