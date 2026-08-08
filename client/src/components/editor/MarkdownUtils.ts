@@ -1,7 +1,7 @@
 import React from 'react';
 
 export function slugify(text: string): string {
-  return text.toLowerCase().replace(/[*_`~[\\]()!]/g, '').replace(/[^\\w\\s-]/g, '').replace(/\\s+/g, '-').replace(/-+/g, '-').trim();
+  return text.toLowerCase().replace(/[*_`~[\]()!]/g, '').replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
 }
 
 export function makeHeadingId(children: React.ReactNode): string {
@@ -31,7 +31,7 @@ export function resolveWorkspacePath(relativePath: string, activeFilePath: strin
 }
 
 export function resolveImageSrc(src: string, activeFilePath: string | null): string {
-  if (/^https?:\\/\\//.test(src) || src.startsWith('data:')) return src;
+  if (/^https?:\/\//.test(src) || src.startsWith('data:')) return src;
   if (!activeFilePath) return src;
   return `http://localhost:3001/api/files/image?path=${encodeURIComponent(resolveWorkspacePath(src, activeFilePath))}`;
 }
