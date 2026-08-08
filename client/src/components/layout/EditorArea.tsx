@@ -2,7 +2,7 @@ import React, { forwardRef, useImperativeHandle, useState, useEffect, useCallbac
 import type { editor as MonacoEditorAPI } from 'monaco-editor';
 import { MarkdownRenderer } from '../editor/MarkdownRenderer';
 import { useSummary } from '../../hooks/useSummary';
-import { resolveWorkspacePath } from '../editor/markdownUtils';
+import { resolveWorkspacePath } from '../editor/MarkdownUtils';
 import { EditorTabs } from '../editor/EditorTabs';
 import { MonacoEditor } from '../editor/MonacoEditor';
 import { WelcomeScreen } from '../editor/WelcomeScreen';
@@ -74,7 +74,7 @@ function isPreviewable(path: string) {
   return path.endsWith('.md') || path.endsWith('.html');
 }
 
-/* Markdown path and heading helpers live in editor/markdownUtils.ts. */
+/* Markdown path and heading helpers live in editor/MarkdownUtils.ts. */
 
 const btnStyle: React.CSSProperties = {
   padding: '6px 14px',
