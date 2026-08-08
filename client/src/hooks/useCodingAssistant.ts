@@ -152,6 +152,11 @@ export function useCodingAssistant(
         setCanRetryConversationSave(true);
         setConversationPersistenceError(error instanceof Error ? error.message : 'Failed to save conversation');
       });
+  // uiMessages is listed so the effect reads committed state: the done handler
+  // calls setUiMessages and setConversationSaveRevision in the same React batch,
+  // so when this effect fires the completed message is already in uiMessages.
+  // Runs during streaming are no-ops — pendingSaveRef is null until the reply
+  // finishes, so the null guard at the top exits immediately every time.
   }, [conversationSaveRevision, uiMessages]);
 
   const injectProactiveMessage = useCallback((message: string, collectContext: () => Promise<string>) => {
@@ -369,7 +374,7 @@ export function useCodingAssistant(
 
   // ── sendMessage ───────────────────────────────────────────────────────────────
 
-  const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[], tutorMode?: boolean) => {
+  const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[], tutorMode?: boolean, fresh?: boolean) => {
     if (!text.trim() || isLoading) return;
 
     const sendWorkspacePath = workspacePathRef.current;
@@ -408,11 +413,11 @@ export function useCodingAssistant(
     if (editorContext) {
       apiContent += `\n\n---\n**User Visual Context** (currently visible in editor):\n\`\`\`\n${editorContext}\n\`\`\``;
     }
-    const newHistory: HistoryMessage[] = [...history, { role: 'user', content: apiContent }];
+    const newHistory: HistoryMessage[] = [...(fresh ? [] : history), { role: 'user', content: apiContent }];
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    setUiMessages(prev => [...prev, userMsg, assistantMsg]);
+    setUiMessages(fresh ? [userMsg, assistantMsg] : (prev => [...prev, userMsg, assistantMsg]));
     setHistory(newHistory);
     setIsLoading(true);
 
