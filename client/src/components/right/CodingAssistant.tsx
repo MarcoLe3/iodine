@@ -84,39 +84,49 @@ export interface CodingAssistantHandle {
 interface CodingAssistantProps { workspacePath: string | null; activeFilePath: string | null; onWorkspaceOpen: (path: string) => void; provider: Provider; model: string; setProvider: (id: string) => void; setModel: (id: string) => void; getEditorContext?: () => string | null; contextNodes: FileNode[]; onRemoveContextNode: (path: string) => void; onClearContextNodes: () => void; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void; onOpenNode?: (nodeName: string, nodeId?: string) => void; activeSystemNode?: string | null; onUserTyping?: () => void; onMessageSent?: () => void; onWatchTrigger?: () => void; onAssistantReply?: (text: string, hadToolUse: boolean) => void; }
 
 export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onWatchTrigger, onAssistantReply }, ref) {
-  const { uiMessages, isLoading, isWatching, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply);
+  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({ injectProactiveMessage, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, notifyEditorActivity]);
   const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(false); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
   const [pastConversations, setPastConversations] = useState<ConversationRecord[]>([]);
   const [showConversations, setShowConversations] = useState(false);
+  const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
   const prevIsLoadingRef = useRef(false);
-  const refreshConversations = (ws: string) => fetchConversations(ws).then(setPastConversations).catch(() => {});
-  useEffect(() => {
-    if (prevIsLoadingRef.current && !isLoading) {
-      textareaRef.current?.focus();
-      if (workspacePath) refreshConversations(workspacePath);
+  const refreshConversations = async (ws: string) => {
+    try {
+      setPastConversations(await fetchConversations(ws));
+      setConversationLoadError(null);
+    } catch (error) {
+      setConversationLoadError(error instanceof Error ? error.message : 'Failed to load conversations');
     }
+  };
+  useEffect(() => {
+    if (prevIsLoadingRef.current && !isLoading) textareaRef.current?.focus();
     prevIsLoadingRef.current = isLoading;
-  }, [isLoading, workspacePath]);
+  }, [isLoading]);
   // Fetch past conversations on mount and whenever the workspace changes
   useEffect(() => {
-    if (!workspacePath) { setPastConversations([]); return; }
+    if (!workspacePath) { setPastConversations([]); setConversationLoadError(null); return; }
+    setConversationLoadError(null);
     refreshConversations(workspacePath);
   }, [workspacePath]);
-  // Refresh list when chat is cleared (returns to empty state)
+  // Refresh only after persistence succeeds, so a fast response cannot race
+  // the list request ahead of the save.
   useEffect(() => {
-    if (uiMessages.length === 0 && workspacePath) refreshConversations(workspacePath);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uiMessages.length === 0, workspacePath]);
+    if (workspacePath && conversationSaveRevision > 0) refreshConversations(workspacePath);
+  }, [workspacePath, conversationSaveRevision]);
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
   const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; setInput(''); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode); onMessageSent?.(); };
   const handleClearAll = async () => {
-    await clearAllConversations();
-    setPastConversations([]);
-    setShowConversations(false);
+    try {
+      await clearAllConversations();
+      setPastConversations([]);
+      setShowConversations(false);
+    } catch {
+      // The hook exposes the persistence error without discarding the list.
+    }
   };
   const handleLoadConversation = (conv: ConversationRecord) => {
     loadConversation(conv);
@@ -136,6 +146,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       {apiConfigured === false && <div style={{ margin: '8px 8px 0', padding: '8px 10px', background: '#f487710a', border: '1px solid #f4877140', borderRadius: 4, fontSize: 12, color: '#f48771', flexShrink: 0 }}>No {provider.label} API key configured. Click <strong>?</strong> above for setup instructions.</div>}
       {apiConfigured === true && !workspacePath && <div style={{ margin: '8px 8px 0', padding: '8px 10px', background: '#e7c5470a', border: '1px solid #e7c54740', borderRadius: 4, fontSize: 12, color: '#e7c547', flexShrink: 0 }}><div style={{ marginBottom: 6 }}>No workspace set. Enter an absolute path so the assistant can read and write files.</div><div style={{ display: 'flex', gap: 6 }}><input type="text" value={wsInput} onChange={e => setWsInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSetWorkspace(); }} placeholder="/absolute/path/to/project" style={{ flex: 1, background: 'var(--color-bg-input)', border: '1px solid #e7c54760', borderRadius: 6, color: 'var(--color-text-primary)', padding: '4px 8px', fontSize: 12, outline: 'none' }} /><button onClick={handleSetWorkspace} disabled={wsOpening || !wsInput.trim()} style={{ background: '#e7c547', color: '#1e1e1e', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: wsOpening || !wsInput.trim() ? 'default' : 'pointer', opacity: wsOpening || !wsInput.trim() ? .6 : 1 }}>{wsOpening ? '…' : 'Open'}</button></div>{wsError && <div style={{ marginTop: 4, color: '#f48771', fontSize: 11 }}>{wsError}</div>}</div>}
       {workspacePath && <div style={{ margin: '6px 8px 0', padding: '4px 8px', background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-secondary)', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={workspacePath}>{workspacePath}</div>}
+      {conversationLoadError && <div role="alert" style={{ margin: '6px 8px 0', padding: '6px 8px', background: '#f4877112', border: '1px solid #f4877160', borderRadius: 6, color: '#f48771', fontSize: 11, flexShrink: 0 }}>Conversation history could not be loaded.</div>}
+      {conversationPersistenceError && <div role="alert" style={{ margin: '6px 8px 0', padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 8, background: '#f4877112', border: '1px solid #f4877160', borderRadius: 6, color: '#f48771', fontSize: 11, flexShrink: 0 }}><span style={{ flex: 1 }}>Conversation history could not be saved or cleared.</span>{canRetryConversationSave && <button onClick={retryConversationSave} style={{ background: 'none', border: '1px solid #f4877180', borderRadius: 999, color: '#f48771', cursor: 'pointer', fontSize: 10, padding: '2px 7px' }}>Retry</button>}</div>}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: showConversations || uiMessages.length === 0 ? '0' : '12px 10px' }}>
         {showConversations || (uiMessages.length === 0 && pastConversations.length > 0) ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
