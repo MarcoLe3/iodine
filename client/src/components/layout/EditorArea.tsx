@@ -1,6 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useState, useEffect, useCallback, useRef } from 'react';
 import type { editor as MonacoEditorAPI } from 'monaco-editor';
 import { MarkdownRenderer } from '../editor/MarkdownRenderer';
+import { useSummary } from '../../hooks/useSummary';
 import { resolveWorkspacePath } from '../editor/markdownUtils';
 import { EditorTabs } from '../editor/EditorTabs';
 import { MonacoEditor } from '../editor/MonacoEditor';
@@ -104,13 +105,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     // so the outline doesn't jerk through intermediate positions during smooth scroll.
     const suppressTrackingUntilRef = useRef(0);
 
-    const [editorView,       setEditorView]       = useState<EditorView>('source');
-    const [summaryContent,   setSummaryContent]   = useState('');
-    const [summaryLoading,   setSummaryLoading]   = useState(false);
-    const [summaryError,     setSummaryError]     = useState<string | null>(null);
-    const [hasCachedSummary,     setHasCachedSummary]     = useState(false);
-    const [cachedSummaryObsolete, setCachedSummaryObsolete] = useState(false);
-    const [summaryObsolete,      setSummaryObsolete]      = useState(false);
+    const [editorView, setEditorView] = useState<EditorView>('source');
 
     // Pending navigation request: open a file at a line and highlight a range.
     // Stored in a ref so it can be applied when the Monaco editor mounts for the target file.
@@ -133,12 +128,6 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         return saved;
       })();
       setEditorView(view);
-      setSummaryContent('');
-      setSummaryError(null);
-      setSummaryLoading(false);
-      setHasCachedSummary(false);
-      setCachedSummaryObsolete(false);
-      setSummaryObsolete(false);
       // Restore the saved scroll position for this file (0 if first visit).
       scrollPercentageRef.current = activeFile?.path
         ? (scrollByPathRef.current.get(activeFile.path) ?? 0)
@@ -159,44 +148,27 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       if (activeFile?.path) viewByPathRef.current.set(activeFile.path, editorView);
     }, [editorView, activeFile?.path]);
 
-    // Probe cache whenever the active file/dir changes so the button label is accurate
-    // PDFs and images are excluded from AI summary
-    useEffect(() => {
-      if (!activeFile || activeFile.isImage || activeFile.isPdf) return;
-      if (!workspacePath && !activeFile.isExternal) return;
-      const isExternal = !!activeFile.isExternal;
-      const lastSep = Math.max(activeFile.path.lastIndexOf('/'), activeFile.path.lastIndexOf('\\'));
-      const externalWs = isExternal
-        ? activeFile.path.substring(0, lastSep)
-        : null;
-      const relPath = isExternal
-        ? activeFile.path.substring(lastSep + 1)
-        :(activeFile.path.startsWith(workspacePath! + '/')
-            ? activeFile.path.slice(workspacePath!.length + 1)
-            : activeFile.path);
-      const wsParam = isExternal ? `&workspacePath=${encodeURIComponent(externalWs!)}` : '';
-      const url = activeFile.isDirectory
-        ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}${wsParam}`
-        : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}${wsParam}`;
-      fetch(url)
-        .then(r => r.json())
-        .then((data: { content: string | null; obsolete?: boolean }) => {
-          setHasCachedSummary(!!data.content);
-          setCachedSummaryObsolete(!!data.content && data.obsolete === true);
-        })
-        .catch(() => {});
-    }, [activeFile?.path, workspacePath]);
-
-    // Honor an external request to show the AI summary for the active file.
-    // Switching the view to 'summary' with empty content triggers the
-    // generation/cache-load effect below.
-    useEffect(() => {
-      if (!summaryRequestPath || !activeFile) return;
-      if (activeFile.path !== summaryRequestPath) return;
-      setEditorView('summary');
-      onSummaryHandled?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [summaryRequestPath, activeFile?.path]);
+    const {
+      summaryContent,
+      summaryLoading,
+      summaryError,
+      hasCachedSummary,
+      cachedSummaryObsolete,
+      summaryObsolete,
+      handleSwitchToSummary,
+      handleRegenerateSummary,
+    } = useSummary({
+      activeFile,
+      workspacePath,
+      provider,
+      model,
+      editorView,
+      setEditorView,
+      summaryRequestPath,
+      onSummaryHandled,
+      onSummaryOpen,
+      onSummaryContentChange,
+    });
 
     // Honor an external request to show the preview for the active file (e.g. markdown wiki navigation).
     // Runs after the file-switch reset effect so it reliably overrides 'source'.
@@ -314,11 +286,6 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     useEffect(() => {
       onEditorViewChange?.(editorView);
     }, [editorView, onEditorViewChange]);
-
-    // Notify parent whenever summary text changes so it can drive the outline panel.
-    useEffect(() => {
-      onSummaryContentChange?.(summaryContent);
-    }, [summaryContent, onSummaryContentChange]);
 
     useImperativeHandle(ref, () => ({
       save: () => {},
@@ -479,120 +446,6 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         }, 0);
       }
     }, [activeFile?.path, editorView, openFiles, onTabClick, onOpenFile, wikiNavigate]);
-
-    const handleSwitchToSummary = useCallback(async (skipCache = false) => {
-      if (!activeFile || (!workspacePath && !activeFile.isExternal)) return;
-      setEditorView('summary');
-      onSummaryOpen?.();
-
-      // If we already have content for this session, just show it
-      if (summaryContent && !skipCache) return;
-
-      setSummaryLoading(true);
-      setSummaryError(null);
-
-      // For external files, use the file's directory as the workspace root
-      const isExternal = !!activeFile.isExternal;
-      const lastSep = Math.max(activeFile.path.lastIndexOf('/'), activeFile.path.lastIndexOf('\\'));
-      const externalWs = isExternal
-        ? activeFile.path.substring(0, lastSep)
-        : null;
-      const relPath = isExternal
-        ? activeFile.path.substring(lastSep + 1)
-        :toRelPath(activeFile.path);
-      const isDir = !!activeFile.isDirectory;
-
-      // 1. Check cache (skipped when regenerating)
-      if (!skipCache) {
-        try {
-          const wsParam = isExternal ? `&workspacePath=${encodeURIComponent(externalWs!)}` : '';
-          const cacheUrl = isDir
-            ? `${API_BASE}/api/ai-directory-summary?path=${encodeURIComponent(relPath)}${wsParam}`
-            : `${API_BASE}/api/ai-summary?path=${encodeURIComponent(relPath)}${wsParam}`;
-          const resp = await fetch(cacheUrl);
-          const data = await resp.json() as { content: string | null; obsolete?: boolean };
-          if (data.content) {
-            setSummaryContent(data.content);
-            setSummaryObsolete(data.obsolete === true);
-            setSummaryLoading(false);
-            return;
-          }
-        } catch { /* fall through to generation */ }
-      }
-
-      // 2. Generate via SSE
-      try {
-        const generateUrl = isDir
-          ? `${API_BASE}/api/ai-directory-summary/generate`
-          : `${API_BASE}/api/ai-summary/generate`;
-        const generateBody = isDir
-          ? JSON.stringify({ dirPath: relPath, provider: provider.id, model, ...(isExternal ? { workspacePath: externalWs } : {}) })
-          : JSON.stringify({ filePath: relPath, provider: provider.id, model, ...(isExternal ? { workspacePath: externalWs } : {}) });
-        const resp = await fetch(generateUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: generateBody,
-        });
-
-        if (!resp.ok || !resp.body) {
-          setSummaryError('Failed to start generation');
-          setSummaryLoading(false);
-          return;
-        }
-
-        const reader  = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const parts = buf.split('\n\n');
-          buf = parts.pop() ?? '';
-          for (const part of parts) {
-            let eventName = '', dataStr = '';
-            for (const line of part.split('\n')) {
-              if (line.startsWith('event: ')) eventName = line.slice(7).trim();
-              else if (line.startsWith('data: ')) dataStr  = line.slice(6).trim();
-            }
-            if (!dataStr) continue;
-            try {
-              const payload = JSON.parse(dataStr) as Record<string, unknown>;
-              if (eventName === 'text_delta') {
-                setSummaryContent(c => c + (payload.text as string));
-              } else if (eventName === 'done') {
-                setSummaryLoading(false);
-                setHasCachedSummary(true);
-                setCachedSummaryObsolete(false);
-                setSummaryObsolete(false);
-              } else if (eventName === 'error') {
-                setSummaryError(payload.message as string);
-                setSummaryLoading(false);
-              }
-            } catch { /* skip malformed */ }
-          }
-        }
-      } catch (e) {
-        setSummaryError((e as Error).message);
-        setSummaryLoading(false);
-      }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeFile, workspacePath, provider, model, summaryContent]);
-
-    const handleRegenerateSummary = useCallback(() => {
-      setSummaryContent('');
-      setSummaryError(null);
-      handleSwitchToSummary(true); // skip cache, force fresh generation
-    }, [handleSwitchToSummary]);
-
-    // Re-trigger generation after clearing content (for regenerate)
-    useEffect(() => {
-      if (editorView === 'summary' && !summaryContent && !summaryLoading && !summaryError) {
-        handleSwitchToSummary();
-      }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [summaryContent, summaryLoading, editorView]);
 
     return (
       <div
