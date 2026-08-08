@@ -69,6 +69,9 @@ export function WorkbenchLayout() {
     }
   }, [isExpanded]);
   const [trayHeight, setTrayHeight] = useState(TRAY_DEFAULT);
+  const [showSidebar, setShowSidebar] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [showBottomTray, setShowBottomTray] = useState(true);
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
 
@@ -443,6 +446,12 @@ export function WorkbenchLayout() {
         theme={theme}
         onToggleTheme={toggleTheme}
         openTabsCount={openFiles.length}
+        showSidebar={showSidebar}
+        showRightPanel={showRightPanel}
+        showBottomTray={showBottomTray}
+        onToggleSidebar={() => setShowSidebar(v => !v)}
+        onToggleRightPanel={() => setShowRightPanel(v => !v)}
+        onToggleBottomTray={() => setShowBottomTray(v => !v)}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -454,37 +463,38 @@ export function WorkbenchLayout() {
             gitChangeCount={gitChangeCount}
           />
 
-          <Sidebar
-            activeView={activeView}
-            width={sidebarWidth}
-            workspacePath={workspacePath}
-            activeFilePath={activeFilePath}
-            onFileClick={openFile}
-            onDeleteSuccess={handleDeleteSuccess}
-            onRenameSuccess={handleRenameSuccess}
-            onDirSummary={handleDirSummary}
-            onFileSummary={handleFileSummary}
-            onAddToContext={handleAddToContext}
-            onNodeSelect={handleNodeSelect}
-            expandToPath={activeFilePath}
-            outlineContent={
-              currentEditorView === 'summary' && activeFilePath
-                ? (summaryOutlineContent || null)
-                : currentEditorView === 'preview' && activeFilePath
-                ? (openFiles.find(f => f.path === activeFilePath)?.content ?? null)
-                : null
-            }
-            onOutlineNavigate={handleOutlineNavigate}
-            activeHeadingId={activeHeadingId}
-          />
-
-          <ResizeDivider
-            currentWidth={sidebarWidth}
-            onResize={setSidebarWidth}
-            min={SIDEBAR_MIN}
-            max={SIDEBAR_MAX}
-            side="left"
-          />
+          <div style={{ display: showSidebar ? 'contents' : 'none' }}>
+            <Sidebar
+              activeView={activeView}
+              width={sidebarWidth}
+              workspacePath={workspacePath}
+              activeFilePath={activeFilePath}
+              onFileClick={openFile}
+              onDeleteSuccess={handleDeleteSuccess}
+              onRenameSuccess={handleRenameSuccess}
+              onDirSummary={handleDirSummary}
+              onFileSummary={handleFileSummary}
+              onAddToContext={handleAddToContext}
+              onNodeSelect={handleNodeSelect}
+              expandToPath={activeFilePath}
+              outlineContent={
+                currentEditorView === 'summary' && activeFilePath
+                  ? (summaryOutlineContent || null)
+                  : currentEditorView === 'preview' && activeFilePath
+                  ? (openFiles.find(f => f.path === activeFilePath)?.content ?? null)
+                  : null
+              }
+              onOutlineNavigate={handleOutlineNavigate}
+              activeHeadingId={activeHeadingId}
+            />
+            <ResizeDivider
+              currentWidth={sidebarWidth}
+              onResize={setSidebarWidth}
+              min={SIDEBAR_MIN}
+              max={SIDEBAR_MAX}
+              side="left"
+            />
+          </div>
 
           <EditorArea
             ref={editorAreaRef}
@@ -515,48 +525,51 @@ export function WorkbenchLayout() {
             onGoForward={goForward}
           />
 
-          <ResizeDivider
-            currentWidth={effectiveRightWidth}
-            onResize={(w) => { setRightPanelWidth(w); resetExpansion(); }}
-            min={RIGHT_MIN}
-            max={RIGHT_MAX}
-            side="right"
-          />
-
-          <RightPanel
-            ref={rightPanelRef}
-            width={effectiveRightWidth}
-            animated={panelAnimated}
-            workspacePath={workspacePath}
-            activeFilePath={activeFilePath}
-            onWorkspaceOpen={handleWorkspaceOpen}
-            provider={provider}
-            model={model}
-            setProvider={setProvider}
-            setModel={setModel}
-            getEditorContext={getEditorContext}
-            runCommandInTerminal={runCommandInTerminal}
-            contextNodes={contextNodes}
-            onRemoveContextNode={handleRemoveContextNode}
-            onClearContextNodes={handleClearContextNodes}
-            onNavigateToLine={handleNavigateToLine}
-            onOpenUrl={handleOpenUrl}
-            activeSystemNode={activeSystemNode}
-            onMessageSent={recordAction}
-            onWatchTrigger={() => { playBell(); rightPanelRef.current?.triggerPulse(); }}
-            onAssistantReply={onAssistantReply}
-          />
+          <div style={{ display: showRightPanel ? 'contents' : 'none' }}>
+            <ResizeDivider
+              currentWidth={effectiveRightWidth}
+              onResize={(w) => { setRightPanelWidth(w); resetExpansion(); }}
+              min={RIGHT_MIN}
+              max={RIGHT_MAX}
+              side="right"
+            />
+            <RightPanel
+              ref={rightPanelRef}
+              width={effectiveRightWidth}
+              animated={panelAnimated}
+              workspacePath={workspacePath}
+              activeFilePath={activeFilePath}
+              onWorkspaceOpen={handleWorkspaceOpen}
+              provider={provider}
+              model={model}
+              setProvider={setProvider}
+              setModel={setModel}
+              getEditorContext={getEditorContext}
+              runCommandInTerminal={runCommandInTerminal}
+              contextNodes={contextNodes}
+              onRemoveContextNode={handleRemoveContextNode}
+              onClearContextNodes={handleClearContextNodes}
+              onNavigateToLine={handleNavigateToLine}
+              onOpenUrl={handleOpenUrl}
+              activeSystemNode={activeSystemNode}
+              onMessageSent={recordAction}
+              onWatchTrigger={() => { playBell(); rightPanelRef.current?.triggerPulse(); }}
+              onAssistantReply={onAssistantReply}
+            />
+          </div>
         </div>
 
         {/* Horizontal resize handle + bottom tray */}
-        <ResizeDivider
-          orientation="horizontal"
-          currentWidth={trayHeight}
-          onResize={setTrayHeight}
-          min={TRAY_MIN}
-          max={TRAY_MAX}
-        />
-        <BottomTray ref={bottomTrayRef} height={trayHeight} workspacePath={workspacePath} />
+        <div style={{ display: showBottomTray ? 'contents' : 'none' }}>
+          <ResizeDivider
+            orientation="horizontal"
+            currentWidth={trayHeight}
+            onResize={setTrayHeight}
+            min={TRAY_MIN}
+            max={TRAY_MAX}
+          />
+          <BottomTray ref={bottomTrayRef} height={trayHeight} workspacePath={workspacePath} />
+        </div>
       </div>
       {workspacePath && <StatusBar proactive={proactiveStatus} />}
     </div>

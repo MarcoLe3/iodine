@@ -631,6 +631,27 @@ Two search modes share the same dialog UI and server endpoint:
 - Opening via **File > Open File…** always forces mode to `'external'` regardless of previous state.
 - `onOpenWorkspaceFile` in `WorkbenchLayout` constructs a `FileNode` and calls `openFile` so workspace files are treated as regular workspace files (saves route through the workspace API; no `isExternal` flag).
 
+## Code Block Copy Button
+
+Fenced code blocks in the Coding Assistant output have a **Copy** button in the top-right corner of the `<pre>` element.
+
+| File | Role |
+|------|------|
+| `client/src/components/right/CodingAssistant.tsx` | `CodeBlock` component wraps `<pre className="md-pre">` and renders an absolutely-positioned button (`top: 6, right: 6`). Clicking copies the code text via `navigator.clipboard.writeText`. The button shows **Copy** normally and flashes **Copied!** (teal) for 1.5 s; a `resetTimerRef` clears any pending timer on re-click or unmount. Only fenced blocks get the button — inline `<code>` spans pass through unchanged. |
+
+**Key details:** `children` from ReactMarkdown for a fenced block is already a plain string, so `String(children).replace(/\n$/, '')` extracts the text with no tree-walking. `type="button"` prevents accidental form submission.
+
+## Pane Toggle Buttons
+
+Three icon buttons in the menu bar right section (left of the theme toggle) let the user show/hide the **sidebar**, **right panel**, and **bottom tray** without losing state.
+
+| File | Role |
+|------|------|
+| `client/src/components/layout/WorkbenchLayout.tsx` | Owns `showSidebar`, `showRightPanel`, `showBottomTray` boolean states (all default `true`). Each pane and its `ResizeDivider` are wrapped in `<div style={{ display: shown ? 'contents' : 'none' }}>` so components stay mounted — all chat history, terminal sessions, and editor state are preserved when hidden. Toggle callbacks are passed to `MenuBar`. |
+| `client/src/components/layout/MenuBar.tsx` | `PaneIcon` renders a small SVG layout diagram (15×13) for each pane type: the toggled region is filled at 45% opacity when the pane is visible, and empty when hidden. Active buttons have `var(--color-bg-hover)` background; hidden-pane buttons are dimmed to 55% opacity. A thin separator divides the pane buttons from the theme toggle. `SunIcon` and `MoonIcon` SVG components replace the previous Unicode characters for crisper rendering. |
+
+**`display: contents` pattern:** The wrapper div with `display: 'contents'` is transparent to the flex layout — its children participate directly as flex items in the parent row/column. Switching to `display: 'none'` hides the subtree without unmounting it, so no state is lost.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.

@@ -14,9 +14,63 @@ interface MenuBarProps {
   theme: Theme;
   onToggleTheme: () => void;
   openTabsCount: number;
+  showSidebar: boolean;
+  showRightPanel: boolean;
+  showBottomTray: boolean;
+  onToggleSidebar: () => void;
+  onToggleRightPanel: () => void;
+  onToggleBottomTray: () => void;
 }
 
-export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onCloseUneditedTabs, onSortTabsByFileStructure, onOpenExternalFile, onOpenWorkspaceFile, workspacePath, theme, onToggleTheme, openTabsCount }: MenuBarProps) {
+function PaneIcon({ pane }: { pane: 'left' | 'right' | 'bottom' }) {
+  if (pane === 'left') return (
+    <svg width="15" height="13" viewBox="0 0 15 13" fill="none" style={{ display: 'block' }}>
+      <rect x=".5" y=".5" width="14" height="12" rx="1.5" stroke="currentColor" strokeWidth="1"/>
+      <line x1="5.5" y1=".5" x2="5.5" y2="12.5" stroke="currentColor" strokeWidth="1"/>
+      <rect x="1" y="1" width="4" height="11" fill="currentColor" opacity="0.45"/>
+    </svg>
+  );
+  if (pane === 'right') return (
+    <svg width="15" height="13" viewBox="0 0 15 13" fill="none" style={{ display: 'block' }}>
+      <rect x=".5" y=".5" width="14" height="12" rx="1.5" stroke="currentColor" strokeWidth="1"/>
+      <line x1="9.5" y1=".5" x2="9.5" y2="12.5" stroke="currentColor" strokeWidth="1"/>
+      <rect x="10" y="1" width="4" height="11" fill="currentColor" opacity="0.45"/>
+    </svg>
+  );
+  return (
+    <svg width="15" height="13" viewBox="0 0 15 13" fill="none" style={{ display: 'block' }}>
+      <rect x=".5" y=".5" width="14" height="12" rx="1.5" stroke="currentColor" strokeWidth="1"/>
+      <line x1=".5" y1="8.5" x2="14.5" y2="8.5" stroke="currentColor" strokeWidth="1"/>
+      <rect x="1" y="9" width="13" height="3" fill="currentColor" opacity="0.45"/>
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ display: 'block' }}>
+      <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.4"/>
+      <line x1="7" y1=".5" x2="7" y2="2.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="7" y1="11.8" x2="7" y2="13.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1=".5" y1="7" x2="2.2" y2="7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="11.8" y1="7" x2="13.5" y2="7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="2.4" y1="2.4" x2="3.6" y2="3.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="10.4" y1="10.4" x2="11.6" y2="11.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="11.6" y1="2.4" x2="10.4" y2="3.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="3.6" y1="10.4" x2="2.4" y2="11.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ display: 'block' }}>
+      <path d="M11.5 9.5A6 6 0 0 1 4.5 2.5a5 5 0 1 0 7 7Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onCloseUneditedTabs, onSortTabsByFileStructure, onOpenExternalFile, onOpenWorkspaceFile, workspacePath, theme, onToggleTheme, openTabsCount, showSidebar, showRightPanel, showBottomTray, onToggleSidebar, onToggleRightPanel, onToggleBottomTray }: MenuBarProps) {
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [editorMenuOpen, setEditorMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -624,21 +678,46 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
             </button>
           )}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2 }}>
+          {(
+            [
+              { pane: 'left'   as const, shown: showSidebar,    onToggle: onToggleSidebar,    title: 'Toggle sidebar' },
+              { pane: 'right'  as const, shown: showRightPanel, onToggle: onToggleRightPanel, title: 'Toggle right panel' },
+              { pane: 'bottom' as const, shown: showBottomTray, onToggle: onToggleBottomTray, title: 'Toggle bottom panel' },
+            ] as const
+          ).map(({ pane, shown, onToggle, title }) => (
+            <button
+              key={pane}
+              type="button"
+              onClick={onToggle}
+              title={title}
+              style={{
+                width: 28, height: 24, borderRadius: 3,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: shown ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                background: shown ? 'var(--color-bg-hover)' : 'none',
+                opacity: shown ? 1 : 0.55,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-bg-hover)'; e.currentTarget.style.opacity = '1'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = shown ? 'var(--color-bg-hover)' : 'none'; e.currentTarget.style.opacity = shown ? '1' : '0.55'; }}
+            >
+              <PaneIcon pane={pane} />
+            </button>
+          ))}
+          <div style={{ width: 1, height: 16, background: 'var(--color-border)', margin: '0 4px' }} />
           <button
             onClick={onToggleTheme}
             title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             style={{
-              width: 28,
-              height: 24,
-              borderRadius: 3,
+              width: 28, height: 24, borderRadius: 3,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'var(--color-text-primary)',
             }}
             onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'none')}
           >
-            {theme === 'dark' ? '☀' : '☾'}
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
         </div>
       </div>
