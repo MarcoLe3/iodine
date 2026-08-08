@@ -1,7 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useState, useEffect, useCallback, useRef } from 'react';
 import type { editor as MonacoEditorAPI } from 'monaco-editor';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MarkdownRenderer } from '../editor/MarkdownRenderer';
+import { resolveWorkspacePath } from '../editor/markdownUtils';
 import { EditorTabs } from '../editor/EditorTabs';
 import { MonacoEditor } from '../editor/MonacoEditor';
 import { WelcomeScreen } from '../editor/WelcomeScreen';
@@ -73,54 +73,7 @@ function isPreviewable(path: string) {
   return path.endsWith('.md') || path.endsWith('.html');
 }
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[*_`~[\]()!]/g, '')
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .trim();
-}
-
-function makeHeadingId(children: React.ReactNode): string {
-  const extract = (n: React.ReactNode): string => {
-    if (!n) return '';
-    if (typeof n === 'string') return n;
-    if (Array.isArray(n)) return n.map(extract).join('');
-    if (typeof n === 'object' && 'props' in (n as object))
-      return extract((n as React.ReactElement).props.children);
-    return '';
-  };
-  return slugify(extract(children));
-}
-
-/** Resolve a relative markdown link path against the active file's directory.
- *  Normalises backslashes to forward slashes first so Windows paths work. */
-function resolveWorkspacePath(relativePath: string, activeFilePath: string): string {
-  // Normalise to forward slashes for uniform processing.
-  const normActive = activeFilePath.replace(/\\/g, '/');
-  const normRel    = relativePath.replace(/\\/g, '/');
-  const dir = normActive.substring(0, normActive.lastIndexOf('/'));
-  const parts = `${dir}/${normRel}`.split('/');
-  const resolved: string[] = [];
-  for (const part of parts) {
-    if (!part || part === '.') continue;
-    if (part === '..') resolved.pop();
-    else resolved.push(part);
-  }
-  // Re-attach the root prefix ('/' on Unix, 'C:/' on Windows).
-  const root = normActive.match(/^([A-Za-z]:[/\\]|\/)/)?.[0] ?? '';
-  const sep = root.endsWith('/') ? '' : '/';
-  return root + sep + resolved.join('/');
-}
-
-/** Resolve a potentially relative image src to an API URL that the server can serve. */
-function resolveImageSrc(src: string, activeFilePath: string | null): string {
-  if (/^https?:\/\//.test(src) || src.startsWith('data:')) return src;
-  if (!activeFilePath) return src;
-  return `http://localhost:3001/api/files/image?path=${encodeURIComponent(resolveWorkspacePath(src, activeFilePath))}`;
-}
+/* Markdown path and heading helpers live in editor/markdownUtils.ts. */
 
 const btnStyle: React.CSSProperties = {
   padding: '6px 14px',
@@ -469,7 +422,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     }, [openFiles, onTabClick, onOpenFile, workspacePath, onSummaryRequest, onPreviewRequest]);
 
     /**
-     * Inline-code component for ReactMarkdown.
+     * Inline-code component for markdown rendering.
      * If the text looks like a relative file path (no spaces, contains /, e.g. "client/src/App.tsx")
      * it renders as a clickable link with dotted underline, opening via wikiNavigate.
      * Block code (className="language-xxx") is passed through unchanged.
@@ -499,6 +452,33 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       },
       [activeFile, wikiNavigate],
     );
+
+    const handleMarkdownLinkClick = useCallback((event: React.MouseEvent<HTMLAnchorElement>, target: string) => {
+      const isHash = target.startsWith('#');
+      const isExternal = /^(https?:|mailto:)/i.test(target);
+      if (isExternal) {
+        event.preventDefault();
+        window.open(target, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      if (isHash || !activeFile?.path) return;
+      event.preventDefault();
+      const [pathPart, hash] = target.split('#', 2);
+      const absPath = resolveWorkspacePath(pathPart, activeFile.path);
+      if (editorView === 'preview' || editorView === 'summary') {
+        void wikiNavigate(absPath);
+      } else {
+        const targetFile = openFiles.find(f => f.path === absPath);
+        if (targetFile) onTabClick(targetFile.path);
+        else onOpenFile?.(absPath);
+      }
+      if (hash) {
+        window.setTimeout(() => {
+          const heading = document.getElementById(hash);
+          heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 0);
+      }
+    }, [activeFile?.path, editorView, openFiles, onTabClick, onOpenFile, wikiNavigate]);
 
     const handleSwitchToSummary = useCallback(async (skipCache = false) => {
       if (!activeFile || (!workspacePath && !activeFile.isExternal)) return;
@@ -854,20 +834,12 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
                 {/* Streaming / cached markdown */}
                 {summaryContent && (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      code: inlineCodeComponent,
-                      h1: ({ children, ...p }) => <h1 id={makeHeadingId(children)} {...p}>{children}</h1>,
-                      h2: ({ children, ...p }) => <h2 id={makeHeadingId(children)} {...p}>{children}</h2>,
-                      h3: ({ children, ...p }) => <h3 id={makeHeadingId(children)} {...p}>{children}</h3>,
-                      h4: ({ children, ...p }) => <h4 id={makeHeadingId(children)} {...p}>{children}</h4>,
-                      h5: ({ children, ...p }) => <h5 id={makeHeadingId(children)} {...p}>{children}</h5>,
-                      h6: ({ children, ...p }) => <h6 id={makeHeadingId(children)} {...p}>{children}</h6>,
-                    }}
-                  >
-                    {summaryContent}
-                  </ReactMarkdown>
+                  <MarkdownRenderer
+                    content={summaryContent}
+                    activeFilePath={activeFile.path}
+                    inlineCodeComponent={inlineCodeComponent}
+                    onLinkClick={handleMarkdownLinkClick}
+                  />
                 )}
               </div>
 
@@ -886,55 +858,12 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                     boxSizing: 'border-box',
                   }}
                 >
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      a({ href, children, ...props }) {
-                        const target = href ?? '';
-                        const isHash = target.startsWith('#');
-                        const isExternal = /^(https?:|mailto:)/i.test(target);
-                        const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-                          if (isExternal) {
-                            event.preventDefault();
-                            window.open(target, '_blank', 'noopener,noreferrer');
-                            return;
-                          }
-                          if (isHash || !activeFile.path) return;
-                          event.preventDefault();
-                          const [pathPart, hash] = target.split('#', 2);
-                          const absPath = resolveWorkspacePath(pathPart, activeFile.path);
-                          const isWiki = editorView === 'preview' || editorView === 'summary';
-                          if (isWiki) {
-                            void wikiNavigate(absPath);
-                          } else {
-                            const targetFile = openFiles.find(f => f.path === absPath);
-                            if (targetFile) onTabClick(targetFile.path);
-                            else onOpenFile?.(absPath);
-                          }
-                          if (hash) {
-                            window.setTimeout(() => {
-                              const heading = document.getElementById(hash);
-                              heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }, 0);
-                          }
-                        };
-                        return <a href={href} onClick={handleClick} {...props}>{children}</a>;
-                      },
-                      code: inlineCodeComponent,
-                      img({ src, alt, ...props }) {
-                        const resolvedSrc = resolveImageSrc(src ?? '', activeFile.path);
-                        return <img src={resolvedSrc} alt={alt ?? ''} {...props} style={{ maxWidth: '100%' }} />;
-                      },
-                      h1: ({ children, ...p }) => <h1 id={makeHeadingId(children)} {...p}>{children}</h1>,
-                      h2: ({ children, ...p }) => <h2 id={makeHeadingId(children)} {...p}>{children}</h2>,
-                      h3: ({ children, ...p }) => <h3 id={makeHeadingId(children)} {...p}>{children}</h3>,
-                      h4: ({ children, ...p }) => <h4 id={makeHeadingId(children)} {...p}>{children}</h4>,
-                      h5: ({ children, ...p }) => <h5 id={makeHeadingId(children)} {...p}>{children}</h5>,
-                      h6: ({ children, ...p }) => <h6 id={makeHeadingId(children)} {...p}>{children}</h6>,
-                    }}
-                  >
-                    {activeFile.content}
-                  </ReactMarkdown>
+                  <MarkdownRenderer
+                    content={activeFile.content ?? ''}
+                    activeFilePath={activeFile.path}
+                    inlineCodeComponent={inlineCodeComponent}
+                    onLinkClick={handleMarkdownLinkClick}
+                  />
                 </div>
               ) : (
                 <iframe
