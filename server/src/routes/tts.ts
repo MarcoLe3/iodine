@@ -52,7 +52,7 @@ router.post('/tts/verbally', async (req: Request, res: Response) => {
         ],
         max_completion_tokens: 120,
       });
-      const narration = completion.choices[0]?.message?.content?.trim() ?? text;
+      const narration = completion.choices[0]?.message?.content?.trim() || text.slice(0, 1000);
 
       // Step 2: speak with tts-1-hd
       const speech = await client.audio.speech.create({
@@ -74,7 +74,7 @@ router.post('/tts/verbally', async (req: Request, res: Response) => {
         contents: [{ parts: [{ text }] }],
         config: { systemInstruction: NARRATION_PROMPT },
       });
-      const narration = condensed.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? text;
+      const narration = condensed.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || text.slice(0, 1000);
 
       // Step 2: speak with Gemini TTS
       const audioResp = await ai.models.generateContent({
