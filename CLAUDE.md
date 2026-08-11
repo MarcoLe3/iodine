@@ -652,6 +652,22 @@ Three icon buttons in the menu bar right section (left of the theme toggle) let 
 
 **`display: contents` pattern:** The wrapper div with `display: 'contents'` is transparent to the flex layout — its children participate directly as flex items in the parent row/column. Switching to `display: 'none'` hides the subtree without unmounting it, so no state is lost.
 
+## Verbally (TTS)
+
+Completed assistant messages longer than 120 characters show a **Verbally** chip below the content. Clicking it condenses the response via LLM into a confident slide-deck narration, then speaks it aloud using the provider's TTS API. Only OpenAI and Google are supported; Anthropic users see a dialog offering to switch.
+
+| File | Role |
+|------|------|
+| `server/src/routes/tts.ts` | `POST /api/tts/verbally` — accepts `{ text, provider, model }`. Step 1: calls the LLM (OpenAI chat or Gemini `generateContent`) with the narration prompt to produce a 2–4 sentence slide-deck narration. Step 2: calls TTS — OpenAI uses `tts-1-hd` / voice `nova` and returns `audio/mpeg`; Google uses `gemini-2.5-flash-preview-tts` with voice `Aoede`, receives base64 PCM (24 kHz, 16-bit mono), converts to WAV via `pcmToWav`, and returns `audio/wav`. |
+| `server/src/app.ts` | Registers `ttsRouter` at `/api`. |
+| `client/src/components/right/CodingAssistant.tsx` | `speakingMsgId`, `verballyLoadingId`, `verballyError` states + `audioRef`. `handleVerbally(msgId, text)` stops any current playback, calls the endpoint, creates a blob URL, and plays it via `new Audio(url)`. Error message surfaces in a dismissable banner above the input. Anthropic users see a modal with one-click switches to OpenAI or Google. `MessageBubble` receives `onVerbally`, `isSpeaking`, `isVerballyLoading` props; the chip is hidden for messages ≤ 120 characters. |
+
+**Narration prompt:** Instructs the model to narrate as a confident presenter speaking live over a slide — strip code blocks, markdown, and hedging; distill to 2–4 natural spoken sentences; no self-introduction or "this slide shows".
+
+**Provider IDs:** `'openai'` and `'google'` (not `'gemini'`) — match the values in `client/src/providers.ts`.
+
+**Audio playback:** Only one message speaks at a time. Clicking the chip on the currently-speaking message stops it (toggle). `audio.onended` clears `speakingMsgId` and revokes the blob URL.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.

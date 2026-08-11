@@ -10,6 +10,7 @@ import buildConfigRouter from './routes/buildConfig';
 import projectRouter from './routes/project';
 import proactiveRouter from './routes/proactive';
 import conversationsRouter from './routes/conversations';
+import ttsRouter from './routes/tts';
 
 export function createApp() {
   const app = express();
@@ -27,6 +28,7 @@ export function createApp() {
   app.use('/api/project', projectRouter);
   app.use('/api', proactiveRouter);
   app.use('/api', conversationsRouter);
+  app.use('/api', ttsRouter);
 
   return app;
 }
