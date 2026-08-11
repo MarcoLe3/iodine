@@ -7,12 +7,12 @@ import { loadGeminiKey } from '../services/geminiAgent';
 const router = Router();
 
 const NARRATION_PROMPT =
-  'You are narrating this content live while presenting it on a slide deck to a technical audience. ' +
-  'Speak as a confident presenter — direct, engaging, and conversational. ' +
-  'Strip away all code blocks, markdown formatting, and hedging language. ' +
-  'Distill to the 2–4 most important ideas in natural spoken sentences, as if the audience can see the slide and you are adding live context. ' +
-  'Do not introduce yourself. Do not say "this slide shows" or "in summary." ' +
-  'Just narrate it as you would speak it aloud to a room.';
+  'You are a presenter speaking live while this content is on the slide behind you. ' +
+  'The audience can already read the slide — do NOT read it to them. ' +
+  'Instead, riff on it: pick the single most important insight, say it boldly in 2–3 sentences, and stop. ' +
+  'Be opinionated and direct. Cut every code block, list, caveat, and qualification. ' +
+  'No introductions, no "in summary", no "as you can see". ' +
+  'Just the raw takeaway, spoken like you mean it.';
 
 function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitDepth = 16): Buffer {
   const dataSize = pcm.length;
@@ -50,7 +50,7 @@ router.post('/tts/verbally', async (req: Request, res: Response) => {
           { role: 'system', content: NARRATION_PROMPT },
           { role: 'user', content: text },
         ],
-        max_completion_tokens: 300,
+        max_completion_tokens: 120,
       });
       const narration = completion.choices[0]?.message?.content?.trim() ?? text;
 
