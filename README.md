@@ -21,7 +21,7 @@ Every explanation is grounded in the real project—from architecture diagrams d
 <img src="https://github.com/user-attachments/assets/55a721c6-8990-407f-a343-bdecbdf42b1e" alt="Iodine IDE demo" width="100%" />
 
 <p align="center">
-  More demos on YouTube: <a href="https://www.youtube.com/watch?v=5BlcEDO4Mrg">Demo 1</a> · <a href="https://www.youtube.com/watch?v=SjOQjkT9GJM">Demo 2</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 3</a>
+  More demos on YouTube: <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 1</a> · <a href="https://www.youtube.com/watch?v=SjOQjkT9GJM">Demo 2</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 3</a>
 </p>
 
 ## The problem
