@@ -668,6 +668,10 @@ Completed assistant messages longer than 120 characters show a **Verbally** chip
 
 **Audio playback:** Only one message speaks at a time. Clicking the chip on the currently-speaking message stops it (toggle). `audio.onended` clears `speakingMsgId` and revokes the blob URL.
 
+**Speaking indicator:** While audio plays the chip content switches to `SpeakingWave` — 7 vertical bars (2 px wide, `currentColor`) animated with `@keyframes wave-bar` (2 px → 11 px, 0.65 s ease-in-out, alternating) and staggered `animationDelay` values to produce an equalizer ripple. The bars inherit the chip's teal accent via `currentColor`.
+
+**Tutor mode integration:** When Tutor mode is on, the Verbally chip is shown on every assistant message regardless of length (`alwaysVerbally` prop bypasses the 120-char threshold). Additionally, a `useEffect` keyed on `isLoading` auto-triggers `handleVerbally` at the end of each generation so the narration plays automatically without user interaction.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.
