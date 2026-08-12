@@ -11,40 +11,39 @@ import type { FileNode } from '../../types';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
+// {file} is replaced at runtime with the filename from the tool input path.
 const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
   read_file: [
-    "Hmm, let me read this.",
-    "Let me take a look at this.",
-    "Let me examine this.",
-    "Hmm, let me check this file.",
-    "Let me read through this.",
-    "Let me see what this says.",
+    "Hmm, let me read {file}.",
+    "Let me take a look at {file}.",
+    "Let me examine {file}.",
+    "Hmm, let me check {file}.",
+    "Let me see what {file} says.",
   ],
   edit_file: [
-    "Let me edit this.",
-    "Hmm, let me make this change.",
-    "Let me update this.",
-    "Hmm, let me adjust this.",
-    "Let me modify this.",
+    "Let me edit {file}.",
+    "Hmm, let me update {file}.",
+    "Let me modify {file}.",
+    "Hmm, let me adjust {file}.",
+    "Let me make that change in {file}.",
   ],
   write_file: [
-    "Let me write this.",
-    "Hmm, let me create this.",
-    "Let me write this out.",
-    "Hmm, let me put this together.",
-    "Let me set this up.",
+    "Let me write {file}.",
+    "Hmm, let me create {file}.",
+    "Let me put {file} together.",
+    "Hmm, let me set up {file}.",
   ],
   open_file: [
-    "Let me open this file.",
-    "Hmm, let me navigate here.",
-    "Let me pull this up.",
-    "Let me look at this.",
+    "Let me open {file}.",
+    "Hmm, let me navigate to {file}.",
+    "Let me pull up {file}.",
+    "Let me look at {file}.",
   ],
   list_directory: [
-    "Hmm, let me look around.",
-    "Let me check the structure.",
-    "Let me see what's here.",
-    "Hmm, let me explore this.",
+    "Hmm, let me look around in {file}.",
+    "Let me check the structure of {file}.",
+    "Let me see what's in {file}.",
+    "Hmm, let me explore {file}.",
   ],
   search_files: [
     "Let me search for this.",
@@ -224,10 +223,13 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     if (gen === narrationGenRef.current) isDrainingRef.current = false;
   }, []);
 
-  const handleToolNarration = useCallback((name: string, _input: Record<string, unknown>) => {
+  const handleToolNarration = useCallback((name: string, input: Record<string, unknown>) => {
     turnHadNarrationsRef.current = true;
     const phrases = TOOL_NARRATION_PHRASES[name] ?? ["Hmm, let me handle this.", "Let me take care of this."];
-    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    const template = phrases[Math.floor(Math.random() * phrases.length)];
+    const pathVal = Object.values(input).find(v => typeof v === 'string' && (v.includes('/') || v.includes('\\'))) as string | undefined;
+    const filename = pathVal ? (pathVal.split(/[/\\]/).filter(Boolean).pop() ?? null) : null;
+    const phrase = template.replace('{file}', filename ?? 'this');
     narrationQueueRef.current.push(async () => {
       const r = await fetch(`${API_BASE}/api/tts/speak`, {
         method: 'POST',
