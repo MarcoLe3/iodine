@@ -670,7 +670,11 @@ Completed assistant messages longer than 120 characters show a **Verbally** chip
 
 **Speaking indicator:** While audio plays the chip content switches to `SpeakingWave` — 7 vertical bars (2 px wide, `currentColor`) animated with `@keyframes wave-bar` (2 px → 11 px, 0.65 s ease-in-out, alternating) and staggered `animationDelay` values to produce an equalizer ripple. The bars inherit the chip's teal accent via `currentColor`.
 
-**Tutor mode integration:** When Tutor mode is on, the Verbally chip is shown on every assistant message regardless of length (`alwaysVerbally` prop bypasses the 120-char threshold). Additionally, a `useEffect` keyed on `isLoading` auto-triggers `handleVerbally` at the end of each generation so the narration plays automatically without user interaction.
+**Tutor mode integration:** When Tutor mode is on, the Verbally chip is shown on every assistant message regardless of length (`alwaysVerbally` prop bypasses the 120-char threshold). At the end of each generation the auto-speak effect enqueues the condensed Verbally response onto the same narration queue used by tool narrations (see below) — it never interrupts them. If tool narrations played during the turn (`turnHadNarrationsRef`), a random spoken transition phrase ("Aha.", "Got it.", "Alright so.", etc.) is enqueued via `POST /api/tts/speak` immediately before the Verbally audio, bridging the two naturally. No transition is added when there were no tool narrations.
+
+**Tutor mode tool call narration:** Each `tool_call` SSE event during a tutor-mode turn triggers a randomised short phrase ("Hmm, let me read this.", "Let me examine this.", etc.) from `TOOL_NARRATION_PHRASES` keyed by tool name (`read_file`, `edit_file`, `write_file`, `open_file`, `list_directory`, `search_files`). Phrases are spoken sequentially via a ref-based audio queue (`narrationQueueRef` + `drainNarrationQueue`) with generation-counter cancellation (`narrationGenRef`). The `POST /api/tts/speak` endpoint handles direct TTS without a condensation step. The queue stops on new message send, tutor mode toggle off, manual Verbally click, and component unmount.
+
+**Tutor mode system prompt:** The scripted "Ready to start? Say go" turn-1 ending has been removed. The AI presents its plan and ends conversationally — no scripted cues like "say next" or "say go" anywhere in the prompt.
 
 ## Implementation Notes
 
