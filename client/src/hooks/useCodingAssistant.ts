@@ -43,6 +43,7 @@ export function useCodingAssistant(
   onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void,
   onWatchTrigger?: () => void,
   onAssistantReply?: (text: string, hadToolUse: boolean) => void,
+  onToolNarration?: (name: string, input: Record<string, unknown>) => void,
 ) {
   const [uiMessages, setUiMessages] = useState<UIMessage[]>([]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
@@ -62,6 +63,9 @@ export function useCodingAssistant(
 
   const onAssistantReplyRef = useRef(onAssistantReply);
   onAssistantReplyRef.current = onAssistantReply;
+
+  const onToolNarrationRef = useRef(onToolNarration);
+  onToolNarrationRef.current = onToolNarration;
 
   // Tracks whether any tool was called in the current turn; reset at start of sendMessage.
   const toolUsedInTurnRef = useRef(false);
@@ -532,6 +536,9 @@ export function useCodingAssistant(
           } else if (eventName === 'tool_call') {
             flushNow();
             toolUsedInTurnRef.current = true;
+            if (tutorMode) {
+              onToolNarrationRef.current?.(payload.name as string, payload.input as Record<string, unknown>);
+            }
             const toolBlock: UIBlock = {
               type: 'tool',
               id: payload.id as string,

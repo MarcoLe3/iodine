@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useImperativeHandle, forwardRef, KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef, KeyboardEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useCodingAssistant } from '../../hooks/useCodingAssistant';
@@ -10,6 +10,49 @@ import type { Provider } from '../../providers';
 import type { FileNode } from '../../types';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
+
+const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
+  read_file: [
+    "Hmm, let me read this.",
+    "Let me take a look at this.",
+    "Let me examine this.",
+    "Hmm, let me check this file.",
+    "Let me read through this.",
+    "Let me see what this says.",
+  ],
+  edit_file: [
+    "Let me edit this.",
+    "Hmm, let me make this change.",
+    "Let me update this.",
+    "Hmm, let me adjust this.",
+    "Let me modify this.",
+  ],
+  write_file: [
+    "Let me write this.",
+    "Hmm, let me create this.",
+    "Let me write this out.",
+    "Hmm, let me put this together.",
+    "Let me set this up.",
+  ],
+  open_file: [
+    "Let me open this file.",
+    "Hmm, let me navigate here.",
+    "Let me pull this up.",
+    "Let me look at this.",
+  ],
+  list_directory: [
+    "Hmm, let me look around.",
+    "Let me check the structure.",
+    "Let me see what's here.",
+    "Hmm, let me explore this.",
+  ],
+  search_files: [
+    "Let me search for this.",
+    "Hmm, let me find this.",
+    "Let me track this down.",
+    "Hmm, let me look for this.",
+  ],
+};
 
 function argumentSummary(input: unknown): string | null {
   if (!input || typeof input !== 'object') return null;
@@ -132,7 +175,59 @@ export interface CodingAssistantHandle {
 interface CodingAssistantProps { workspacePath: string | null; activeFilePath: string | null; onWorkspaceOpen: (path: string) => void; provider: Provider; model: string; setProvider: (id: string) => void; setModel: (id: string) => void; getEditorContext?: () => string | null; contextNodes: FileNode[]; onRemoveContextNode: (path: string) => void; onClearContextNodes: () => void; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void; onOpenNode?: (nodeName: string, nodeId?: string) => void; activeSystemNode?: string | null; onUserTyping?: () => void; onMessageSent?: () => void; onWatchTrigger?: () => void; onAssistantReply?: (text: string, hadToolUse: boolean) => void; }
 
 export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onWatchTrigger, onAssistantReply }, ref) {
-  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply);
+  // Narration queue for tutor-mode tool call commentary — must be defined before useCodingAssistant.
+  const narrationQueueRef = useRef<Array<() => Promise<string>>>([]);
+  const isDrainingRef = useRef(false);
+  const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const narrationGenRef = useRef(0);
+
+  const stopNarrationQueue = useCallback(() => {
+    narrationGenRef.current++;
+    narrationQueueRef.current = [];
+    if (narrationAudioRef.current) { narrationAudioRef.current.pause(); narrationAudioRef.current = null; }
+    isDrainingRef.current = false;
+  }, []);
+
+  const drainNarrationQueue = useCallback(async () => {
+    if (isDrainingRef.current) return;
+    isDrainingRef.current = true;
+    const gen = narrationGenRef.current;
+    while (narrationQueueRef.current.length > 0 && gen === narrationGenRef.current) {
+      const fetchUrl = narrationQueueRef.current.shift()!;
+      try {
+        const url = await fetchUrl();
+        if (gen !== narrationGenRef.current) { URL.revokeObjectURL(url); break; }
+        await new Promise<void>(resolve => {
+          const audio = new Audio(url);
+          narrationAudioRef.current = audio;
+          let done = false;
+          const finish = () => { if (done) return; done = true; URL.revokeObjectURL(url); resolve(); };
+          audio.play().catch(finish);
+          audio.addEventListener('ended', finish, { once: true });
+          audio.addEventListener('error', finish, { once: true });
+          audio.addEventListener('pause', finish, { once: true });
+        });
+      } catch { /* skip failed clips */ }
+    }
+    if (gen === narrationGenRef.current) isDrainingRef.current = false;
+  }, []);
+
+  const handleToolNarration = useCallback((name: string, _input: Record<string, unknown>) => {
+    const phrases = TOOL_NARRATION_PHRASES[name] ?? ["Hmm, let me handle this.", "Let me take care of this."];
+    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    narrationQueueRef.current.push(async () => {
+      const r = await fetch(`${API_BASE}/api/tts/speak`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: phrase, provider: provider.id }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return URL.createObjectURL(await r.blob());
+    });
+    void drainNarrationQueue();
+  }, [provider.id, drainNarrationQueue]);
+
+  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, handleToolNarration);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({ injectProactiveMessage, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, notifyEditorActivity]);
   const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(false); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
@@ -171,7 +266,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
-  const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
+  const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; stopNarrationQueue(); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
   const handleClearAll = async () => {
     try {
       await clearAllConversations();
@@ -188,6 +283,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const handleSuggestion = (text: string) => { setInput(text); onUserTyping?.(); };
   const handleVerbally = (msgId: string, text: string) => {
     if (provider.id === 'anthropic') { setShowVerballyDialog(true); return; }
+    stopNarrationQueue();
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     if (speakingMsgId === msgId) { setSpeakingMsgId(null); return; }
     setVerballyError(null);
@@ -220,6 +316,10 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         setSpeakingMsgId(null);
       });
   };
+  // Stop narrations when tutor mode is turned off or component unmounts.
+  useEffect(() => { if (!isTutorMode) stopNarrationQueue(); }, [isTutorMode, stopNarrationQueue]);
+  useEffect(() => () => stopNarrationQueue(), [stopNarrationQueue]);
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
   const prevIsLoadingForAutoRef = useRef(false);
   useEffect(() => {
@@ -229,7 +329,19 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       const lastMsg = uiMessages[uiMessages.length - 1];
       if (lastMsg?.role === 'assistant') {
         const text = lastMsg.blocks.filter((b): b is UIBlock & { type: 'text' } => b.type === 'text').map(b => b.content).join('\n\n').trim();
-        if (text) handleVerbally(lastMsg.id, text);
+        // Enqueue the condensed response after any tool narrations — do not interrupt them.
+        if (text && provider.id !== 'anthropic') {
+          narrationQueueRef.current.push(async () => {
+            const r = await fetch(`${API_BASE}/api/tts/verbally`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text, provider: provider.id, model }),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return URL.createObjectURL(await r.blob());
+          });
+          void drainNarrationQueue();
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
