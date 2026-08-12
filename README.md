@@ -2,21 +2,28 @@
   <img src="images/iodine_logo_2-preview.png" alt="Iodine" width="180" />
 </p>
 
-<h1 align="center">Iodine — IDE for Open-source Development</h1>
+<h1 align="center">Iodine — Your AI Codebase Mentor</h1>
 
 <p align="center">
-  An AI-native IDE that turns unfamiliar Git repositories into interactive learning environments.
+  Like having a patient senior engineer beside you—helping you understand unfamiliar code, guiding your next step, and explaining changes as you make them.
 </p>
+
+> “More than 92% of U.S.-based developers use AI coding tools.”
+> — [GitHub Research](https://github.blog/news-insights/research/survey-reveals-92-of-us-based-developers-use-ai-coding-tools/)
+>
+> **Iodine helps you understand what AI builds.**
+
+## A mentor for unfamiliar code
+
+Opening a new open source repository can feel like arriving in a city without a map. Iodine helps you find your way through the codebase without taking control away from you.
+
+It reads the project in context, explains how the pieces fit together, and guides you from your first question to your first confident contribution. Instead of only generating code, Iodine helps you become more capable of working in the codebase.
 
 ## Tutor Mode
 
-**Open any repository.**  
-**Turn on Tutor.**  
-**Walks you through any project one file at a time.**
+**Open a repository. Turn on Tutor. Follow the project one file at a time.**
 
-Tutor Mode is Iodine's central experience. The AI reads the codebase and presents a numbered walkthrough plan. Each subsequent reply opens exactly one file, highlights the relevant lines, and explains what to look at before waiting for you to continue. You can build understanding without losing control.
-
-Every explanation is grounded in the real project—from architecture diagrams down to highlighted source lines.
+Tutor Mode is Iodine's central experience. It creates a guided walkthrough, opens the relevant file, highlights the lines worth studying, and explains what you are seeing before waiting for you to continue. Every explanation is grounded in the actual project—from architecture diagrams to source code.
 
 <img src="https://github.com/user-attachments/assets/55a721c6-8990-407f-a343-bdecbdf42b1e" alt="Iodine IDE demo" width="100%" />
 
@@ -24,43 +31,15 @@ Every explanation is grounded in the real project—from architecture diagrams d
   More demos on YouTube: <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 1</a> · <a href="https://www.youtube.com/watch?v=SjOQjkT9GJM">Demo 2</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 3</a>
 </p>
 
-## The problem
+## How Iodine helps
 
-Every engineer eventually opens a repository they do not understand.
+Iodine supports the way a good human mentor would:
 
-Maybe it is your first week on a new team. Maybe it is a large open-source project. Maybe it is code you wrote two years ago. You know the feeling: hundreds of files, unfamiliar architecture, incomplete documentation, and no obvious place to begin.
+- **Explore** — Follow a guided path through the repository, with relevant files and lines brought into focus.
+- **Build Together** — Ask questions, make changes, run tests, and review your work while staying in control.
+- **Explain** - Explain the code like no agent could.
 
-Software engineers can spend weeks onboarding to unfamiliar systems. Documentation drifts, architecture diagrams become outdated, and AI assistants often solve problems without helping developers understand them.
-
-Existing AI coding tools are excellent at generating code. Iodine explores a different approach: **using AI to shorten the path from unfamiliarity to confident contribution**.
-
-Success is measured by whether the user becomes more capable after using Iodine.
-
-Our long-term goal is to turn any Git repository into an interactive learning environment where AI explains architecture, guides exploration, connects documentation to implementation, and helps you make your first meaningful contribution without taking ownership away from you.
-
-## Why Iodine is different
-
-Iodine is organized around the learning journey:
-
-### Understand
-
-- **AI Summary** — Tutorial-style explanations of any file, including its role, APIs, data flow, and gotchas.
-- **System View** — Interactive architecture diagrams generated from the actual source code, with nodes linked back to implementation.
-- **Architecture highlighting** — Open a file and the corresponding System View node is highlighted automatically.
-
-### Explore
-
-- **Tutor Mode** — A read-only AI guide that walks through an unfamiliar codebase one file at a time, opening files and highlighting the lines worth studying.
-- **Proactive Help** — The IDE monitors your activity and automatically offers assistance when it detects you are churning in place — many actions, little output — without waiting for you to ask.
-- **Visible editor context** — The assistant automatically sees the code currently visible in your editor, so you can ask about what is on screen without copy-pasting.
-- **Interactive navigation** — Move between explanations, source files, architecture, and documentation without leaving the IDE.
-
-### Contribute
-
-- **Coding Assistant** — Read, write, search, and modify workspace files with Claude, GPT, or Gemini.
-- **Build Assistant** — Generate and run project-specific test, build, and run commands.
-- **Git integration** — Review status and diffs, stage changes, discard edits, and commit from the UI.
-- **Terminal approval** — Every shell command requires your explicit approval before it runs.
+The assistant uses the code and context already in your workspace, so guidance stays connected to the project rather than generic examples. It can explain what is happening, suggest a next step, and help you verify the result.
 
 ## Screenshots
 
@@ -73,29 +52,9 @@ Iodine is organized around the learning journey:
 ![Iodine IDE - Preview Mode](images/screenshot_4.png)
 *Preview mode showing a live website in action.*
 
-## Built to extend
+## More than a chat window
 
-Iodine includes a complete IDE foundation—editor, terminal, Git integration, workspace management, and AI tooling—allowing contributors to focus on new developer experiences instead of rebuilding the basics.
-
-The project is built to be forked. Change the layout, add panels, wire new backend capabilities, or build specialized developer tools on top of a familiar foundation. The stack is React + Express + TypeScript with no framework magic.
-
-## Features
-
-- 🖥️ **VS Code-like IDE** — Activity bar, file explorer, Monaco-powered editor, tabs, and resizable panels
-- 📑 **Editor tabs** — Drag tabs to reorder them, scroll when they overflow, and track unsaved changes
-- 📁 **File and folder management** — Create, rename, and delete files and folders from the explorer
-- 🤖 **AI Coding Assistant** — Streaming chat with tool use backed by Claude, GPT, or Gemini
-- 🔔 **Proactive Help** — Detects when you are stuck and proactively offers context-aware assistance
-- 🎓 **Tutor Mode** — Read-only, step-by-step codebase walkthrough with file opening and line highlighting
-- 👁️ **User Visual Context** — Automatically includes visible editor lines or the active selection in AI context
-- 📖 **AI Summary** — Cached, tutorial-style explanations for files and their place in the system
-- 🔨 **Build Assistant** — AI-generated test, build, and run commands with integrated terminal execution
-- 🌿 **Source Control** — Git status, staging, unstaging, discard, diffs, and commits from the UI
-- 📂 **File preview** — Render Markdown and HTML, and view images and PDFs inline
-- 🌐 **URL iframe tabs** — Open local development servers and documentation alongside your code
-- 💾 **Workspace persistence** — Restore the last opened project across server restarts
-- 🖥️ **Integrated terminal** — Multiple resizable xterm.js sessions backed by node-pty
-- 🗺️ **System View** — Generate, edit, save, and export interactive architecture diagrams
+Iodine brings the tools you need into one guided workspace: a code editor, architecture view, integrated terminal, Git workflows, previews, and AI assistance. The tools are there to support the mentoring experience—not distract from it.
 
 ## System View 📈
 
@@ -111,10 +70,8 @@ System View is interactive documentation generated from the code that is actuall
 ## Use Cases
 
 - **Understand an unfamiliar codebase** — Learn architecture and implementation one guided step at a time.
-- **Fork as an IDE** — Add panels, tools, and workflows on top of an existing editor, Git, terminal, and AI foundation.
 - **Build AI-assisted developer tools** — Use the built-in agent infrastructure for specialized assistants.
 - **Learn or teach** — Explore a readable example integrating Monaco, xterm.js, Git, and multiple AI providers.
-- **Build internal developer tools** — Run Iodine locally as a web IDE for any project or deploy it for a team.
 
 ## How It Works
 
