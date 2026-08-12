@@ -676,6 +676,22 @@ Completed assistant messages longer than 120 characters show a **Verbally** chip
 
 **Tutor mode system prompt:** The scripted "Ready to start? Say go" turn-1 ending has been removed. The AI presents its plan and ends conversationally — no scripted cues like "say next" or "say go" anywhere in the prompt.
 
+## Voice Input (STT)
+
+A microphone button sits left of the Send button in the Coding Assistant input row. Clicking it starts recording; it auto-stops after ~1.5 s of silence and sends the transcription automatically without requiring a Send click.
+
+| File | Role |
+|------|------|
+| `server/src/routes/stt.ts` | `POST /api/stt/transcribe` — accepts `{ audioBase64, mimeType, provider }`. OpenAI: forwards to Whisper (`whisper-1`) via `toFile` helper. Google: sends audio as `inlineData` to `gemini-2.0-flash` with a transcription-only prompt. Returns `{ text }`. |
+| `server/src/app.ts` | Registers `sttRouter` at `/api`. |
+| `client/src/components/right/CodingAssistant.tsx` | `isRecording` / `isTranscribing` states + `mediaRecorderRef`, `audioChunksRef`, `silenceTimerRef`, `recordingStreamRef`. `startRecording` requests mic permission, attaches a `MediaRecorder` and an `AnalyserNode` for per-frame RMS silence detection (threshold RMS < 5, 1.5 s hold). `stopRecording` clears the silence timer and stops the recorder. `onstop` closes the `AudioContext`, stops the stream tracks, and calls `transcribeAndSend`. `transcribeAndSend` base64-encodes the blob, POSTs to the server, and calls `sendMessage` directly on success. `MicIcon` SVG renders the button; button turns red while recording. |
+
+**Silence detection:** `AnalyserNode` with `fftSize = 1024` reads byte time-domain data each animation frame. RMS below 5 starts a 1.5 s countdown; any louder frame resets it. Stops the recorder when the countdown expires.
+
+**Provider support:** OpenAI and Google only — same restriction as Verbally. Anthropic users see the existing "switch provider" dialog.
+
+**Auto-send:** After transcription succeeds, `sendMessage` is called directly with the transcribed text; the textarea is not populated.
+
 ## Implementation Notes
 
 For the full project architecture, APIs, and feature details, inspect the relevant source files and `README.md`. Keep this document concise to preserve context-window space.
