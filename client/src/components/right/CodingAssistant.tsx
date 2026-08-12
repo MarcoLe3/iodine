@@ -458,7 +458,17 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
           const msgId = lastMsg.id;
           setSpeakingMsgId(msgId);
           onNarrationQueueEmptyRef.current = () => setSpeakingMsgId(null);
+          // Start fetching Verbally immediately so it loads in parallel with any transition phrase.
+          const verballyPromise = fetch(`${API_BASE}/api/tts/verbally`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, provider: provider.id, model }),
+          }).then(async r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return URL.createObjectURL(await r.blob());
+          });
           // If tool narrations played this turn, bridge with a natural transition phrase.
+          // Verbally is already downloading while this phrase plays, so there's no dead air.
           if (turnHadNarrationsRef.current) {
             const transitions = ["Aha.", "Got it.", "Alright so.", "Okay.", "Right, so.", "Hmm, okay."];
             const transition = transitions[Math.floor(Math.random() * transitions.length)];
@@ -472,15 +482,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
               return URL.createObjectURL(await r.blob());
             });
           }
-          narrationQueueRef.current.push(async () => {
-            const r = await fetch(`${API_BASE}/api/tts/verbally`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text, provider: provider.id, model }),
-            });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return URL.createObjectURL(await r.blob());
-          });
+          narrationQueueRef.current.push(() => verballyPromise);
           void drainNarrationQueue();
           turnHadNarrationsRef.current = false;
         }
