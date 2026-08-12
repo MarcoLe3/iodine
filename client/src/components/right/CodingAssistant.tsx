@@ -396,7 +396,9 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const startRecording = useCallback(async () => {
     if (provider.id === 'anthropic') { setShowVerballyDialog(true); return; }
     // Stop any playing audio before recording so the mic doesn't pick it up.
-    stopNarrationQueue();
+    // Pause audio refs directly — do NOT call stopNarrationQueue() here as it
+    // mutates the generation counter and can break subsequent narration flow.
+    if (narrationAudioRef.current) { narrationAudioRef.current.pause(); narrationAudioRef.current = null; }
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; setSpeakingMsgId(null); }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });

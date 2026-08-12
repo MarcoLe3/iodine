@@ -21,8 +21,9 @@ router.post('/stt/transcribe', async (req: Request, res: Response) => {
       const client = new OpenAI({ apiKey });
 
       const audioBuffer = Buffer.from(audioBase64, 'base64');
-      const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
-      const file = await toFile(audioBuffer, `recording.${ext}`, { type: mimeType });
+      const baseMime = mimeType.split(';')[0].trim();
+      const ext = baseMime.includes('mp4') ? 'mp4' : baseMime.includes('ogg') ? 'ogg' : 'webm';
+      const file = await toFile(audioBuffer, `recording.${ext}`, { type: baseMime });
 
       const transcription = await client.audio.transcriptions.create({
         model: 'whisper-1',
