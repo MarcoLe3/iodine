@@ -359,7 +359,10 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       }
       const { text } = await r.json() as { text: string };
       if (text?.trim()) {
-        sendMessage(text.trim(), activeFilePath, getEditorContext?.() ?? null, undefined, isTutorMode, false);
+        const isFresh = showConversations;
+        setShowConversations(false);
+        if (isFresh) clearMessages();
+        sendMessage(text.trim(), activeFilePath, getEditorContext?.() ?? null, undefined, isTutorMode, isFresh);
         onMessageSent?.();
       }
     } catch (err) {
@@ -368,7 +371,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       setIsTranscribing(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider.id, activeFilePath, isTutorMode]);
+  }, [provider.id, activeFilePath, isTutorMode, showConversations, clearMessages]);
 
   const startRecording = useCallback(async () => {
     if (provider.id === 'anthropic') { setShowVerballyDialog(true); return; }
