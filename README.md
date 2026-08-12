@@ -11,7 +11,7 @@
 > “Half of [developers] believe a 90% AI-written code scenario.”
 > — [Thomas Dohmke, GitHub CEO](https://ashtom.github.io/developers-reinvented)
 >
-> **Iodine helps you understand what AI builds.**
+> **Iodine helps you understand that AI-generated code.**
 
 ## A mentor for unfamiliar code
 
