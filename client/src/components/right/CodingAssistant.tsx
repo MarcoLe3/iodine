@@ -234,7 +234,9 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
 
   const handleToolNarration = useCallback((name: string, input: Record<string, unknown>) => {
     const pathVal = Object.values(input).find(v => typeof v === 'string' && (v.includes('/') || v.includes('\\'))) as string | undefined;
-    const dedupeKey = `${name}:${pathVal ?? ''}`;
+    // Treat read_file and open_file as the same action for dedup purposes.
+    const dedupeFamily = (name === 'open_file' || name === 'read_file') ? 'read' : name;
+    const dedupeKey = `${dedupeFamily}:${pathVal ?? ''}`;
     if (narratedThisTurnRef.current.has(dedupeKey)) return;
     narratedThisTurnRef.current.add(dedupeKey);
     turnHadNarrationsRef.current = true;
