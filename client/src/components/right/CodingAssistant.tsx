@@ -191,12 +191,15 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
   const narrationGenRef = useRef(0);
   const turnHadNarrationsRef = useRef(false);
+  const onNarrationQueueEmptyRef = useRef<(() => void) | null>(null);
 
   const stopNarrationQueue = useCallback(() => {
     narrationGenRef.current++;
     narrationQueueRef.current = [];
     if (narrationAudioRef.current) { narrationAudioRef.current.pause(); narrationAudioRef.current = null; }
     isDrainingRef.current = false;
+    onNarrationQueueEmptyRef.current?.();
+    onNarrationQueueEmptyRef.current = null;
   }, []);
 
   const drainNarrationQueue = useCallback(async () => {
@@ -220,7 +223,11 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         });
       } catch { /* skip failed clips */ }
     }
-    if (gen === narrationGenRef.current) isDrainingRef.current = false;
+    if (gen === narrationGenRef.current) {
+      isDrainingRef.current = false;
+      onNarrationQueueEmptyRef.current?.();
+      onNarrationQueueEmptyRef.current = null;
+    }
   }, []);
 
   const handleToolNarration = useCallback((name: string, input: Record<string, unknown>) => {
@@ -243,6 +250,9 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   }, [provider.id, drainNarrationQueue]);
 
   const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, handleToolNarration);
+  // Keep a ref to sendMessage so callbacks (like transcribeAndSend) never capture a stale closure.
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({ injectProactiveMessage, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, notifyEditorActivity]);
   const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(false); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
@@ -364,7 +374,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         const isFresh = showConversations;
         setShowConversations(false);
         if (isFresh) clearMessages();
-        sendMessage(text.trim(), activeFilePath, getEditorContext?.() ?? null, undefined, isTutorMode, isFresh);
+        sendMessageRef.current(text.trim(), activeFilePath, getEditorContext?.() ?? null, undefined, isTutorMode, isFresh);
         onMessageSent?.();
       }
     } catch (err) {
@@ -445,6 +455,9 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         const text = lastMsg.blocks.filter((b): b is UIBlock & { type: 'text' } => b.type === 'text').map(b => b.content).join('\n\n').trim();
         // Enqueue the condensed response after any tool narrations — do not interrupt them.
         if (text && provider.id !== 'anthropic') {
+          const msgId = lastMsg.id;
+          setSpeakingMsgId(msgId);
+          onNarrationQueueEmptyRef.current = () => setSpeakingMsgId(null);
           // If tool narrations played this turn, bridge with a natural transition phrase.
           if (turnHadNarrationsRef.current) {
             const transitions = ["Aha.", "Got it.", "Alright so.", "Okay.", "Right, so.", "Hmm, okay."];
