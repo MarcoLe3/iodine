@@ -37,7 +37,7 @@ router.post('/stt/transcribe', async (req: Request, res: Response) => {
       const ai = new GoogleGenAI({ apiKey });
 
       const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: [{
           parts: [
             { text: 'Transcribe this audio exactly as spoken. Return only the transcription, no commentary.' },
