@@ -395,6 +395,9 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
 
   const startRecording = useCallback(async () => {
     if (provider.id === 'anthropic') { setShowVerballyDialog(true); return; }
+    // Stop any playing audio before recording so the mic doesn't pick it up.
+    stopNarrationQueue();
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; setSpeakingMsgId(null); }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recordingStreamRef.current = stream;

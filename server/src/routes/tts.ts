@@ -7,12 +7,10 @@ import { loadGeminiKey } from '../services/geminiAgent';
 const router = Router();
 
 const NARRATION_PROMPT =
-  'You are a presenter speaking live while this content is on the slide behind you. ' +
-  'The audience can already read the slide — do NOT read it to them. ' +
-  'Instead, riff on it: pick the single most important insight, say it boldly in 2–3 sentences, and stop. ' +
-  'Be opinionated and direct. Cut every code block, list, caveat, and qualification. ' +
-  'No introductions, no "in summary", no "as you can see". ' +
-  'Just the raw takeaway, spoken like you mean it.';
+  'Condense the following into ONE spoken sentence — two at most. ' +
+  'Pick the single most important point and say it directly. ' +
+  'Cut all code, lists, caveats, and filler. No intro, no summary phrase. ' +
+  'Just the raw takeaway.';
 
 function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitDepth = 16): Buffer {
   const dataSize = pcm.length;
@@ -50,7 +48,7 @@ router.post('/tts/verbally', async (req: Request, res: Response) => {
           { role: 'system', content: NARRATION_PROMPT },
           { role: 'user', content: text },
         ],
-        max_completion_tokens: 120,
+        max_completion_tokens: 60,
       });
       const narration = completion.choices[0]?.message?.content?.trim() || text.slice(0, 1000);
 
