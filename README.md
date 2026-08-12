@@ -8,8 +8,8 @@
   Like having a patient senior engineer beside you—helping you understand unfamiliar code, guiding your next step, and explaining changes as you make them.
 </p>
 
-> “More than 92% of U.S.-based developers use AI coding tools.”
-> — [GitHub Research](https://github.blog/news-insights/research/survey-reveals-92-of-us-based-developers-use-ai-coding-tools/)
+> “Half of [developers] believe a 90% AI-written code scenario.”
+> — [Thomas Dohmke, GitHub CEO](https://ashtom.github.io/developers-reinvented)
 >
 > **Iodine helps you understand what AI builds.**
 
