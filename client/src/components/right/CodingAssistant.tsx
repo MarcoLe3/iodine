@@ -8,10 +8,11 @@ import { UIMessage, UIBlock } from '../../types';
 import { PROVIDERS } from '../../providers';
 import type { Provider } from '../../providers';
 import type { FileNode } from '../../types';
+import { useToolNarration } from '../../hooks/useToolNarration';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
-// {file} is replaced at runtime with the filename from the tool input path.
+/* Tool narration is implemented in useToolNarration. */
 const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
   read_file: [
     "Hmm, let me read {file}.",
@@ -186,18 +187,28 @@ interface CodingAssistantProps { workspacePath: string | null; activeFilePath: s
 
 export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onWatchTrigger, onAssistantReply }, ref) {
   // Narration queue for tutor-mode tool call commentary — must be defined before useCodingAssistant.
-  const narrationQueueRef = useRef<Array<() => Promise<string>>>([]);
-  const isDrainingRef = useRef(false);
-  const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
-  const narrationGenRef = useRef(0);
-  const turnHadNarrationsRef = useRef(false);
-  const onNarrationQueueEmptyRef = useRef<(() => void) | null>(null);
-  // Tracks "toolName:filePath" keys already narrated this turn — prevents repeating the same phrase.
+  const {
+    narrate: handleToolNarration,
+    stop: stopNarrationQueue,
+    drain: drainNarrationQueue,
+    queueRef: narrationQueueRef,
+    audioRef: narrationAudioRef,
+    hadNarrationsRef: turnHadNarrationsRef,
+    onEmptyRef: onNarrationQueueEmptyRef,
+    resetTurn: resetNarrationTurn,
+  } = useToolNarration(provider);
+
   const narratedThisTurnRef = useRef<Set<string>>(new Set());
-  // Tracks the most recently mentioned file so follow-up tool calls can say "the file".
   const lastNarratedFileRef = useRef<string | null>(null);
 
-  const stopNarrationQueue = useCallback(() => {
+  /* Narration state is owned by useToolNarration; these aliases preserve the existing turn-reset flow. */
+  const resetNarrationRefs = useCallback(() => {
+    resetNarrationTurn();
+    narratedThisTurnRef.current = new Set();
+    lastNarratedFileRef.current = null;
+  }, [resetNarrationTurn]);
+
+  const stopNarrationQueueLegacy = useCallback(() => {
     narrationGenRef.current++;
     narrationQueueRef.current = [];
     if (narrationAudioRef.current) { narrationAudioRef.current.pause(); narrationAudioRef.current = null; }
@@ -234,7 +245,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     }
   }, []);
 
-  const handleToolNarration = useCallback((name: string, input: Record<string, unknown>) => {
+  const handleToolNarrationLegacy = useCallback((name: string, input: Record<string, unknown>) => {
     const pathVal = Object.values(input).find(v => typeof v === 'string' && (v.includes('/') || v.includes('\\'))) as string | undefined;
     // Treat read_file and open_file as the same action for dedup purposes.
     const dedupeFamily = (name === 'open_file' || name === 'read_file') ? 'read' : name;
@@ -262,6 +273,9 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     });
     void drainNarrationQueue();
   }, [provider.id, drainNarrationQueue]);
+
+  // The extracted hook is the source of truth; retain the legacy block temporarily for a safe incremental refactor.
+  void handleToolNarrationLegacy;
 
   const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, handleToolNarration);
   // Keep a ref to sendMessage so callbacks (like transcribeAndSend) never capture a stale closure.
@@ -311,7 +325,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
-  const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; stopNarrationQueue(); turnHadNarrationsRef.current = false; narratedThisTurnRef.current = new Set(); lastNarratedFileRef.current = null; setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
+  const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; stopNarrationQueue(); resetNarrationRefs(); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
   const handleClearAll = async () => {
     try {
       await clearAllConversations();
@@ -385,7 +399,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       }
       const { text } = await r.json() as { text: string };
       if (text?.trim()) {
-        stopNarrationQueue(); turnHadNarrationsRef.current = false; narratedThisTurnRef.current = new Set(); lastNarratedFileRef.current = null;
+        stopNarrationQueue(); resetNarrationRefs();
         const isFresh = showConversations;
         setShowConversations(false);
         if (isFresh) clearMessages();
