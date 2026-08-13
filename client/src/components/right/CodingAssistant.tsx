@@ -153,6 +153,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     queueRef: narrationQueueRef,
     audioRef: narrationAudioRef,
     hadNarrationsRef: turnHadNarrationsRef,
+    hadUnskippableRef: turnHadUnskippableRef,
     onEmptyRef: onNarrationQueueEmptyRef,
     resetTurn: resetNarrationRefs,
   } = useToolNarration(provider);
@@ -372,7 +373,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
           const msgId = lastMsg.id;
           setSpeakingMsgId(msgId);
           onNarrationQueueEmptyRef.current = () => setSpeakingMsgId(null);
-          // Start fetching Verbally immediately so it loads in parallel with any transition phrase.
+          // Start fetching Verbally immediately so it loads in parallel with any queued narration.
           const verballyPromise = fetch(`${API_BASE}/api/tts/verbally`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -381,11 +382,10 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return URL.createObjectURL(await r.blob());
           });
-          // If tool narrations played this turn, bridge with a natural transition phrase.
-          // Verbally is already downloading while this phrase plays, so there's no dead air.
-          // The transition is unskippable — it always plays before Verbally.
-          if (turnHadNarrationsRef.current) {
-            const transitions = ["Aha.", "Got it.", "Alright so.", "Okay.", "Right, so.", "Hmm, okay."];
+          // Bridge with "Aha." only on pure exploration turns (no edit/write narrations).
+          // On turns with edits/writes the transition would feel odd after "Let me edit…".
+          if (turnHadNarrationsRef.current && !turnHadUnskippableRef.current) {
+            const transitions = ['Aha.', 'Got it.', 'Alright so.', 'Okay.', 'Right, so.', 'Hmm, okay.'];
             const transition = transitions[Math.floor(Math.random() * transitions.length)];
             narrationQueueRef.current.push({
               skippable: false,
@@ -400,7 +400,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
               },
             });
           }
-          // Evict all skippable backlog as soon as the Verbally audio is ready.
+          // Evict remaining skippable narrations as soon as the Verbally audio is ready.
           verballyPromise.then(() => evictSkippable());
           narrationQueueRef.current.push({ fn: () => verballyPromise, skippable: false });
           void drainNarrationQueue();

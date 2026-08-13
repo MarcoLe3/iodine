@@ -12,10 +12,9 @@ const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
   search_files:   ['Let me search for this.', 'Hmm, let me find this.', 'Let me track this down.', 'Hmm, let me look for this.'],
 };
 
-// read_file and open_file narrations are skippable: they are evicted from the
-// queue as soon as the Verbally audio is ready, cutting straight to the summary.
-// edit_file and write_file narrations are kept — they signal meaningful work.
-const SKIPPABLE_TOOLS = new Set(['read_file', 'open_file']);
+// Exploration/navigation narrations are skippable when the final summary is ready.
+// Edit/write narrations are kept because they announce meaningful changes.
+const SKIPPABLE_TOOLS = new Set(['read_file', 'open_file', 'list_directory', 'search_files']);
 
 interface NarrationEntry {
   fn: () => Promise<string>;
@@ -27,10 +26,11 @@ export function useToolNarration(provider: Provider) {
   const audioRef      = useRef<HTMLAudioElement | null>(null);
   const generationRef = useRef(0);
   const drainingRef   = useRef(false);
-  const narratedRef   = useRef(new Set<string>());
-  const lastFileRef   = useRef<string | null>(null);
-  const hadNarrationsRef = useRef(false);
-  const onEmptyRef    = useRef<(() => void) | null>(null);
+  const narratedRef        = useRef(new Set<string>());
+  const lastFileRef        = useRef<string | null>(null);
+  const hadNarrationsRef   = useRef(false);
+  const hadUnskippableRef  = useRef(false);
+  const onEmptyRef         = useRef<(() => void) | null>(null);
 
   const stop = useCallback(() => {
     generationRef.current++;
@@ -84,6 +84,7 @@ export function useToolNarration(provider: Provider) {
     if (narratedRef.current.has(key)) return;
     narratedRef.current.add(key);
     hadNarrationsRef.current = true;
+    if (!SKIPPABLE_TOOLS.has(name)) hadUnskippableRef.current = true;
 
     const phrases  = TOOL_NARRATION_PHRASES[name] ?? ['Hmm, let me handle this.', 'Let me take care of this.'];
     const template = phrases[Math.floor(Math.random() * phrases.length)];
@@ -108,10 +109,11 @@ export function useToolNarration(provider: Provider) {
   }, [provider.id, drain]);
 
   const resetTurn = useCallback(() => {
-    narratedRef.current   = new Set();
-    lastFileRef.current   = null;
-    hadNarrationsRef.current = false;
+    narratedRef.current       = new Set();
+    lastFileRef.current       = null;
+    hadNarrationsRef.current  = false;
+    hadUnskippableRef.current = false;
   }, []);
 
-  return { narrate, stop, drain, evictSkippable, queueRef, audioRef, hadNarrationsRef, onEmptyRef, resetTurn };
+  return { narrate, stop, drain, evictSkippable, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, onEmptyRef, resetTurn };
 }

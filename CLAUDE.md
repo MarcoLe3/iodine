@@ -99,6 +99,8 @@ The editor pane has a three-way view toggle: **source / preview / summary**.
 | `client/src/components/layout/EditorArea.tsx` | Owns `editorView` state (`'source' \| 'preview' \| 'summary'`). Renders the `🤖 Summary` button for any non-image, non-PDF file when a workspace is open. Streams `text_delta` SSE events from the server and renders partial Markdown progressively. Provides a `↺ Regenerate` button to clear the in-session cache and re-run. Accepts `summaryRequestPath` prop to open in summary view when triggered externally (both files and directories). |
 | `client/src/api/files.ts` | `getAiSummary(workspacePath, filePath, isDirectory?)` probes the cache (`GET /api/ai-summary` or `/api/ai-directory-summary`). `generateAiSummary(workspacePath, filePath, provider, model, isDirectory?)` POSTs to the generate endpoint, collects the full SSE stream, and returns `{ content }`. |
 | `server/src/routes/aiSummary.ts` | `GET /api/ai-summary?path=` and `GET /api/ai-directory-summary?path=` check the disk cache. `POST /api/ai-summary/generate` and `POST /api/ai-directory-summary/generate` stream LLM-generated summaries, then write to cache. |
+| `server/src/prompts/summarySystem.ts` | Exports `SUMMARY_SYSTEM_PROMPT` — the file-level summary system prompt used by all three providers. |
+| `server/src/prompts/directorySummarySystem.ts` | Exports `DIRECTORY_SUMMARY_SYSTEM_PROMPT` — the directory-level summary system prompt. |
 
 **File cache path:** `~/.iodine/<workspace-md5>/<relpath-md5>/<file-content-md5>_ai_summary.md`
 **Directory cache path:** `~/.iodine/<workspace-md5>/<relpath-md5>/<dir-contents-md5>_ai_dir_summary.md`
@@ -652,6 +654,23 @@ Three icon buttons in the menu bar right section (left of the theme toggle) let 
 
 **`display: contents` pattern:** The wrapper div with `display: 'contents'` is transparent to the flex layout — its children participate directly as flex items in the parent row/column. Switching to `display: 'none'` hides the subtree without unmounting it, so no state is lost.
 
+## About Dialog
+
+**Help → About Iodine** opens a modal showing the app version. The version string is derived from `git describe --tags --always --dirty` at Vite startup/build time and injected as the compile-time constant `__APP_VERSION__` via `vite.config.ts`. The TypeScript declaration lives in `client/src/app-version.d.ts`. If git metadata is unavailable the string falls back to `'development'`.
+
+## Editor View Button Theming
+
+The floating editor-view buttons (Preview, Summary, Conflicts) use CSS variables so they adapt to light/dark mode without hardcoded colours.
+
+| Variable | Dark fallback | Light value | Used for |
+|----------|--------------|-------------|----------|
+| `--summary-button-bg` | `#3a3d41` | `#e5e7eb` | Summary button idle background |
+| `--summary-button-color` | `#fff` | `#374151` | Summary button idle text |
+| `--editor-btn-active-bg` | `#007acc` | `#dbeafe` | All three buttons in active/Source state |
+| `--editor-btn-active-color` | `#fff` | `#1e40af` | Active/Source button text |
+
+The `.summary-action` CSS class (applied to the file-tree "Generate/View Summary" dropdown item) sets `color: #6b7280` in light mode via `:root[data-theme='light'] .summary-action`.
+
 ## Voice Memo (TTS)
 
 Completed assistant messages longer than 120 characters show a **Voice Memo** chip (internally "Verbally") below the content. Clicking it condenses the response via LLM into a confident slide-deck narration, then speaks it aloud using the provider's TTS API. Only OpenAI and Google are supported; Anthropic users see a dialog offering to switch.
@@ -670,9 +689,9 @@ Completed assistant messages longer than 120 characters show a **Voice Memo** ch
 
 **Speaking indicator:** While audio plays the chip content switches to `SpeakingWave` — 7 vertical bars (2 px wide, `currentColor`) animated with `@keyframes wave-bar` (2 px → 11 px, 0.65 s ease-in-out, alternating) and staggered `animationDelay` values to produce an equalizer ripple. The bars inherit the chip's teal accent via `currentColor`.
 
-**Tutor mode integration:** When Tutor mode is on, the Verbally chip is shown on every assistant message regardless of length (`alwaysVerbally` prop bypasses the 120-char threshold). At the end of each generation the auto-speak effect enqueues the condensed Verbally response onto the same narration queue used by tool narrations (see below) — it never interrupts them. If tool narrations played during the turn (`turnHadNarrationsRef`), a random spoken transition phrase ("Aha.", "Got it.", "Alright so.", etc.) is enqueued via `POST /api/tts/speak` immediately before the Verbally audio, bridging the two naturally. No transition is added when there were no tool narrations.
+**Tutor mode integration:** When Tutor mode is on, the Verbally chip is shown on every assistant message regardless of length (`alwaysVerbally` prop bypasses the 120-char threshold). At the end of each generation the auto-speak effect enqueues the condensed Verbally response onto the same narration queue used by tool narrations — it never interrupts them. Exploration/navigation narrations (`read_file`, `open_file`, `list_directory`, `search_files`) are marked `skippable: true` and are evicted from the queue as soon as the Verbally audio fetch resolves, so Verbally follows the current clip without waiting for remaining exploration phrases. Edit/write narrations (`skippable: false`) are always played through. On exploration-only turns (no edit/write narrations that turn), a brief transition phrase ("Aha.", "Got it.", etc.) is inserted before Verbally to bridge the two naturally; this transition is suppressed on turns that included edit/write narrations since those already signal completion.
 
-**Tutor mode tool call narration:** Each `tool_call` SSE event during a tutor-mode turn triggers a randomised short phrase ("Hmm, let me read this.", "Let me examine this.", etc.) from `TOOL_NARRATION_PHRASES` keyed by tool name (`read_file`, `edit_file`, `write_file`, `open_file`, `list_directory`, `search_files`). Phrases are spoken sequentially via a ref-based audio queue (`narrationQueueRef` + `drainNarrationQueue`) with generation-counter cancellation (`narrationGenRef`). The `POST /api/tts/speak` endpoint handles direct TTS without a condensation step. The queue stops on new message send, tutor mode toggle off, manual Verbally click, and component unmount.
+**Tutor mode tool call narration:** Each `tool_call` SSE event during a tutor-mode turn triggers a randomised short phrase from `TOOL_NARRATION_PHRASES` keyed by tool name. Narration logic lives in `client/src/hooks/useToolNarration.ts`. The hook owns the `NarrationEntry` queue (`{ fn, skippable }`), generation counter, deduplication set, and per-turn `hadUnskippableRef` flag (set whenever an edit/write narration is queued, reset by `resetTurn()`). Exposed API: `narrate`, `stop`, `drain`, `evictSkippable`, `resetTurn`, plus refs (`queueRef`, `audioRef`, `hadNarrationsRef`, `hadUnskippableRef`, `onEmptyRef`). The `POST /api/tts/speak` endpoint handles direct TTS without a condensation step. The queue stops on new message send, tutor mode toggle off, manual Verbally click, and component unmount.
 
 **Tutor mode system prompt:** The scripted "Ready to start? Say go" turn-1 ending has been removed. The AI presents its plan and ends conversationally — no scripted cues like "say next" or "say go" anywhere in the prompt.
 
