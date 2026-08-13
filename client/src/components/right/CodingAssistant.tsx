@@ -149,6 +149,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     narrate: handleToolNarration,
     stop: stopNarrationQueue,
     drain: drainNarrationQueue,
+    evictSkippable,
     queueRef: narrationQueueRef,
     audioRef: narrationAudioRef,
     hadNarrationsRef: turnHadNarrationsRef,
@@ -382,20 +383,26 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
           });
           // If tool narrations played this turn, bridge with a natural transition phrase.
           // Verbally is already downloading while this phrase plays, so there's no dead air.
+          // The transition is unskippable — it always plays before Verbally.
           if (turnHadNarrationsRef.current) {
             const transitions = ["Aha.", "Got it.", "Alright so.", "Okay.", "Right, so.", "Hmm, okay."];
             const transition = transitions[Math.floor(Math.random() * transitions.length)];
-            narrationQueueRef.current.push(async () => {
-              const r = await fetch(`${API_BASE}/api/tts/speak`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: transition, provider: provider.id }),
-              });
-              if (!r.ok) throw new Error(`HTTP ${r.status}`);
-              return URL.createObjectURL(await r.blob());
+            narrationQueueRef.current.push({
+              skippable: false,
+              fn: async () => {
+                const r = await fetch(`${API_BASE}/api/tts/speak`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ text: transition, provider: provider.id }),
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return URL.createObjectURL(await r.blob());
+              },
             });
           }
-          narrationQueueRef.current.push(() => verballyPromise);
+          // Evict all skippable backlog as soon as the Verbally audio is ready.
+          verballyPromise.then(() => evictSkippable());
+          narrationQueueRef.current.push({ fn: () => verballyPromise, skippable: false });
           void drainNarrationQueue();
           turnHadNarrationsRef.current = false;
         }
