@@ -83,7 +83,17 @@
   --color-preview-pre-bg: #f6f8fa;
   --color-preview-quote: #57606a;
   --color-preview-row-alt: #f6f8fa;
+  --summary-button-bg: #e5e7eb;
 }
+
+.summary-action {
+  color: var(--color-text-primary);
+}
+
+:root[data-theme='light'] .summary-action {
+  color: #6b7280;
+}
+
 
 *, *::before, *::after {
   box-sizing: border-box;

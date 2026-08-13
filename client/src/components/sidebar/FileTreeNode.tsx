@@ -455,6 +455,7 @@ export function FileTreeNode({
                               e.stopPropagation();
                               handleSummary();
                             }}
+                            className="summary-action"
                             style={{
                               display: 'flex',
                               alignItems: 'center',

@@ -592,7 +592,14 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                     ? setEditorView('source')
                     : handleSwitchToSummary()}
                   title={editorView === 'summary' ? 'Back to source' : hasCachedSummary ? (cachedSummaryObsolete ? 'Cached summary is outdated — file has changed' : 'View cached summary') : 'Generate AI summary'}
-                  style={{ ...btnStyle, background: editorView === 'summary' ? '#007acc' : cachedSummaryObsolete ? '#7a5500' : '#3a3d41' }}
+                  style={{
+                    ...btnStyle,
+                    background: editorView === 'summary'
+                      ? '#007acc'
+                      : cachedSummaryObsolete
+                        ? '#7a5500'
+                        : 'var(--summary-button-bg, #3a3d41)',
+                  }}
                 >
                   {editorView === 'summary' ? '⌨ Source' : hasCachedSummary ? '📖 View Summary' : '✨ Generate Summary'}
                 </button>
