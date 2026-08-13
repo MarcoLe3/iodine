@@ -194,6 +194,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const onNarrationQueueEmptyRef = useRef<(() => void) | null>(null);
   // Tracks "toolName:filePath" keys already narrated this turn — prevents repeating the same phrase.
   const narratedThisTurnRef = useRef<Set<string>>(new Set());
+  // Tracks the most recently mentioned file so follow-up tool calls can say "the file".
+  const lastNarratedFileRef = useRef<string | null>(null);
 
   const stopNarrationQueue = useCallback(() => {
     narrationGenRef.current++;
@@ -243,7 +245,12 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     const phrases = TOOL_NARRATION_PHRASES[name] ?? ["Hmm, let me handle this.", "Let me take care of this."];
     const template = phrases[Math.floor(Math.random() * phrases.length)];
     const filename = pathVal ? (pathVal.split(/[/\\]/).filter(Boolean).pop() ?? null) : null;
-    const phrase = template.replace('{file}', filename ?? 'this');
+    // Compare normalized full paths, rather than basenames, so same-named files in
+    // different directories are not incorrectly called "the file".
+    const normalizedPath = pathVal?.replace(/\\/g, '/').replace(/^\.\//, '') ?? null;
+    const sameAsLastFile = normalizedPath !== null && normalizedPath === lastNarratedFileRef.current;
+    const phrase = template.replace('{file}', sameAsLastFile ? 'the file' : filename ?? 'this');
+    if (normalizedPath) lastNarratedFileRef.current = normalizedPath;
     narrationQueueRef.current.push(async () => {
       const r = await fetch(`${API_BASE}/api/tts/speak`, {
         method: 'POST',
@@ -304,7 +311,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
-  const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; stopNarrationQueue(); turnHadNarrationsRef.current = false; narratedThisTurnRef.current = new Set(); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
+  const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; stopNarrationQueue(); turnHadNarrationsRef.current = false; narratedThisTurnRef.current = new Set(); lastNarratedFileRef.current = null; setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
   const handleClearAll = async () => {
     try {
       await clearAllConversations();
@@ -378,7 +385,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       }
       const { text } = await r.json() as { text: string };
       if (text?.trim()) {
-        stopNarrationQueue(); turnHadNarrationsRef.current = false; narratedThisTurnRef.current = new Set();
+        stopNarrationQueue(); turnHadNarrationsRef.current = false; narratedThisTurnRef.current = new Set(); lastNarratedFileRef.current = null;
         const isFresh = showConversations;
         setShowConversations(false);
         if (isFresh) clearMessages();
