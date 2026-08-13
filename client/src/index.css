@@ -85,6 +85,8 @@
   --color-preview-row-alt: #f6f8fa;
   --summary-button-bg: #e5e7eb;
   --summary-button-color: #374151;
+  --editor-btn-active-bg: #dbeafe;
+  --editor-btn-active-color: #1e40af;
 }
 
 .summary-action {

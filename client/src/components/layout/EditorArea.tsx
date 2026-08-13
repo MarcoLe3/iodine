@@ -568,7 +568,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                 <button
                   onClick={() => setEditorView(v => v === 'conflicts' ? 'source' : 'conflicts')}
                   title={editorView === 'conflicts' ? 'Back to source' : 'Resolve merge conflicts'}
-                  style={{ ...btnStyle, background: editorView === 'conflicts' ? '#007acc' : '#6f4e37' }}
+                  style={{ ...btnStyle, background: editorView === 'conflicts' ? 'var(--editor-btn-active-bg, #007acc)' : '#6f4e37', color: editorView === 'conflicts' ? 'var(--editor-btn-active-color, #fff)' : '#fff' }}
                 >
                   {editorView === 'conflicts' ? '⌨ Source' : '⚠ Conflicts'}
                 </button>
@@ -579,7 +579,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                 <button
                   onClick={() => { captureScrollPercentage(); setEditorView(v => v === 'preview' ? 'source' : 'preview'); }}
                   title={editorView === 'preview' ? 'Switch to source' : 'Switch to preview'}
-                  style={{ ...btnStyle, background: editorView === 'preview' ? '#007acc' : '#3a3d41' }}
+                  style={{ ...btnStyle, background: editorView === 'preview' ? 'var(--editor-btn-active-bg, #007acc)' : '#3a3d41', color: editorView === 'preview' ? 'var(--editor-btn-active-color, #fff)' : '#fff' }}
                 >
                   {editorView === 'preview' ? '⌨ Source' : '👁 Preview'}
                 </button>
@@ -595,11 +595,11 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   style={{
                     ...btnStyle,
                     background: editorView === 'summary'
-                      ? '#007acc'
+                      ? 'var(--editor-btn-active-bg, #007acc)'
                       : cachedSummaryObsolete
                         ? '#7a5500'
                         : 'var(--summary-button-bg, #3a3d41)',
-                    color: 'var(--summary-button-color, #fff)',
+                    color: editorView === 'summary' ? 'var(--editor-btn-active-color, #fff)' : 'var(--summary-button-color, #fff)',
                   }}
                 >
                   {editorView === 'summary' ? '⌨ Source' : hasCachedSummary ? '📖 View Summary' : '✨ Generate Summary'}
