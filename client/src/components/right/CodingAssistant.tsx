@@ -12,48 +12,6 @@ import { useToolNarration } from '../../hooks/useToolNarration';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
-/* Tool narration is implemented in useToolNarration. */
-const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
-  read_file: [
-    "Hmm, let me read {file}.",
-    "Let me take a look at {file}.",
-    "Let me examine {file}.",
-    "Hmm, let me check {file}.",
-    "Let me see what {file} says.",
-  ],
-  edit_file: [
-    "Let me edit {file}.",
-    "Hmm, let me update {file}.",
-    "Let me modify {file}.",
-    "Hmm, let me adjust {file}.",
-    "Let me make that change in {file}.",
-  ],
-  write_file: [
-    "Let me write {file}.",
-    "Hmm, let me create {file}.",
-    "Let me put {file} together.",
-    "Hmm, let me set up {file}.",
-  ],
-  open_file: [
-    "Let me open {file}.",
-    "Hmm, let me navigate to {file}.",
-    "Let me pull up {file}.",
-    "Let me look at {file}.",
-  ],
-  list_directory: [
-    "Hmm, let me look around in {file}.",
-    "Let me check the structure of {file}.",
-    "Let me see what's in {file}.",
-    "Hmm, let me explore {file}.",
-  ],
-  search_files: [
-    "Let me search for this.",
-    "Hmm, let me find this.",
-    "Let me track this down.",
-    "Hmm, let me look for this.",
-  ],
-};
-
 function argumentSummary(input: unknown): string | null {
   if (!input || typeof input !== 'object') return null;
   const values = Object.values(input as Record<string, unknown>);
@@ -195,87 +153,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     audioRef: narrationAudioRef,
     hadNarrationsRef: turnHadNarrationsRef,
     onEmptyRef: onNarrationQueueEmptyRef,
-    resetTurn: resetNarrationTurn,
+    resetTurn: resetNarrationRefs,
   } = useToolNarration(provider);
-
-  const narratedThisTurnRef = useRef<Set<string>>(new Set());
-  const lastNarratedFileRef = useRef<string | null>(null);
-
-  /* Narration state is owned by useToolNarration; these aliases preserve the existing turn-reset flow. */
-  const resetNarrationRefs = useCallback(() => {
-    resetNarrationTurn();
-    narratedThisTurnRef.current = new Set();
-    lastNarratedFileRef.current = null;
-  }, [resetNarrationTurn]);
-
-  const stopNarrationQueueLegacy = useCallback(() => {
-    narrationGenRef.current++;
-    narrationQueueRef.current = [];
-    if (narrationAudioRef.current) { narrationAudioRef.current.pause(); narrationAudioRef.current = null; }
-    isDrainingRef.current = false;
-    onNarrationQueueEmptyRef.current?.();
-    onNarrationQueueEmptyRef.current = null;
-  }, []);
-
-  const drainNarrationQueue = useCallback(async () => {
-    if (isDrainingRef.current) return;
-    isDrainingRef.current = true;
-    const gen = narrationGenRef.current;
-    while (narrationQueueRef.current.length > 0 && gen === narrationGenRef.current) {
-      const fetchUrl = narrationQueueRef.current.shift()!;
-      try {
-        const url = await fetchUrl();
-        if (gen !== narrationGenRef.current) { URL.revokeObjectURL(url); break; }
-        await new Promise<void>(resolve => {
-          const audio = new Audio(url);
-          narrationAudioRef.current = audio;
-          let done = false;
-          const finish = () => { if (done) return; done = true; URL.revokeObjectURL(url); resolve(); };
-          audio.play().catch(finish);
-          audio.addEventListener('ended', finish, { once: true });
-          audio.addEventListener('error', finish, { once: true });
-          audio.addEventListener('pause', finish, { once: true });
-        });
-      } catch { /* skip failed clips */ }
-    }
-    if (gen === narrationGenRef.current) {
-      isDrainingRef.current = false;
-      onNarrationQueueEmptyRef.current?.();
-      onNarrationQueueEmptyRef.current = null;
-    }
-  }, []);
-
-  const handleToolNarrationLegacy = useCallback((name: string, input: Record<string, unknown>) => {
-    const pathVal = Object.values(input).find(v => typeof v === 'string' && (v.includes('/') || v.includes('\\'))) as string | undefined;
-    // Treat read_file and open_file as the same action for dedup purposes.
-    const dedupeFamily = (name === 'open_file' || name === 'read_file') ? 'read' : name;
-    const dedupeKey = `${dedupeFamily}:${pathVal ?? ''}`;
-    if (narratedThisTurnRef.current.has(dedupeKey)) return;
-    narratedThisTurnRef.current.add(dedupeKey);
-    turnHadNarrationsRef.current = true;
-    const phrases = TOOL_NARRATION_PHRASES[name] ?? ["Hmm, let me handle this.", "Let me take care of this."];
-    const template = phrases[Math.floor(Math.random() * phrases.length)];
-    const filename = pathVal ? (pathVal.split(/[/\\]/).filter(Boolean).pop() ?? null) : null;
-    // Compare normalized full paths, rather than basenames, so same-named files in
-    // different directories are not incorrectly called "the file".
-    const normalizedPath = pathVal?.replace(/\\/g, '/').replace(/^\.\//, '') ?? null;
-    const sameAsLastFile = normalizedPath !== null && normalizedPath === lastNarratedFileRef.current;
-    const phrase = template.replace('{file}', sameAsLastFile ? 'the file' : filename ?? 'this');
-    if (normalizedPath) lastNarratedFileRef.current = normalizedPath;
-    narrationQueueRef.current.push(async () => {
-      const r = await fetch(`${API_BASE}/api/tts/speak`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: phrase, provider: provider.id }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return URL.createObjectURL(await r.blob());
-    });
-    void drainNarrationQueue();
-  }, [provider.id, drainNarrationQueue]);
-
-  // The extracted hook is the source of truth; retain the legacy block temporarily for a safe incremental refactor.
-  void handleToolNarrationLegacy;
 
   const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, handleToolNarration);
   // Keep a ref to sendMessage so callbacks (like transcribeAndSend) never capture a stale closure.
@@ -519,7 +398,6 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
           narrationQueueRef.current.push(() => verballyPromise);
           void drainNarrationQueue();
           turnHadNarrationsRef.current = false;
-          narratedThisTurnRef.current = new Set();
         }
       }
     }
