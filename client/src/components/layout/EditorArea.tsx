@@ -599,6 +599,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                       : cachedSummaryObsolete
                         ? '#7a5500'
                         : 'var(--summary-button-bg, #3a3d41)',
+                    color: 'var(--summary-button-color, #fff)',
                   }}
                 >
                   {editorView === 'summary' ? '⌨ Source' : hasCachedSummary ? '📖 View Summary' : '✨ Generate Summary'}
