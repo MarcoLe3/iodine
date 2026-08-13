@@ -652,9 +652,9 @@ Three icon buttons in the menu bar right section (left of the theme toggle) let 
 
 **`display: contents` pattern:** The wrapper div with `display: 'contents'` is transparent to the flex layout — its children participate directly as flex items in the parent row/column. Switching to `display: 'none'` hides the subtree without unmounting it, so no state is lost.
 
-## Verbally (TTS)
+## Voice Memo (TTS)
 
-Completed assistant messages longer than 120 characters show a **Verbally** chip below the content. Clicking it condenses the response via LLM into a confident slide-deck narration, then speaks it aloud using the provider's TTS API. Only OpenAI and Google are supported; Anthropic users see a dialog offering to switch.
+Completed assistant messages longer than 120 characters show a **Voice Memo** chip (internally "Verbally") below the content. Clicking it condenses the response via LLM into a confident slide-deck narration, then speaks it aloud using the provider's TTS API. Only OpenAI and Google are supported; Anthropic users see a dialog offering to switch.
 
 | File | Role |
 |------|------|
