@@ -11,6 +11,7 @@ import { loadApiKey } from '../services/anthropicAgent';
 import { loadOpenAIKey } from '../services/openaiAgent';
 import { loadGeminiKey } from '../services/geminiAgent';
 import { SUMMARY_SYSTEM_PROMPT } from '../prompts/summarySystem';
+import { DIRECTORY_SUMMARY_SYSTEM_PROMPT } from '../prompts/directorySummarySystem';
 
 const router = Router();
 
@@ -210,35 +211,6 @@ router.post('/ai-summary/generate', async (req, res) => {
 
 // ── Directory summary helpers ──────────────────────────────────────────────────
 
-const DIR_SUMMARY_SYSTEM_PROMPT = `You are a senior software engineer writing internal documentation for an engineering team.
-You will receive the relative path of a directory and a recursive listing of all files inside it.
-Generate a clear, tutorial-style Markdown document that explains this directory's role and contents to a mid-level engineer.
-
-## Format requirements
-Use rich Markdown — headers, bold terms, inline code, tables, bullet lists, ASCII diagrams.
-
-## Sections to include
-
-### 1. Overview
-What problem or domain does this directory own? One clear paragraph.
-
-### 2. File Inventory
-A table or annotated list of every file with a one-line description of its purpose.
-
-### 3. Key Relationships & Entry Points
-How do the files relate to each other? Which file should a new developer read first?
-Include a simple ASCII diagram if the relationships are non-trivial:
-\`\`\`text
-index.ts → router.ts → handler.ts
-                     ↘ middleware.ts
-\`\`\`
-
-### 4. Conventions & Patterns
-Naming conventions, code patterns, architectural decisions, or anything easy to get wrong.
-
-## Tone
-Write as if *teaching*, not just listing. Explain the *why* behind the structure.`;
-
 /** Walk a directory recursively and return all relative file paths (sorted). */
 function walkDir(root: string, base: string = root): string[] {
   let entries: fs.Dirent[];
@@ -364,7 +336,7 @@ router.post('/ai-directory-summary/generate', async (req, res) => {
       const stream = await client.chat.completions.create({
         model: selectedModel,
         messages: [
-          { role: 'system', content: DIR_SUMMARY_SYSTEM_PROMPT },
+          { role: 'system', content: DIRECTORY_SUMMARY_SYSTEM_PROMPT },
           { role: 'user',   content: userMessage },
         ],
         stream: true,
@@ -381,7 +353,7 @@ router.post('/ai-directory-summary/generate', async (req, res) => {
       const stream = await ai.models.generateContentStream({
         model: selectedModel,
         contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-        config: { systemInstruction: DIR_SUMMARY_SYSTEM_PROMPT },
+        config: { systemInstruction: DIRECTORY_SUMMARY_SYSTEM_PROMPT },
       });
       for await (const chunk of stream) {
         if (abortSignal.aborted) break;
@@ -397,7 +369,7 @@ router.post('/ai-directory-summary/generate', async (req, res) => {
       const stream = client.messages.stream({
         model: selectedModel,
         max_tokens: 8192,
-        system: DIR_SUMMARY_SYSTEM_PROMPT,
+        system: DIRECTORY_SUMMARY_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       });
       for await (const event of stream) {
