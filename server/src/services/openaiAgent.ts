@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { Response } from 'express';
 import { TOOL_SCHEMAS } from './fileTools';
 import { executeAgentTool } from './agentTools';
-import { buildSystemPrompt } from './systemPrompt';
+import { buildSystemPrompt } from '../prompts/systemPrompt';
 
 export async function loadOpenAIKey(): Promise<string> {
   if (process.env.OPENAI_TOKEN) return process.env.OPENAI_TOKEN;

@@ -5,7 +5,7 @@ import path from 'path';
 import { Response } from 'express';
 import { TOOL_SCHEMAS } from './fileTools';
 import { executeAgentTool } from './agentTools';
-import { buildSystemPrompt } from './systemPrompt';
+import { buildSystemPrompt } from '../prompts/systemPrompt';
 
 export async function loadApiKey(): Promise<string> {
   try {

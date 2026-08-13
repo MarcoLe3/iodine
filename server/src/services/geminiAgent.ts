@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { Response } from 'express';
 import { TOOL_SCHEMAS } from './fileTools';
 import { executeAgentTool } from './agentTools';
-import { buildSystemPrompt } from './systemPrompt';
+import { buildSystemPrompt } from '../prompts/systemPrompt';
 
 export async function loadGeminiKey(): Promise<string> {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;

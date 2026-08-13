@@ -1,5 +1,5 @@
 import { rootPath } from '../state';
-import { TUTOR_SYSTEM_ADDENDUM } from './tutorSystem';
+import { TUTOR_SYSTEM_ADDENDUM } from '../prompts/tutorSystem';
 
 export function buildSystemPrompt(activeFile: string | null, tutorMode?: boolean): string {
   const workspaceInfo = rootPath ? `Workspace: ${rootPath}` : 'No workspace is currently open.';
@@ -24,4 +24,4 @@ If you feel that the user is progressively struggling or not making progress, be
   return tutorMode ? base + TUTOR_SYSTEM_ADDENDUM : base;
 }
 
-export { TUTOR_SYSTEM_ADDENDUM } from './tutorSystem';
+export { TUTOR_SYSTEM_ADDENDUM } from '../prompts/tutorSystem';
