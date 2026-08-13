@@ -77,6 +77,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
+  const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [pathInput, setPathInput] = useState('');
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -632,6 +633,17 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
               >
                 File a Bug
               </button>
+              <button
+                onMouseDown={() => { setHelpMenuOpen(false); setShowAboutDialog(true); }}
+                style={{
+                  display: 'block', width: '100%', padding: '5px 16px', textAlign: 'left',
+                  color: 'var(--color-text-primary)', fontSize: 13, cursor: 'pointer',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                About Iodine
+              </button>
             </div>
           )}
         </div>
@@ -870,6 +882,22 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
               >
                 Close All
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* About dialog */}
+      {showAboutDialog && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowAboutDialog(false); }}
+        >
+          <div style={{ background: 'var(--color-bg-sidebar)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '20px 24px', width: 320, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)' }}>Iodine</div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>Version {__APP_VERSION__}</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <button onClick={() => setShowAboutDialog(false)} style={{ padding: '6px 16px', borderRadius: 3, background: 'var(--color-bg-hover)', color: 'var(--color-text-primary)', fontSize: 13, cursor: 'pointer' }}>Close</button>
             </div>
           </div>
         </div>
