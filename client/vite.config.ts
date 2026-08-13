@@ -18,10 +18,25 @@ function getGitVersion(): string {
   }
 }
 
+function getGitRepo(): string {
+  try {
+    const url = execSync('git config --get remote.origin.url', {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    const m = url.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
+    return m ? m[1] : '';
+  } catch {
+    return '';
+  }
+}
+
 export default defineConfig({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(getGitVersion()),
+    __APP_REPO__: JSON.stringify(getGitRepo()),
   },
   server: {
     port: 5173,

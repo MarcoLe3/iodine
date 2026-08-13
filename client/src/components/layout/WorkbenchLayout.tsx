@@ -12,6 +12,7 @@ import { useFileWatcher } from '../../hooks/useFileWatcher';
 import { useTheme } from '../../hooks/useTheme';
 import { useSourceControl } from '../../hooks/useSourceControl';
 import { getWorkspace, closeWorkspace, rephraseProactiveMessage } from '../../api/files';
+import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import { useProactiveHelp } from '../../hooks/useProactiveHelp';
 import { createIdleChurnSignal } from '../../services/proactiveSignals';
 import { usePanelExpansion, DEFAULT_PANEL_EXPANSION_CONFIG } from '../../hooks/usePanelExpansion';
@@ -74,6 +75,7 @@ export function WorkbenchLayout() {
   const [showBottomTray, setShowBottomTray] = useState(true);
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
+  const { updateInfo, snooze: snoozeUpdate } = useUpdateCheck(typeof __APP_REPO__ !== 'undefined' ? __APP_REPO__ : '');
 
   // When set, the EditorArea should switch to the AI summary view for this file path.
   const [summaryRequestPath, setSummaryRequestPath] = useState<string | null>(null);
@@ -452,6 +454,8 @@ export function WorkbenchLayout() {
         onToggleSidebar={() => setShowSidebar(v => !v)}
         onToggleRightPanel={() => setShowRightPanel(v => !v)}
         onToggleBottomTray={() => setShowBottomTray(v => !v)}
+        updateInfo={updateInfo}
+        onSnoozeUpdate={snoozeUpdate}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>

@@ -654,9 +654,27 @@ Three icon buttons in the menu bar right section (left of the theme toggle) let 
 
 **`display: contents` pattern:** The wrapper div with `display: 'contents'` is transparent to the flex layout — its children participate directly as flex items in the parent row/column. Switching to `display: 'none'` hides the subtree without unmounting it, so no state is lost.
 
-## About Dialog
+## About Dialog & Update Check
 
-**Help → About Iodine** opens a modal showing the app version. The version string is derived from `git describe --tags --always --dirty` at Vite startup/build time and injected as the compile-time constant `__APP_VERSION__` via `vite.config.ts`. The TypeScript declaration lives in `client/src/app-version.d.ts`. If git metadata is unavailable the string falls back to `'development'`.
+**Help → About Iodine** opens a modal showing the app version. The version string is derived from `git describe --tags --always --dirty` at Vite startup/build time and injected as the compile-time constant `__APP_VERSION__` via `vite.config.ts`. The GitHub repo slug (`owner/repo`) is extracted from `git config --get remote.origin.url` and injected as `__APP_REPO__`. Both declarations live in `client/src/app-version.d.ts`. If git metadata is unavailable the strings fall back to `'development'` / `''`.
+
+### Update Check
+
+On startup and every 4 hours, the app fetches `https://api.github.com/repos/{__APP_REPO__}/releases/latest` and compares the release tag against `__APP_VERSION__` using semver. If a newer version is found and the user has not snoozed, an **Update available** dialog appears automatically showing the current and latest versions with two actions:
+
+- **View release** — opens the GitHub release URL in the browser and closes the dialog.
+- **Remind me in 30 days** — writes the current timestamp to `localStorage` under `iodine:update-snooze` and clears the dialog. The next check (on mount or on the 4-hour interval) skips the fetch entirely while the snooze is active.
+
+A yellow dot appears on the **Help** menu button and an **Update available…** item appears at the top of the Help dropdown while an update is pending.
+
+The check is a no-op when `__APP_REPO__` is empty (no git remote), when `__APP_VERSION__` is not a valid semver (e.g. a bare commit hash or `'development'`), or while the snooze is active.
+
+| File | Role |
+|------|------|
+| `client/src/hooks/useUpdateCheck.ts` | Fetches GitHub Releases API, compares semver, respects localStorage snooze, returns `{ updateInfo, snooze }`. |
+| `client/src/components/layout/WorkbenchLayout.tsx` | Mounts `useUpdateCheck(__APP_REPO__)` and passes `updateInfo`/`onSnoozeUpdate` to `MenuBar`. |
+| `client/src/components/layout/MenuBar.tsx` | Auto-shows update dialog when `updateInfo` becomes non-null; renders yellow dot on Help button; renders dialog with View/Snooze actions. |
+| `client/vite.config.ts` | `getGitRepo()` extracts `owner/repo` from the git remote URL and injects it as `__APP_REPO__`. |
 
 ## Editor View Button Theming
 

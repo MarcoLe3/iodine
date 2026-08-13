@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { findWorkspace, openWorkspace, downloadProjectMetadata, importProjectMetadata, clearProjectMetadata, searchFiles } from '../../api/files';
 import type { Theme } from '../../hooks/useTheme';
+import type { UpdateInfo } from '../../hooks/useUpdateCheck';
 
 interface MenuBarProps {
   onOpenProject: (path: string) => void;
@@ -20,6 +21,8 @@ interface MenuBarProps {
   onToggleSidebar: () => void;
   onToggleRightPanel: () => void;
   onToggleBottomTray: () => void;
+  updateInfo?: UpdateInfo | null;
+  onSnoozeUpdate?: () => void;
 }
 
 function PaneIcon({ pane }: { pane: 'left' | 'right' | 'bottom' }) {
@@ -70,7 +73,7 @@ function MoonIcon() {
   );
 }
 
-export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onCloseUneditedTabs, onSortTabsByFileStructure, onOpenExternalFile, onOpenWorkspaceFile, workspacePath, theme, onToggleTheme, openTabsCount, showSidebar, showRightPanel, showBottomTray, onToggleSidebar, onToggleRightPanel, onToggleBottomTray }: MenuBarProps) {
+export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onCloseUneditedTabs, onSortTabsByFileStructure, onOpenExternalFile, onOpenWorkspaceFile, workspacePath, theme, onToggleTheme, openTabsCount, showSidebar, showRightPanel, showBottomTray, onToggleSidebar, onToggleRightPanel, onToggleBottomTray, updateInfo, onSnoozeUpdate }: MenuBarProps) {
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [editorMenuOpen, setEditorMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -83,6 +86,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   const [error, setError] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState<{ type: 'downloading' | 'importing' | 'clearing' | 'success' | 'error'; message: string } | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [showOpenFileDialog, setShowOpenFileDialog] = useState(false);
   const [openFileMode, setOpenFileMode] = useState<'workspace' | 'external'>('external');
   const [fileQuery, setFileQuery] = useState('');
@@ -129,6 +133,11 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
     }, 250);
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
   }, [fileQuery, openFileMode]);
+
+  // Auto-show update dialog when an update is first detected.
+  useEffect(() => {
+    if (updateInfo) setShowUpdateDialog(true);
+  }, [updateInfo]);
 
   const openFileResult = useCallback((p: string) => {
     if (openFileMode === 'workspace') onOpenWorkspaceFile(p);
@@ -583,6 +592,13 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
             onMouseLeave={e => { if (!helpMenuOpen) e.currentTarget.style.background = 'none'; }}
           >
             Help
+          {updateInfo && (
+            <span style={{
+              display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+              background: '#e6b800', marginLeft: 4, verticalAlign: 'middle',
+              flexShrink: 0,
+            }} />
+          )}
           </button>
 
           {helpMenuOpen && (
@@ -633,6 +649,21 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
               >
                 File a Bug
               </button>
+              {updateInfo && (
+                <button
+                  onMouseDown={() => { setHelpMenuOpen(false); setShowUpdateDialog(true); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    width: '100%', padding: '5px 16px', textAlign: 'left',
+                    color: '#e6b800', fontSize: 13, cursor: 'pointer',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e6b800', flexShrink: 0 }} />
+                  Update available…
+                </button>
+              )}
               <button
                 onMouseDown={() => { setHelpMenuOpen(false); setShowAboutDialog(true); }}
                 style={{
@@ -898,6 +929,47 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
             <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>Version {__APP_VERSION__}</div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setShowAboutDialog(false)} style={{ padding: '6px 16px', borderRadius: 3, background: 'var(--color-bg-hover)', color: 'var(--color-text-primary)', fontSize: 13, cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update available dialog */}
+      {showUpdateDialog && updateInfo && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowUpdateDialog(false); }}
+        >
+          <div style={{ background: 'var(--color-bg-sidebar)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '20px 24px', width: 360, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 8 }}>Update available</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              A new version of Iodine is available.
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 16 }}>
+              Current: <span style={{ fontFamily: 'monospace', color: 'var(--color-text-primary)' }}>{__APP_VERSION__}</span>
+              {'  →  '}
+              Latest: <span style={{ fontFamily: 'monospace', color: '#89d185' }}>{updateInfo.latestTag}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => {
+                  setShowUpdateDialog(false);
+                  onSnoozeUpdate?.();
+                }}
+                style={{ padding: '6px 14px', borderRadius: 3, background: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)', fontSize: 13, cursor: 'pointer' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+              >
+                Remind me in 30 days
+              </button>
+              <button
+                onClick={() => { window.open(updateInfo.url, '_blank'); setShowUpdateDialog(false); }}
+                style={{ padding: '6px 14px', borderRadius: 3, background: 'var(--color-accent)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                View release
+              </button>
             </div>
           </div>
         </div>
