@@ -61,4 +61,4 @@ export const PROVIDERS: Provider[] = [
 ];
 
 export const DEFAULT_PROVIDER = PROVIDERS.find((provider) => provider.id === 'openai')!;
-export const DEFAULT_MODEL = 'gpt-5.6-luna';
+export const DEFAULT_MODEL = 'gpt-5.6-sol';
