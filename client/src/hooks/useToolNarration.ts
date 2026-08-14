@@ -194,5 +194,5 @@ export function useToolNarration(provider: Provider) {
     unskippableCountRef.current = 0;
   }, []);
 
-  return { narrate, stop, drain, evictSkippable, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, onEmptyRef, resetTurn };
+  return { narrate, stop, drain, evictSkippable, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, unskippableCountRef, onEmptyRef, resetTurn };
 }

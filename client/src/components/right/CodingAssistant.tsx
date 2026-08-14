@@ -154,6 +154,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     audioRef: narrationAudioRef,
     hadNarrationsRef: turnHadNarrationsRef,
     hadUnskippableRef: turnHadUnskippableRef,
+    unskippableCountRef: turnUnskippableCountRef,
     onEmptyRef: onNarrationQueueEmptyRef,
     resetTurn: resetNarrationRefs,
   } = useToolNarration(provider);
@@ -382,10 +383,14 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return URL.createObjectURL(await r.blob());
           });
-          // Bridge with "Aha." only on pure exploration turns (no edit/write narrations).
-          // On turns with edits/writes the transition would feel odd after "Let me edit…".
-          if (turnHadNarrationsRef.current && !turnHadUnskippableRef.current) {
-            const transitions = ['Aha.', 'Got it.', 'Alright so.', 'Okay.', 'Right, so.', 'Hmm, okay.'];
+          // Bridge exploration turns normally, and larger edit/write batches with a concise transition.
+          // One or two edits already have enough narration and do not need an extra bridge.
+          const shouldBridge = turnHadNarrationsRef.current
+            && (!turnHadUnskippableRef.current || turnUnskippableCountRef.current >= 3);
+          if (shouldBridge) {
+            const transitions = turnUnskippableCountRef.current >= 3
+              ? ['Alright.', 'Okay.']
+              : ['Aha.', 'Got it.', 'Alright so.', 'Okay.', 'Right, so.', 'Hmm, okay.'];
             const transition = transitions[Math.floor(Math.random() * transitions.length)];
             narrationQueueRef.current.push({
               skippable: false,
