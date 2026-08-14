@@ -24,6 +24,10 @@ interface SidebarProps {
   onOutlineNavigate?: (id: string) => void;
   /** The currently active heading id (for bolding). */
   activeHeadingId?: string | null;
+  /** Commit message drafted by the AI — applied to SCM panel on mount. */
+  pendingCommitMessage?: string | null;
+  /** Called after the pending message has been consumed. */
+  onPendingCommitMessageApplied?: () => void;
 }
 
 export function Sidebar({
@@ -43,6 +47,8 @@ export function Sidebar({
   outlineContent,
   onOutlineNavigate,
   activeHeadingId,
+  pendingCommitMessage,
+  onPendingCommitMessageApplied,
 }: SidebarProps) {
   // Helper to open a file given only its absolute path (from SCM panel)
   const handleOpenByPath = (absPath: string) => {
@@ -83,7 +89,12 @@ export function Sidebar({
           expandToPath={expandToPath}
         />
       ) : (
-        <SourceControlPanel workspacePath={workspacePath} onFileOpen={handleOpenByPath} />
+        <SourceControlPanel
+          workspacePath={workspacePath}
+          onFileOpen={handleOpenByPath}
+          pendingCommitMessage={pendingCommitMessage}
+          onPendingCommitMessageApplied={onPendingCommitMessageApplied}
+        />
       )}
     </div>
   );

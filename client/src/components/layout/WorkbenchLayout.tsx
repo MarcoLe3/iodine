@@ -289,10 +289,14 @@ export function WorkbenchLayout() {
     setActiveView(view);
   }, []);
 
+  const [pendingCommitMessage, setPendingCommitMessage] = useState<string | null>(null);
+
   useEffect(() => {
-    const showSourceControl = () => {
+    const showSourceControl = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message ?? null;
       setShowSidebar(true);
       setActiveView('scm');
+      if (message) setPendingCommitMessage(message);
     };
     window.addEventListener('iodine:git-commit-compose', showSourceControl);
     return () => window.removeEventListener('iodine:git-commit-compose', showSourceControl);
@@ -499,6 +503,8 @@ export function WorkbenchLayout() {
               }
               onOutlineNavigate={handleOutlineNavigate}
               activeHeadingId={activeHeadingId}
+              pendingCommitMessage={pendingCommitMessage}
+              onPendingCommitMessageApplied={() => setPendingCommitMessage(null)}
             />
             <ResizeDivider
               currentWidth={sidebarWidth}

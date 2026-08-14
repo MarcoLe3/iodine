@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSourceControl } from '../../hooks/useSourceControl';
 import { fetchRefGithubUrl } from '../../api/files';
 import type { GitChange, GitCommit, GitBranchInfo, ConfirmDialog } from '../../hooks/useSourceControl';
@@ -456,8 +456,16 @@ function ConfirmDialogOverlay({ dialog }: { dialog: ConfirmDialog }) {
 
 // ─── main panel ───────────────────────────────────────────────────────────────
 
-export function SourceControlPanel({ workspacePath, onFileOpen }: { workspacePath: string | null; onFileOpen: (absPath: string) => void }) {
+export function SourceControlPanel({ workspacePath, onFileOpen, pendingCommitMessage, onPendingCommitMessageApplied }: { workspacePath: string | null; onFileOpen: (absPath: string) => void; pendingCommitMessage?: string | null; onPendingCommitMessageApplied?: () => void }) {
   const sc = useSourceControl(workspacePath);
+
+  useEffect(() => {
+    if (pendingCommitMessage) {
+      sc.setCommitMessage(pendingCommitMessage);
+      onPendingCommitMessageApplied?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCommitMessage]);
   const canCommit = sc.staged.length > 0 && sc.commitMessage.trim().length > 0 && !sc.loading;
   const hasChanges = sc.staged.length > 0 || sc.unstaged.length > 0;
 
