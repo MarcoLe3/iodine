@@ -87,6 +87,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
   const [projectStatus, setProjectStatus] = useState<{ type: 'downloading' | 'importing' | 'clearing' | 'success' | 'error'; message: string } | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [commandsCopied, setCommandsCopied] = useState(false);
   const [showOpenFileDialog, setShowOpenFileDialog] = useState(false);
   const [openFileMode, setOpenFileMode] = useState<'workspace' | 'external'>('external');
   const [fileQuery, setFileQuery] = useState('');
@@ -954,12 +955,28 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
               <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
                 To update, run these commands from the Iodine directory:
               </div>
-              <pre style={{
-                margin: 0, padding: '9px 10px', overflowX: 'auto',
-                background: 'var(--color-bg-editor)', border: '1px solid var(--color-border)',
-                borderRadius: 4, color: 'var(--color-text-primary)', fontSize: 11,
-                lineHeight: 1.6, fontFamily: "'Cascadia Code','Fira Code',Menlo,monospace",
-              }}>{'git pull origin main\ngit fetch --tags\nnpm install\nnpm run dev'}</pre>
+              <div style={{ position: 'relative' }}>
+                <pre style={{
+                  margin: 0, padding: '9px 76px 9px 10px', overflowX: 'auto',
+                  background: 'var(--color-bg-editor)', border: '1px solid var(--color-border)',
+                  borderRadius: 4, color: 'var(--color-text-primary)', fontSize: 11,
+                  lineHeight: 1.6, fontFamily: "'Cascadia Code','Fira Code',Menlo,monospace",
+                }}>{'git pull origin main\ngit fetch --tags\nnpm install\nnpm run dev'}</pre>
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText('git pull origin main\ngit fetch --tags\nnpm install\nnpm run dev');
+                    setCommandsCopied(true);
+                    setTimeout(() => setCommandsCopied(false), 2000);
+                  }}
+                  style={{
+                    position: 'absolute', top: 6, right: 6, padding: '4px 8px',
+                    borderRadius: 3, background: 'var(--color-bg-hover)',
+                    color: 'var(--color-text-primary)', fontSize: 11, cursor: 'pointer',
+                  }}
+                >
+                  {commandsCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
               <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6 }}>
                 Stop the current server first, then restart it with <code>npm run dev</code>.
               </div>
