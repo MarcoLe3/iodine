@@ -319,11 +319,19 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         container.scrollTo({ top: offset - 16, behavior: 'smooth' });
       },
       getVisibleContext: () => {
+        const fileName = activeFile?.name ?? '';
+
+        // When the user is viewing the generated summary, send that content
+        // rather than the source hidden behind the summary view.
+        if (editorView === 'summary') {
+          if (!summaryContent.trim()) return null;
+          return `File: ${fileName} (generated summary)\n${summaryContent}`;
+        }
+
         const editor = monacoEditorRef.current;
         if (!editor) return null;
         const model = editor.getModel();
         if (!model) return null;
-        const fileName = activeFile?.name ?? '';
 
         // Prefer selected text
         const selection = editor.getSelection();
@@ -349,7 +357,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         }
         return `File: ${fileName} (visible lines ${startLine}-${endLine})\n${lines.join('\n')}`;
       },
-    }), [applyNavigation, activeFilePath, activeFile, editorView]);
+    }), [applyNavigation, activeFilePath, activeFile, editorView, summaryContent]);
 
     const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
     const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && (!!workspacePath || !!activeFile.isExternal) && !activeFile.path.endsWith('.md');
