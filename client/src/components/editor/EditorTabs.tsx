@@ -12,7 +12,7 @@ interface EditorTabsProps {
 export function EditorTabs({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder }: EditorTabsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragIndexRef = useRef<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [draggedPath, setDraggedPath] = useState<string | null>(null);
 
   if (openFiles.length === 0) return null;
 
@@ -48,7 +48,7 @@ export function EditorTabs({ openFiles, activeFilePath, onTabClick, onTabClose, 
     >
       {openFiles.map((file, index) => {
         const isActive = file.path === activeFilePath;
-        const isDragOver = dragOverIndex === index;
+        const isDragging = draggedPath === file.path;
 
         return (
           <div
@@ -57,29 +57,29 @@ export function EditorTabs({ openFiles, activeFilePath, onTabClick, onTabClose, 
             onClick={() => onTabClick(file.path)}
             onDragStart={e => {
               dragIndexRef.current = index;
+              setDraggedPath(file.path);
               e.dataTransfer.effectAllowed = 'move';
               // Firefox requires data to be set for drag to initiate
               e.dataTransfer.setData('text/plain', file.path);
             }}
             onDragOver={e => {
               e.preventDefault();
-              if (dragIndexRef.current === null || dragIndexRef.current === index) return;
-              setDragOverIndex(index);
-            }}
-            onDragLeave={() => {
-              setDragOverIndex(current => (current === index ? null : current));
-            }}
-            onDrop={e => {
-              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
               const fromIndex = dragIndexRef.current;
-              dragIndexRef.current = null;
-              setDragOverIndex(null);
               if (fromIndex === null || fromIndex === index) return;
-              onTabReorder?.(fromIndex, index);
+
+              const rect = e.currentTarget.getBoundingClientRect();
+              const insertAfter = e.clientX > rect.left + rect.width / 2;
+              let toIndex = index + (insertAfter ? 1 : 0);
+              if (fromIndex < toIndex) toIndex -= 1;
+              if (toIndex === fromIndex) return;
+
+              onTabReorder?.(fromIndex, toIndex);
+              dragIndexRef.current = toIndex;
             }}
             onDragEnd={() => {
               dragIndexRef.current = null;
-              setDragOverIndex(null);
+              setDraggedPath(null);
             }}
             style={{
               display: 'flex',
@@ -92,9 +92,12 @@ export function EditorTabs({ openFiles, activeFilePath, onTabClick, onTabClose, 
               cursor: 'pointer',
               background: isActive ? 'var(--color-bg-tab-active)' : 'var(--color-bg-tab-inactive)',
               borderTop: isActive ? '1px solid var(--color-accent)' : '1px solid transparent',
-              borderLeft: isDragOver ? '2px solid var(--color-accent)' : 'none',
+              borderLeft: 'none',
               borderRight: '1px solid var(--color-border)',
               color: isActive ? 'var(--color-text-active)' : 'var(--color-text-secondary)',
+              opacity: isDragging ? 0.55 : 1,
+              transform: isDragging ? 'scale(0.98)' : 'scale(1)',
+              transition: 'transform 120ms ease, opacity 120ms ease, background-color 120ms ease',
               userSelect: 'none',
               flexShrink: 0,
               position: 'relative',
