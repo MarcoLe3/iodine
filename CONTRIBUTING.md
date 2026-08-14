@@ -99,6 +99,20 @@ Provider and model definitions live in `client/src/providers.ts`; provider adapt
 3. Keep tool behavior provider-independent by using the shared agent-tool layer.
 4. Update the provider selection UI and documentation.
 
+### Add an agent tool
+
+Agent tools are declared once and exposed to Anthropic, Gemini, and OpenAI automatically. The latest `git_commit_compose` tool is a useful reference implementation.
+
+1. Add the tool's description and JSON parameter schema to `TOOL_SCHEMAS` in `server/src/services/fileTools.ts`. Use a stable `snake_case` name, precise parameter descriptions, and list every mandatory argument in `required`.
+2. Implement ordinary workspace/file operations in `executeTool` in the same file. Return a `ToolResult` with `content`, a concise `preview`, and an `error` flag; validate `rootPath`, inputs, and paths before performing work.
+3. Implement interactive or client-facing tools in `executeAgentTool` in `server/src/services/agentTools.ts`, before the fallback to `executeTool`. Emit an SSE event with `res.write(...)`, respect `abortSignal.aborted`, and return a normal `ToolResult`. Tools requiring user approval, such as terminal commands, should remain in this layer.
+4. Handle any new SSE event in `client/src/hooks/useCodingAssistant.ts`, then connect it to the owning UI state or component. For example, `git_commit_compose` dispatches a browser event that `client/src/hooks/useSourceControl.ts` consumes to populate the commit editor.
+5. Add a phrase in `client/src/hooks/useToolNarration.ts` when Tutor Mode should narrate the action. Also decide whether the tool is safe to include in `SKIPPABLE_TOOLS`; mutating or otherwise meaningful actions should generally remain unskippable.
+6. Update `server/src/prompts/systemPrompt.ts` when the assistant needs explicit guidance about when or how to use the tool. Update specialized prompts as needed, and document user-facing behavior in the closest reference guide.
+7. Run `npm run typecheck` and `npm run build`, then test the tool with each supported provider. For client-facing tools, verify the SSE event reaches the UI and that cancellation or missing input fails safely.
+
+A tool usually touches only `fileTools.ts` when it can execute entirely on the server. Tools that trigger UI behavior commonly also touch `agentTools.ts`, `useCodingAssistant.ts`, the relevant UI hook/component, `useToolNarration.ts`, and the system prompt.
+
 ## Design Principles
 
 - Help users understand before asking them to act.
