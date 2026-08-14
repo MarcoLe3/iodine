@@ -8,9 +8,10 @@ const router = Router();
 
 const NARRATION_PROMPT =
   'Condense the following into ONE spoken sentence — two at most. ' +
-  'Pick the single most important point and say it directly. ' +
-  'Cut all code, lists, caveats, and filler. No intro, no summary phrase. ' +
-  'Just the raw takeaway.';
+  'Preserve the first brief conversational pleasantry if present, such as “Great!”, “No problem.”, or “Of course.”, but do not add one. ' +
+  'Then state the single most important point directly. ' +
+  'Cut all code, lists, caveats, and filler. No summary phrase. ' +
+  'Just the spoken takeaway.';
 
 function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitDepth = 16): Buffer {
   const dataSize = pcm.length;
