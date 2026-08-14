@@ -172,6 +172,16 @@ export const TOOL_SCHEMAS = {
       required: ['query'],
     },
   },
+  git_commit_compose: {
+    description: 'Populate the Source Control commit message editor with a proposed message. This does not run git commit; the user reviews the message and finishes by clicking Commit.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        message: { type: 'string', description: 'The complete commit message to place in the Source Control message editor' },
+      },
+      required: ['message'],
+    },
+  },
   run_terminal_command: {
     description: 'Propose a terminal command in the workspace. This tool pauses until the user explicitly approves or rejects it. After approval, its captured stdout, stderr, exit code, and detected localhost URLs are returned so you can interpret the result and continue. Use longRunning for development servers and watchers.',
     parameters: {

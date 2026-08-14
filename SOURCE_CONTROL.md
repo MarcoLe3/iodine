@@ -88,6 +88,12 @@ The `loaded` flag distinguishes "not yet fetched" from "no branch" (not a git re
 
 Receives `workspacePath` from `Sidebar`. Renders the commit area and two `ChangeSection` sub-components. File rows use per-row `hovered` state (via `onMouseEnter`/`onMouseLeave`) to toggle between the status badge and action buttons.
 
+### Assistant commit-message composition
+
+The `git_commit_compose` assistant tool accepts a required `message` and populates the Source Control commit textarea. Its server handler emits an SSE event rather than invoking `git commit`; the client opens the sidebar and Source Control view, then applies the proposed message. The user remains in control of the final action and must review the message and click **Commit** (or press Ctrl+Enter) to create the commit.
+
+The assistant system prompt instructs models to use `git_commit_compose` instead of running `git commit`. In Tutor mode, `client/src/hooks/useToolNarration.ts` announces this action with a phrase such as “Let me draft a commit message.”
+
 ---
 
 ## File Tree Status Indicators

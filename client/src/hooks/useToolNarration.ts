@@ -9,7 +9,8 @@ const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
   write_file:     ['Let me write {file}.', 'Hmm, let me create {file}.', 'Let me put {file} together.', 'Hmm, let me set up {file}.'],
   open_file:      ['Let me open {file}.', 'Hmm, let me navigate to {file}.', 'Let me pull up {file}.', 'Let me look at {file}.'],
   list_directory: ["Hmm, let me look around in {file}.", 'Let me check the structure of {file}.', "Let me see what's in {file}.", 'Hmm, let me explore {file}.'],
-  search_files:   ['Let me search for this.', 'Hmm, let me find this.', 'Let me track this down.', 'Hmm, let me look for this.'],
+  search_files:       ['Let me search for this.', 'Hmm, let me find this.', 'Let me track this down.', 'Hmm, let me look for this.'],
+  git_commit_compose: ['Let me draft a commit message.', 'Let me prepare the commit message for you.'],
 };
 
 // Exploration/navigation narrations are skippable when the final summary is ready.

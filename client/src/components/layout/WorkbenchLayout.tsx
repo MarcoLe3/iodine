@@ -289,6 +289,15 @@ export function WorkbenchLayout() {
     setActiveView(view);
   }, []);
 
+  useEffect(() => {
+    const showSourceControl = () => {
+      setShowSidebar(true);
+      setActiveView('scm');
+    };
+    window.addEventListener('iodine:git-commit-compose', showSourceControl);
+    return () => window.removeEventListener('iodine:git-commit-compose', showSourceControl);
+  }, []);
+
   const handleEditorViewChange = useCallback((view: string) => {
     setCurrentEditorView(view);
     if (view === 'preview' || view === 'summary') {

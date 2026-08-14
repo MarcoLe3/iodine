@@ -36,6 +36,21 @@ export async function executeAgentTool(
     return { content: `Opened ${filePath} at line ${line}`, preview: `Opened ${filePath}:${line}`, error: false };
   }
 
+  if (name === 'git_commit_compose') {
+    const message = typeof input.message === 'string' ? input.message.trim() : '';
+    if (!message) {
+      return { content: 'message is required', preview: 'message is required', error: true };
+    }
+    if (!abortSignal.aborted) {
+      res.write(`event: git_commit_compose\ndata: ${JSON.stringify({ message })}\n\n`);
+    }
+    return {
+      content: 'Commit message populated for user review. No commit was created.',
+      preview: 'Commit message populated for review',
+      error: false,
+    };
+  }
+
   if (name !== 'run_terminal_command') return executeTool(name, input);
 
   const command = typeof input.command === 'string' ? input.command.trim() : '';

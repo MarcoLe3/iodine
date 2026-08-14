@@ -67,6 +67,15 @@ export function useSourceControl(workspacePath: string | null) {
     return () => { clearInterval(interval); window.removeEventListener('focus', refresh); };
   }, [refresh]);
 
+  useEffect(() => {
+    const handleCompose = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message;
+      if (message) setCommitMessage(message);
+    };
+    window.addEventListener('iodine:git-commit-compose', handleCompose);
+    return () => window.removeEventListener('iodine:git-commit-compose', handleCompose);
+  }, []);
+
   const stage = async (relPath: string) => {
     try { await stageFile(relPath); } catch { /* ignore */ }
     await refresh();

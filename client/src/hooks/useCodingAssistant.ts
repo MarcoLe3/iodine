@@ -523,6 +523,11 @@ export function useCodingAssistant(
             if (filePath) {
               onNavigateToLineRef.current?.(filePath, line, endLine, startCol, endCol);
             }
+          } else if (eventName === 'git_commit_compose') {
+            const message = payload.message as string;
+            if (message) {
+              window.dispatchEvent(new CustomEvent('iodine:git-commit-compose', { detail: { message } }));
+            }
           } else if (eventName === 'text_delta') {
             const text = payload.text as string;
             // Buffer for animation-frame batching
