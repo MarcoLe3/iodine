@@ -77,6 +77,7 @@ function isPreviewable(path: string) {
 /* Markdown path and heading helpers live in editor/MarkdownUtils.ts. */
 
 const btnStyle: React.CSSProperties = {
+  width: 150,
   padding: '6px 14px',
   fontSize: 12,
   fontWeight: 600,
