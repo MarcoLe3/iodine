@@ -6,7 +6,7 @@ This document is organized from project-wide conventions and architecture to fea
 
 ### Naming Convention — Marketing Names vs. Internal Identifiers
 
-Several features have branded display names shown in the UI. These names must **never** be used for internal technical objects (variables, functions, props, types, CSS classes, API routes, or file names). Always use the plain descriptive technical name internally.
+Several features have branded display names shown in the UI. These names must **never** be used for internal technical objects (variables, functions, props, types, CSS classes, API routes, or file names). **Always** use the plain descriptive technical name internally.
 
 | UI display name | Internal technical name to use |
 |-----------------|-------------------------------|
@@ -42,7 +42,7 @@ Theme support is client-side and uses shared CSS variables so components do not 
 | `client/src/components/bottom/TerminalPanel.tsx` | Styles the terminal tab strip, active tab, labels, and controls with shared theme variables. |
 | `client/src/components/right/CodingAssistant.tsx` | Uses theme variables for assistant cards, command text, and live terminal-command output. |
 
-When adding or changing UI, use the existing `--color-*` variables rather than hard-coded dark colors. Add a semantic token to both `:root` and `:root[data-theme='light']` when no suitable variable exists. Canvas-rendered or third-party widgets such as xterm and Monaco do not automatically inherit CSS colors; explicitly update their theme when `data-theme` changes.
+When adding or changing UI, use the **existing `--color-*` variables** rather than hard-coded dark colors. Add a semantic token to **both** `:root` and `:root[data-theme='light']` when no suitable variable exists. Canvas-rendered or third-party widgets such as xterm and Monaco do not automatically inherit CSS colors; explicitly update their theme when `data-theme` changes.
 
 ### Editor Experience
 
@@ -71,7 +71,7 @@ These actions are wired in `MenuBar.tsx` via callbacks from `WorkbenchLayout.tsx
 - `MenuBarProps.onCloseUneditedTabs` → closes only unedited files  
 - `MenuBarProps.onSortTabsByFileStructure` → reorders tabs by path
 
-The "Close All Tabs" action requires confirmation. "Close Unedited Files" runs immediately with no dialog since it only affects clean files. All three buttons are disabled when no tabs are open.
+The "Close All Tabs" action **requires confirmation**. "Close Unedited Files" runs immediately with no dialog since it only affects clean files. All three buttons are disabled when no tabs are open.
 
 #### Image & PDF Viewers
 
