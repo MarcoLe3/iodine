@@ -42,10 +42,9 @@ export function useUpdateCheck(repo: string) {
     if (!repo) return;
 
     function sendLivePing() {
-      void fetch(COUNTER_URL, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${__COUNTER_API_KEY__}` },
-      }).then(() => setLastPingAt(Date.now())).catch(() => { /* silently skip */ });
+      void fetch(`${COUNTER_URL}?api_key=${__COUNTER_API_KEY__}`)
+        .then(() => setLastPingAt(Date.now()))
+        .catch(() => { /* silently skip */ });
     }
 
     async function check() {
