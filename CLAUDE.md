@@ -263,6 +263,17 @@ The right panel contains three tabs: **Coding Assistant**, **Build**, and **Syst
 |------|------|
 | `client/src/components/layout/RightPanel.tsx` | Conditionally renders the Provider/Model info box only when `activeTab !== 'assistant'`. The callout is hidden for the Coding Assistant tab to avoid redundancy. |
 
+#### Commit Message Composition and SCM View Mounting
+
+The `git_commit_compose` tool populates the Source Control commit editor through the `iodine:git-commit-compose` browser event. The event listener must live in the always-mounted `WorkbenchLayout`, not in the conditionally mounted `SourceControlPanel`; otherwise an event fired while another sidebar view is active is lost before the SCM panel mounts.
+
+| File | Role |
+|------|------|
+| `client/src/components/layout/WorkbenchLayout.tsx` | Owns `pendingCommitMessage`, listens for `iodine:git-commit-compose`, stores the message, and switches `activeView` to `'scm'`. Passes the pending value and clear callback down to the SCM panel. |
+| `client/src/components/sidebar/SourceControlPanel.tsx` | Uses an effect keyed by the pending-message prop. Once mounted, calls `sc.setCommitMessage(pendingCommitMessage)` and then clears the parent state so the message is applied exactly once. |
+
+**Required flow:** event → parent stores message → parent opens SCM → panel mounts → effect applies message → parent clears message. Keep cross-view event listeners in a stable ancestor whenever handling the event may itself cause the destination component to mount.
+
 #### Conversation History Persistence
 
 Completed conversations are automatically saved to disk and surfaced in the empty state so the user can resume them after a browser refresh.

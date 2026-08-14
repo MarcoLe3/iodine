@@ -234,6 +234,44 @@ user to configure anything.
 
 ---
 
+## `git_commit_compose` Message Lost When SCM Panel Is Closed
+
+### Symptom
+
+The `git_commit_compose` tool reported success and switched the sidebar to Source Control,
+but the commit message editor remained empty. Retrying after the SCM view was already open
+could work, making the failure appear intermittent.
+
+### Root Cause
+
+The `iodine:git-commit-compose` browser event was handled by `SourceControlPanel`. That
+panel is conditionally mounted only while the SCM view is active. If the tool dispatched
+the event while another sidebar view was active, there was no listener to receive it. The
+subsequent view switch mounted the panel too late because browser events are not replayed.
+
+### Fix
+
+`WorkbenchLayout` is the single, always-mounted listener for
+`iodine:git-commit-compose`. It stores the event's message in `pendingCommitMessage` and
+switches the sidebar to the SCM view. The value flows into `SourceControlPanel` as a prop;
+a `useEffect` applies it with `sc.setCommitMessage(...)` after the panel mounts or the prop
+changes, then clears the pending value through a callback.
+
+```text
+git_commit_compose event
+  → WorkbenchLayout stores pendingCommitMessage and opens SCM
+  → SourceControlPanel mounts with the pending message
+  → useEffect calls sc.setCommitMessage(message)
+  → pendingCommitMessage is cleared
+```
+
+Keep listeners for events that can trigger a conditional view in an ancestor that remains
+mounted. Do not move this listener back into `SourceControlPanel`, or the mount-timing race
+will return. Clearing the pending state is also required so the message is not re-applied
+on a later render or SCM remount.
+
+---
+
 ## OpenAI Streaming Stutter
 
 ### Symptom
