@@ -27,14 +27,15 @@ const TOOLS: Anthropic.Tool[] = Object.entries(TOOL_SCHEMAS).map(([name, schema]
   input_schema: schema.parameters as Anthropic.Tool['input_schema'],
 }));
 
-// Newer models use adaptive thinking; older models use extended thinking with a budget.
-const ADAPTIVE_THINKING_MODELS = new Set(['claude-opus-4-8', 'claude-sonnet-5']);
+// Older models use extended thinking with a budget; newer models use adaptive.
+// Default to adaptive so any future model works without code changes.
+const LEGACY_THINKING_MODELS = new Set(['claude-sonnet-4-6', 'claude-haiku-4-5']);
 
 function getThinkingParam(model: string): Anthropic.ThinkingConfigParam {
-  if (ADAPTIVE_THINKING_MODELS.has(model)) {
-    return { type: 'adaptive' };
+  if (LEGACY_THINKING_MODELS.has(model)) {
+    return { type: 'enabled', budget_tokens: 8000 };
   }
-  return { type: 'enabled', budget_tokens: 8000 };
+  return { type: 'adaptive' };
 }
 
 function writeSSE(res: Response, event: string, data: unknown) {
