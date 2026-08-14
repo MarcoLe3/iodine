@@ -30,6 +30,7 @@ export function useToolNarration(provider: Provider) {
   const lastFileRef        = useRef<string | null>(null);
   const hadNarrationsRef   = useRef(false);
   const hadUnskippableRef  = useRef(false);
+  const unskippableCountRef = useRef(0);
   const onEmptyRef         = useRef<(() => void) | null>(null);
 
   const stop = useCallback(() => {
@@ -84,7 +85,15 @@ export function useToolNarration(provider: Provider) {
     if (narratedRef.current.has(key)) return;
     narratedRef.current.add(key);
     hadNarrationsRef.current = true;
-    if (!SKIPPABLE_TOOLS.has(name)) hadUnskippableRef.current = true;
+    const isUnskippable = !SKIPPABLE_TOOLS.has(name);
+    if (isUnskippable) {
+      hadUnskippableRef.current = true;
+      unskippableCountRef.current++;
+    }
+
+    // After 2 unskippable (edit/write) narrations in a turn, make the rest skippable
+    // so repeated "let me edit…" clips don't pile up and feel robotic.
+    const skippable = SKIPPABLE_TOOLS.has(name) || unskippableCountRef.current > 2;
 
     const phrases  = TOOL_NARRATION_PHRASES[name] ?? ['Hmm, let me handle this.', 'Let me take care of this.'];
     const template = phrases[Math.floor(Math.random() * phrases.length)];
@@ -103,16 +112,17 @@ export function useToolNarration(provider: Provider) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return URL.createObjectURL(await response.blob());
       },
-      skippable: SKIPPABLE_TOOLS.has(name),
+      skippable,
     });
     void drain();
   }, [provider.id, drain]);
 
   const resetTurn = useCallback(() => {
-    narratedRef.current       = new Set();
-    lastFileRef.current       = null;
-    hadNarrationsRef.current  = false;
-    hadUnskippableRef.current = false;
+    narratedRef.current        = new Set();
+    lastFileRef.current        = null;
+    hadNarrationsRef.current   = false;
+    hadUnskippableRef.current  = false;
+    unskippableCountRef.current = 0;
   }, []);
 
   return { narrate, stop, drain, evictSkippable, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, onEmptyRef, resetTurn };
