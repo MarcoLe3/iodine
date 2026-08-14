@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 interface HeadingEntry {
   level: number;
   text: string;
@@ -37,6 +39,11 @@ interface OutlinePanelProps {
 export function OutlinePanel({ content, activeHeadingId, onNavigate }: OutlinePanelProps) {
   const headings = content ? parseHeadings(content) : [];
   const minLevel = headings.length > 0 ? Math.min(...headings.map(h => h.level)) : 1;
+  const activeHeadingRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    activeHeadingRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [activeHeadingId]);
 
   // Find ancestor IDs for the active heading
   const ancestorIds = new Set<string>();
@@ -95,6 +102,7 @@ export function OutlinePanel({ content, activeHeadingId, onNavigate }: OutlinePa
             return (
               <button
                 key={`${heading.id}-${idx}`}
+                ref={isActive ? activeHeadingRef : null}
                 onClick={() => onNavigate?.(heading.id)}
                 title={heading.text}
                 style={{
