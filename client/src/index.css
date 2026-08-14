@@ -85,6 +85,10 @@
   --color-preview-row-alt: #f6f8fa;
   --summary-button-bg: #e5e7eb;
   --summary-button-color: #374151;
+  --editor-btn-neutral-bg: #e5e7eb;
+  --editor-btn-neutral-color: #374151;
+  --summary-button-obsolete-bg: #f59e0b;
+  --summary-button-obsolete-color: #451a03;
   --editor-btn-active-bg: #dbeafe;
   --editor-btn-active-color: #1e40af;
 }

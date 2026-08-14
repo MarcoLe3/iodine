@@ -77,7 +77,7 @@ function isPreviewable(path: string) {
 /* Markdown path and heading helpers live in editor/MarkdownUtils.ts. */
 
 const btnStyle: React.CSSProperties = {
-  width: 150,
+  width: 180,
   padding: '6px 14px',
   fontSize: 12,
   fontWeight: 600,
@@ -87,6 +87,7 @@ const btnStyle: React.CSSProperties = {
   borderRadius: 6,
   cursor: 'pointer',
   userSelect: 'none',
+  whiteSpace: 'nowrap',
   boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
 };
 
@@ -588,7 +589,11 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                 <button
                   onClick={() => { captureScrollPercentage(); setEditorView(v => v === 'preview' ? 'source' : 'preview'); }}
                   title={editorView === 'preview' ? 'Switch to source' : 'Switch to preview'}
-                  style={{ ...btnStyle, background: editorView === 'preview' ? 'var(--editor-btn-active-bg, #007acc)' : '#3a3d41', color: editorView === 'preview' ? 'var(--editor-btn-active-color, #fff)' : '#fff' }}
+                  style={{
+                    ...btnStyle,
+                    background: editorView === 'preview' ? 'var(--editor-btn-active-bg, #007acc)' : 'var(--editor-btn-neutral-bg, #3a3d41)',
+                    color: editorView === 'preview' ? 'var(--editor-btn-active-color, #fff)' : 'var(--editor-btn-neutral-color, #fff)',
+                  }}
                 >
                   {editorView === 'preview' ? '⌨ Source' : '👁 Preview'}
                 </button>
@@ -606,9 +611,13 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                     background: editorView === 'summary'
                       ? 'var(--editor-btn-active-bg, #007acc)'
                       : cachedSummaryObsolete
-                        ? '#7a5500'
+                        ? 'var(--summary-button-obsolete-bg, #7a5500)'
                         : 'var(--summary-button-bg, #3a3d41)',
-                    color: editorView === 'summary' ? 'var(--editor-btn-active-color, #fff)' : 'var(--summary-button-color, #fff)',
+                    color: editorView === 'summary'
+                      ? 'var(--editor-btn-active-color, #fff)'
+                      : cachedSummaryObsolete
+                        ? 'var(--summary-button-obsolete-color, #fff)'
+                        : 'var(--summary-button-color, #fff)',
                   }}
                 >
                   {editorView === 'summary' ? '⌨ Source' : hasCachedSummary ? '📖 View Summary' : '✨ Generate Summary'}
