@@ -940,15 +940,29 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
           style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}
           onClick={e => { if (e.target === e.currentTarget) setShowUpdateDialog(false); }}
         >
-          <div style={{ background: 'var(--color-bg-sidebar)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '20px 24px', width: 360, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+          <div style={{ background: 'var(--color-bg-sidebar)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '20px 24px', width: 420, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 8 }}>Update available</div>
             <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
               A new version of Iodine is available.
             </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
               Current: <span style={{ fontFamily: 'monospace', color: 'var(--color-text-primary)' }}>{__APP_VERSION__}</span>
               {'  →  '}
               Latest: <span style={{ fontFamily: 'monospace', color: '#89d185' }}>{updateInfo.latestTag}</span>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+                To update, run these commands from the Iodine directory:
+              </div>
+              <pre style={{
+                margin: 0, padding: '9px 10px', overflowX: 'auto',
+                background: 'var(--color-bg-editor)', border: '1px solid var(--color-border)',
+                borderRadius: 4, color: 'var(--color-text-primary)', fontSize: 11,
+                lineHeight: 1.6, fontFamily: "'Cascadia Code','Fira Code',Menlo,monospace",
+              }}>{'git pull origin main\ngit fetch --tags\nnpm install\nnpm run dev'}</pre>
+              <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6 }}>
+                Stop the current server first, then restart it with <code>npm run dev</code>.
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button
