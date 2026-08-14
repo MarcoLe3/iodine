@@ -36,6 +36,7 @@ function isSnoozed(): boolean {
 
 export function useUpdateCheck(repo: string) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [lastPingAt, setLastPingAt] = useState<number | null>(null);
 
   useEffect(() => {
     if (!repo) return;
@@ -44,7 +45,7 @@ export function useUpdateCheck(repo: string) {
       void fetch(COUNTER_URL, {
         method: 'GET',
         headers: { Authorization: `Bearer ${__COUNTER_API_KEY__}` },
-      }).catch(() => { /* silently skip */ });
+      }).then(() => setLastPingAt(Date.now())).catch(() => { /* silently skip */ });
     }
 
     async function check() {
@@ -76,5 +77,5 @@ export function useUpdateCheck(repo: string) {
     setUpdateInfo(null);
   };
 
-  return { updateInfo, snooze };
+  return { updateInfo, snooze, lastPingAt };
 }

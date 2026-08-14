@@ -75,7 +75,7 @@ export function WorkbenchLayout() {
   const [showBottomTray, setShowBottomTray] = useState(true);
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
-  const { updateInfo, snooze: snoozeUpdate } = useUpdateCheck(typeof __APP_REPO__ !== 'undefined' ? __APP_REPO__ : '');
+  const { updateInfo, snooze: snoozeUpdate, lastPingAt } = useUpdateCheck(typeof __APP_REPO__ !== 'undefined' ? __APP_REPO__ : '');
 
   // When set, the EditorArea should switch to the AI summary view for this file path.
   const [summaryRequestPath, setSummaryRequestPath] = useState<string | null>(null);
@@ -575,7 +575,7 @@ export function WorkbenchLayout() {
           <BottomTray ref={bottomTrayRef} height={trayHeight} workspacePath={workspacePath} />
         </div>
       </div>
-      {workspacePath && <StatusBar proactive={proactiveStatus} />}
+      {workspacePath && <StatusBar proactive={proactiveStatus} lastPingAt={lastPingAt} />}
     </div>
   );
 }

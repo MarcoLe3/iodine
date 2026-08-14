@@ -1,7 +1,28 @@
+import { useState, useEffect } from 'react';
 import type { ProactiveStatus } from '../../hooks/useProactiveHelp';
 
 interface StatusBarProps {
   proactive: ProactiveStatus;
+  lastPingAt: number | null;
+}
+
+function useTimeAgo(ts: number | null): string {
+  const [label, setLabel] = useState('—');
+
+  useEffect(() => {
+    if (!ts) { setLabel('—'); return; }
+    function update() {
+      const s = Math.floor((Date.now() - ts!) / 1000);
+      if (s < 60)        setLabel(`${s}s ago`);
+      else if (s < 3600) setLabel(`${Math.floor(s / 60)}m ago`);
+      else               setLabel(`${Math.floor(s / 3600)}h ago`);
+    }
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [ts]);
+
+  return label;
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -10,7 +31,8 @@ const REASON_LABELS: Record<string, string> = {
   cooldown: 'cooldown',
 };
 
-export function StatusBar({ proactive }: StatusBarProps) {
+export function StatusBar({ proactive, lastPingAt }: StatusBarProps) {
+  const heartbeatAgo = useTimeAgo(lastPingAt);
   const { actionCount, nextCheckInSec, willTrigger, noReason, cooldownRemainingSec } = proactive;
 
   let triggerLabel: string;
@@ -62,6 +84,8 @@ export function StatusBar({ proactive }: StatusBarProps) {
           <Pill label="Cooldown" value={cooldownLabel} />
         </>
       )}
+      <Sep />
+      <Pill label="Heartbeat" value={heartbeatAgo} />
     </div>
   );
 }
