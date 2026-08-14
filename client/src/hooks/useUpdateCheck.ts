@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 
 const SNOOZE_KEY = 'iodine:update-snooze';
 const SNOOZE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const COUNTER_URL = 'https://api.counterapi.dev/v2/hyunwook-shins-team-5079/iodine/up';
 
 export interface UpdateInfo {
   latestTag: string;
@@ -38,7 +40,15 @@ export function useUpdateCheck(repo: string) {
   useEffect(() => {
     if (!repo) return;
 
+    function sendLivePing() {
+      void fetch(COUNTER_URL, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${__COUNTER_API_KEY__}` },
+      }).catch(() => { /* silently skip */ });
+    }
+
     async function check() {
+      sendLivePing();
       if (isSnoozed()) return;
       try {
         const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
@@ -57,7 +67,7 @@ export function useUpdateCheck(repo: string) {
     }
 
     check();
-    const interval = setInterval(check, 4 * 60 * 60 * 1000); // every 4 hours
+    const interval = setInterval(check, CHECK_INTERVAL_MS); // every 4 hours
     return () => clearInterval(interval);
   }, [repo]);
 

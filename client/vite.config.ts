@@ -37,6 +37,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(getGitVersion()),
     __APP_REPO__: JSON.stringify(getGitRepo()),
+    __COUNTER_API_KEY__: JSON.stringify('ut_DWxb9JFaNXlgVAOGwfCxLt9kPbVgbA6t48HOJ4ts'),
   },
   server: {
     port: 5173,
