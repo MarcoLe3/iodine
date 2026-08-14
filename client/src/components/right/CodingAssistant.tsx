@@ -369,16 +369,20 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       const lastMsg = uiMessages[uiMessages.length - 1];
       if (lastMsg?.role === 'assistant') {
         const text = lastMsg.blocks.filter((b): b is UIBlock & { type: 'text' } => b.type === 'text').map(b => b.content).join('\n\n').trim();
-        // Enqueue the condensed response after any tool narrations — do not interrupt them.
+        // Enqueue the response audio after any tool narrations — do not interrupt them.
         if (text && provider.id !== 'anthropic') {
           const msgId = lastMsg.id;
           setSpeakingMsgId(msgId);
           onNarrationQueueEmptyRef.current = () => setSpeakingMsgId(null);
-          // Start fetching Verbally immediately so it loads in parallel with any queued narration.
-          const verballyPromise = fetch(`${API_BASE}/api/tts/verbally`, {
+          // Skip condensation for short, tool-free responses and speak the original text directly.
+          const wordCount = text.split(/\s+/).length;
+          const useDirectSpeech = wordCount < 15 && !turnHadNarrationsRef.current;
+          const speechPromise = fetch(`${API_BASE}/api/tts/${useDirectSpeech ? 'speak' : 'verbally'}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, provider: provider.id, model }),
+            body: JSON.stringify(useDirectSpeech
+              ? { text, provider: provider.id }
+              : { text, provider: provider.id, model }),
           }).then(async r => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return URL.createObjectURL(await r.blob());
@@ -405,9 +409,9 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
               },
             });
           }
-          // Evict remaining skippable narrations as soon as the Verbally audio is ready.
-          verballyPromise.then(() => evictSkippable());
-          narrationQueueRef.current.push({ fn: () => verballyPromise, skippable: false });
+          // Evict remaining skippable narrations as soon as the response audio is ready.
+          speechPromise.then(() => evictSkippable());
+          narrationQueueRef.current.push({ fn: () => speechPromise, skippable: false });
           void drainNarrationQueue();
           turnHadNarrationsRef.current = false;
         }
