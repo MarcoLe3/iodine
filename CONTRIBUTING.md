@@ -8,35 +8,43 @@ Iodine — IDE for Open-source Development — is built to be forked and extende
 iodine/
 ├── package.json              # Root: npm workspaces + concurrently dev script
 ├── tsconfig.base.json        # Shared TypeScript config
+├── .env.example              # Supported environment variables and API keys
 │
 ├── client/                   # React + TypeScript frontend (Vite) — http://localhost:5173
 │   └── src/
 │       ├── App.tsx           # Renders WorkbenchLayout
 │       ├── providers.ts      # AI provider + model definitions
 │       ├── types/            # Shared types: FileNode, OpenFile, UIMessage, etc.
-│       ├── api/              # Typed fetch wrappers for file/workspace endpoints
-│       ├── hooks/            # useFileTree, useOpenFiles, useGitStatus, useCodingAssistant, …
+│       ├── api/              # Typed fetch wrappers for server endpoints
+│       ├── hooks/            # Workspace, Git, terminal, and assistant state
+│       ├── services/         # Client-side feature services
+│       ├── utils/            # Shared frontend utilities
 │       └── components/
 │           ├── layout/       # WorkbenchLayout, MenuBar, ActivityBar, Sidebar, EditorArea, RightPanel
-│           ├── sidebar/      # FileExplorer, FileTreeNode, SourceControlPanel
-│           ├── editor/       # EditorTabs, MonacoEditor, WelcomeScreen
-│           ├── bottom/        # BottomTray, TerminalPanel, TerminalSession
+│           ├── sidebar/      # File explorer and source-control views
+│           ├── editor/       # Tabs, Monaco editor, previews, and welcome UI
+│           ├── bottom/       # Bottom tray and terminal sessions
 │           └── right/        # CodingAssistant, BuildAssistant, SystemView
 │
 ├── server/                   # Express + WebSocket backend — http://localhost:3001
 │   └── src/
 │       ├── app.ts            # Express app and route registration
-│       ├── index.ts           # HTTP/WebSocket server startup
-│       ├── state.ts           # Persisted workspace state
-│       ├── terminal.ts        # node-pty terminal sessions
-│       ├── routes/             # files, agent, AI summary, Git, project, build config
-│       └── services/           # AI provider adapters and agent tools
+│       ├── index.ts          # HTTP/WebSocket server startup
+│       ├── events.ts         # Server event definitions and coordination
+│       ├── state.ts          # Persisted workspace state
+│       ├── terminal.ts       # node-pty terminal sessions
+│       ├── models/           # Server-side data and provider model definitions
+│       ├── prompts/          # System and specialized AI prompts
+│       ├── routes/           # Workspace, agent, conversation, Git, terminal, and media endpoints
+│       └── services/         # AI provider adapters, agent tools, and server services
 │
 ├── images/                   # Logo, screenshots, and demo video
 ├── README.md                 # Product overview and getting started guide
 ├── CONTRIBUTING.md           # This document
 ├── SOURCE_CONTROL.md         # Git integration reference
-└── DEBUGGING.md              # Debugging notes and known failure modes
+├── DEBUGGING.md              # Debugging notes and known failure modes
+├── CLAUDE.md                 # AI coding guidance for this repository
+└── LICENSE                   # Project license
 ```
 
 ## Local Development
