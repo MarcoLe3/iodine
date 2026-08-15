@@ -150,6 +150,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     stop: stopNarrationQueue,
     drain: drainNarrationQueue,
     evictSkippable,
+    enqueueGreeting,
     queueRef: narrationQueueRef,
     audioRef: narrationAudioRef,
     hadNarrationsRef: turnHadNarrationsRef,
@@ -175,6 +176,13 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const [showVerballyDialog, setShowVerballyDialog] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevIsLoadingRef = useRef(false);
+  // Ref mirrors: transcribeAndSend is a useCallback whose deps don't include these
+  // state values, so refs give it non-stale access without widening the dep array.
+  const pastConversationsRef = useRef<ConversationRecord[]>([]);
+  const conversationLoadErrorRef = useRef<string | null>(null);
+  const conversationsLoadingRef = useRef(true);
+  // State (not ref) so handleSend can gate on it synchronously in the render closure.
+  const [conversationsLoading, setConversationsLoading] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -183,10 +191,18 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const refreshConversations = async (ws: string) => {
     try {
-      setPastConversations(await fetchConversations(ws));
+      const convs = await fetchConversations(ws);
+      pastConversationsRef.current = convs;
+      setPastConversations(convs);
+      conversationLoadErrorRef.current = null;
       setConversationLoadError(null);
     } catch (error) {
-      setConversationLoadError(error instanceof Error ? error.message : 'Failed to load conversations');
+      const msg = error instanceof Error ? error.message : 'Failed to load conversations';
+      conversationLoadErrorRef.current = msg;
+      setConversationLoadError(msg);
+    } finally {
+      conversationsLoadingRef.current = false;
+      setConversationsLoading(false);
     }
   };
   useEffect(() => {
@@ -195,7 +211,18 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   }, [isLoading]);
   // Fetch past conversations on mount and whenever the workspace changes
   useEffect(() => {
-    if (!workspacePath) { setPastConversations([]); setConversationLoadError(null); return; }
+    if (!workspacePath) {
+      pastConversationsRef.current = [];
+      setPastConversations([]);
+      conversationLoadErrorRef.current = null;
+      setConversationLoadError(null);
+      conversationsLoadingRef.current = false;
+      setConversationsLoading(false);
+      return;
+    }
+    conversationsLoadingRef.current = true;
+    setConversationsLoading(true);
+    conversationLoadErrorRef.current = null;
     setConversationLoadError(null);
     refreshConversations(workspacePath);
   }, [workspacePath]);
@@ -207,10 +234,11 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
-  const handleSend = () => { const text = input.trim(); if (!text || isLoading) return; stopNarrationQueue(); resetNarrationRefs(); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
+  const handleSend = () => { const text = input.trim(); if (!text || isLoading || conversationsLoading) return; stopNarrationQueue(); resetNarrationRefs(); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const isNewThread = isFresh || uiMessages.length === 0; if (isNewThread && isTutorMode && !conversationLoadError) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); } const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
   const handleClearAll = async () => {
     try {
       await clearAllConversations();
+      pastConversationsRef.current = [];
       setPastConversations([]);
       setShowConversations(false);
     } catch {
@@ -285,6 +313,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         const isFresh = showConversations;
         setShowConversations(false);
         if (isFresh) clearMessages();
+        const isNewThread = isFresh || uiMessages.length === 0;
+        if (isNewThread && isTutorMode && !conversationsLoadingRef.current && !conversationLoadErrorRef.current) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); }
         sendMessageRef.current(text.trim(), activeFilePath, getEditorContext?.() ?? null, undefined, isTutorMode, isFresh);
         onMessageSent?.();
       }
@@ -375,6 +405,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
           setSpeakingMsgId(msgId);
           onNarrationQueueEmptyRef.current = () => setSpeakingMsgId(null);
           // Skip condensation for short, tool-free responses and speak the original text directly.
+          // Greeting is already in the queue as a dedicated clip; response always receives none.
           const wordCount = text.split(/\s+/).length;
           const useDirectSpeech = wordCount < 15 && !turnHadNarrationsRef.current;
           const speechPromise = fetch(`${API_BASE}/api/tts/${useDirectSpeech ? 'speak' : 'verbally'}`, {

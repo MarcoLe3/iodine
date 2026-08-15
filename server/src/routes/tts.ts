@@ -33,7 +33,11 @@ function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitDepth = 16):
 }
 
 router.post('/tts/verbally', async (req: Request, res: Response) => {
-  const { text, provider, model } = req.body as { text: string; provider: string; model: string };
+  const { text, provider, model } = req.body as {
+    text: string;
+    provider: string;
+    model: string;
+  };
 
   if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
 

@@ -186,6 +186,24 @@ export function useToolNarration(provider: Provider) {
     void drain();
   }, [provider.id, drain]);
 
+  /** Enqueue a greeting clip at the front of the turn so it plays before any tool narrations. */
+  const enqueueGreeting = useCallback((mode: 'hello' | 'welcomeBack') => {
+    const text = mode === 'hello' ? 'Hello.' : 'Welcome back.';
+    queueRef.current.push({
+      skippable: false,
+      fn: async () => {
+        const response = await fetch(`${API_BASE}/api/tts/speak`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, provider: provider.id }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return URL.createObjectURL(await response.blob());
+      },
+    });
+    void drain();
+  }, [provider.id, drain]);
+
   const resetTurn = useCallback(() => {
     narratedRef.current        = new Set();
     lastFileRef.current        = null;
@@ -194,5 +212,5 @@ export function useToolNarration(provider: Provider) {
     unskippableCountRef.current = 0;
   }, []);
 
-  return { narrate, stop, drain, evictSkippable, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, unskippableCountRef, onEmptyRef, resetTurn };
+  return { narrate, stop, drain, evictSkippable, enqueueGreeting, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, unskippableCountRef, onEmptyRef, resetTurn };
 }
