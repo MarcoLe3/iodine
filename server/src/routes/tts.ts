@@ -12,6 +12,7 @@ const NARRATION_PROMPT =
   'Then state the single most important point directly. ' +
   'Cut all code, lists, caveats, and filler. No summary phrase. ' +
   'Just the spoken takeaway.';
+const CONDENSATION_FALLBACK = 'Please check what I wrote below.';
 
 function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitDepth = 16): Buffer {
   const dataSize = pcm.length;
@@ -47,15 +48,20 @@ router.post('/tts/verbally', async (req: Request, res: Response) => {
       const client = new OpenAI({ apiKey });
 
       // Step 1: condense into slide-deck narration
-      const completion = await client.chat.completions.create({
-        model,
-        messages: [
-          { role: 'system', content: NARRATION_PROMPT },
-          { role: 'user', content: text },
-        ],
-        max_completion_tokens: 60,
-      });
-      const narration = completion.choices[0]?.message?.content?.trim() || text.slice(0, 1000);
+      let narration = CONDENSATION_FALLBACK;
+      try {
+        const completion = await client.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: NARRATION_PROMPT },
+            { role: 'user', content: text },
+          ],
+          max_completion_tokens: 60,
+        });
+        narration = completion.choices[0]?.message?.content?.trim() || CONDENSATION_FALLBACK;
+      } catch {
+        // Continue to TTS with the fallback when condensation fails.
+      }
 
       // Step 2: speak with tts-1-hd
       const speech = await client.audio.speech.create({
@@ -77,7 +83,7 @@ router.post('/tts/verbally', async (req: Request, res: Response) => {
         contents: [{ parts: [{ text }] }],
         config: { systemInstruction: NARRATION_PROMPT },
       });
-      const narration = condensed.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || text.slice(0, 1000);
+      const narration = condensed.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'Please check what I wrote below.';
 
       // Step 2: speak with Gemini TTS
       const audioResp = await ai.models.generateContent({
