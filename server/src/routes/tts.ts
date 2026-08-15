@@ -3,16 +3,9 @@ import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 import { loadOpenAIKey } from '../services/openaiAgent';
 import { loadGeminiKey } from '../services/geminiAgent';
+import { CONDENSATION_FALLBACK, NARRATION_PROMPT } from '../prompts/ttsPrompts';
 
 const router = Router();
-
-const NARRATION_PROMPT =
-  'Condense the following into ONE spoken sentence — two at most. ' +
-  'Preserve the first brief conversational pleasantry if present, such as “Great!”, “No problem.”, or “Of course.”, but do not add one. ' +
-  'Then state the single most important point directly. ' +
-  'Cut all code, lists, caveats, and filler. No summary phrase. ' +
-  'Just the spoken takeaway.';
-const CONDENSATION_FALLBACK = 'Please check what I wrote below.';
 
 function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitDepth = 16): Buffer {
   const dataSize = pcm.length;
@@ -78,12 +71,17 @@ router.post('/tts/verbally', async (req: Request, res: Response) => {
       const ai = new GoogleGenAI({ apiKey });
 
       // Step 1: condense with the user's chat model
-      const condensed = await ai.models.generateContent({
-        model,
-        contents: [{ parts: [{ text }] }],
-        config: { systemInstruction: NARRATION_PROMPT },
-      });
-      const narration = condensed.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'Please check what I wrote below.';
+      let narration = CONDENSATION_FALLBACK;
+      try {
+        const condensed = await ai.models.generateContent({
+          model,
+          contents: [{ parts: [{ text }] }],
+          config: { systemInstruction: NARRATION_PROMPT },
+        });
+        narration = condensed.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || CONDENSATION_FALLBACK;
+      } catch {
+        // Continue to TTS with the fallback when condensation fails.
+      }
 
       // Step 2: speak with Gemini TTS
       const audioResp = await ai.models.generateContent({
