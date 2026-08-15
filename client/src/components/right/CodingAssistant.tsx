@@ -181,6 +181,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const pastConversationsRef = useRef<ConversationRecord[]>([]);
   const conversationLoadErrorRef = useRef<string | null>(null);
   const conversationsLoadingRef = useRef(true);
+  // Guards the opening narration independently of transient message state.
+  const hasGreetedCurrentThreadRef = useRef(false);
   // State (not ref) so handleSend can gate on it synchronously in the render closure.
   const [conversationsLoading, setConversationsLoading] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
@@ -234,7 +236,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
-  const handleSend = () => { const text = input.trim(); if (!text || isLoading || conversationsLoading) return; stopNarrationQueue(); resetNarrationRefs(); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) clearMessages(); const isNewThread = isFresh || uiMessages.length === 0; if (isNewThread && isTutorMode && !conversationLoadError) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); } const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
+  const handleSend = () => { const text = input.trim(); if (!text || isLoading || conversationsLoading) return; stopNarrationQueue(); resetNarrationRefs(); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) { clearMessages(); hasGreetedCurrentThreadRef.current = false; } if (!hasGreetedCurrentThreadRef.current && isTutorMode && !conversationLoadError) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); hasGreetedCurrentThreadRef.current = true; } const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh); onMessageSent?.(); };
   const handleClearAll = async () => {
     try {
       await clearAllConversations();
@@ -247,6 +249,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   };
   const handleLoadConversation = (conv: ConversationRecord) => {
     loadConversation(conv);
+    hasGreetedCurrentThreadRef.current = true;
     setShowConversations(false);
   };
   const handleSuggestion = (text: string) => { setInput(text); onUserTyping?.(); };
@@ -312,9 +315,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         stopNarrationQueue(); resetNarrationRefs();
         const isFresh = showConversations;
         setShowConversations(false);
-        if (isFresh) clearMessages();
-        const isNewThread = isFresh || uiMessages.length === 0;
-        if (isNewThread && isTutorMode && !conversationsLoadingRef.current && !conversationLoadErrorRef.current) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); }
+        if (isFresh) { clearMessages(); hasGreetedCurrentThreadRef.current = false; }
+        if (!hasGreetedCurrentThreadRef.current && isTutorMode && !conversationsLoadingRef.current && !conversationLoadErrorRef.current) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); hasGreetedCurrentThreadRef.current = true; }
         sendMessageRef.current(text.trim(), activeFilePath, getEditorContext?.() ?? null, undefined, isTutorMode, isFresh);
         onMessageSent?.();
       }
