@@ -733,3 +733,51 @@ This only manifests in the **dogfooding scenario**: using iodine to edit iodine'
 1. **Run the built server** — `npm run build && node server/dist/index.js` — no hot reload, agent edits no longer restart the server.
 2. **Batch edits into one turn** — if the agent must touch multiple server files, ask it to do them all at once so the tsx restart happens at the end rather than mid-turn.
 3. **Use Claude Code CLI for server-side edits** — the CLI runs outside the iodine process so server restarts do not affect it.
+
+---
+
+## Monaco Cursor Jumps to the Last Line While Typing
+
+### Symptom
+
+While typing in the Monaco editor, the cursor intermittently jumps to the final line of
+the file. The jump coincides with background file refreshes or diff polling rather than
+with a specific keystroke.
+
+### Root Cause
+
+The editor was rendered as a controlled component:
+
+```tsx
+<Editor value={file.content} />
+```
+
+External sources such as `useFileDiff`, `refreshFile`, and diff polling can update
+`file.content`. When `@monaco-editor/react` sees that the prop value differs from the
+current model value, it replaces the model's full range using `pushEditOperations`.
+Because that replacement supplies no cursor-state computer, Monaco places the cursor at
+the end of the replaced range—the last line.
+
+Local editor changes already flow through `onChange` → `onContentChange` → application
+state. Passing those changes back through the controlled `value` prop unnecessarily
+re-applies the editor's own content and exposes this cursor-reset behavior.
+
+### Fix
+
+Use Monaco in uncontrolled mode with `defaultValue`, then handle true external content
+changes through the editor ref. Before applying an external update, capture the current
+selections and scroll position; restore them after updating the model. Do not push a
+state update back into Monaco when it originated from Monaco's own `onChange` callback.
+
+When switching files, ensure the correct content is loaded explicitly (or use a stable
+model URI per file), because later changes to `defaultValue` do not update an existing
+model. External refreshes must also avoid overwriting newer unsaved local edits.
+
+### Regression checks
+
+- Type continuously while file and diff polling run.
+- Modify the active file externally and verify cursor, selections, and scroll are kept.
+- Switch rapidly between files and verify each model has the correct content.
+- Confirm stale watcher responses cannot overwrite newer local edits.
+- Verify undo/redo and multi-cursor selections after an external update.
+- Handle deletion or rename of the active file without recreating the wrong model.

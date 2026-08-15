@@ -162,6 +162,10 @@ export function MonacoEditor({ file, onContentChange, diffData, onEditorMount, o
   onActivityRef.current = onActivity;
   const [mounted, setMounted] = useState(false);
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  // Tracks the last content value that originated from the editor's own onChange.
+  // Used to distinguish user edits (which must not be pushed back) from external
+  // content updates (refreshFile, agent writes) which need explicit model sync.
+  const editorValueRef = useRef(file.content);
 
   // Keep diffDataRef in sync so the click handler always has the latest data
   useEffect(() => { diffDataRef.current = diffData ?? null; }, [diffData]);
@@ -272,14 +276,31 @@ export function MonacoEditor({ file, onContentChange, diffData, onEditorMount, o
     decorationIdsRef.current = editor.deltaDecorations([], newDecorations);
   }, [diffData, mounted]);
 
+  // Sync external content changes (refreshFile, agent writes) into the editor
+  // while preserving cursor and selection. Changes that came from the editor's
+  // own onChange are already reflected in the model and must be skipped, otherwise
+  // @monaco-editor/react's controlled-value path replaces the full model range
+  // and moves the cursor to the last line.
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !mounted) return;
+    if (file.content === editorValueRef.current) return; // editor-originated change — no-op
+    const position = editor.getPosition();
+    const selection = editor.getSelection();
+    editorValueRef.current = file.content ?? '';
+    editor.setValue(file.content ?? '');
+    if (position) editor.setPosition(position);
+    if (selection) editor.setSelection(selection);
+  }, [file.content, mounted]);
+
   return (
     <>
       <Editor
         height="100%"
         theme={document.documentElement.dataset.theme === 'light' ? 'light' : 'vs-dark'}
         language={file.language}
-        value={file.content}
-        onChange={value => onContentChange(file.path, value ?? '')}
+        defaultValue={file.content}
+        onChange={value => { editorValueRef.current = value ?? ''; onContentChange(file.path, value ?? ''); }}
         beforeMount={configureMonacoLanguages}
         onMount={handleMount}
         options={{
