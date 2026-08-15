@@ -188,7 +188,7 @@ export function useToolNarration(provider: Provider) {
 
   /** Enqueue a greeting clip at the front of the turn so it plays before any tool narrations. */
   const enqueueGreeting = useCallback((mode: 'hello' | 'welcomeBack') => {
-    const text = mode === 'hello' ? 'Hello.' : 'Welcome back.';
+    const text = mode === 'hello' ? 'Hello there.' : 'Welcome back.';
     queueRef.current.push({
       skippable: false,
       fn: async () => {
