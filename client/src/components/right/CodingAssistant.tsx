@@ -12,6 +12,12 @@ import { useToolNarration } from '../../hooks/useToolNarration';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
+const SPEECH_OPTIONS = [
+  { id: 'google', label: 'Gemini', model: 'gemini-2.5-flash-preview-tts' },
+  { id: 'openai', label: 'OpenAI', model: 'tts-1-hd' },
+] as const;
+type SpeechProviderId = typeof SPEECH_OPTIONS[number]['id'];
+
 function argumentSummary(input: unknown): string | null {
   if (!input || typeof input !== 'object') return null;
   const values = Object.values(input as Record<string, unknown>);
@@ -166,6 +172,9 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   sendMessageRef.current = sendMessage;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({ injectProactiveMessage, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, notifyEditorActivity]);
+  const [speechProviderId, setSpeechProviderId] = useState<SpeechProviderId>(() => (localStorage.getItem('iodine:speech-provider') as SpeechProviderId) ?? 'google');
+  useEffect(() => { localStorage.setItem('iodine:speech-provider', speechProviderId); }, [speechProviderId]);
+  const speechOption = SPEECH_OPTIONS.find(o => o.id === speechProviderId) ?? SPEECH_OPTIONS[0];
   const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(false); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
   const [pastConversations, setPastConversations] = useState<ConversationRecord[]>([]);
   const [showConversations, setShowConversations] = useState(false);
@@ -254,7 +263,6 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   };
   const handleSuggestion = (text: string) => { setInput(text); onUserTyping?.(); };
   const handleVerbally = (msgId: string, text: string) => {
-    if (provider.id === 'anthropic') { setShowVerballyDialog(true); return; }
     stopNarrationQueue();
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     if (speakingMsgId === msgId) { setSpeakingMsgId(null); return; }
@@ -263,7 +271,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     fetch(`${API_BASE}/api/tts/verbally`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, provider: provider.id, model }),
+      body: JSON.stringify({ text, provider: speechOption.id, model: speechOption.model }),
     })
       .then(async r => {
         if (!r.ok) {
@@ -503,7 +511,13 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         {verballyError && <div style={{ padding: '6px 10px', background: '#f4877112', border: '1px solid #f4877160', borderRadius: 6, fontSize: 11, color: '#f48771', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>🔊 Voice Memo: {verballyError}</span><button onClick={() => setVerballyError(null)} style={{ background: 'none', border: 'none', color: '#f48771', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px' }}>×</button></div>}
         {isWatching && <div className="watching-alert" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '7px 10px', border: '1px solid #e7c547', borderRadius: 6, background: '#e7c54718' }}><span className="watching-dot" />Assistant is actively watching your progress</div>}
         <textarea ref={textareaRef} value={input} onChange={e => { setInput(e.target.value); onUserTyping?.(); }} onKeyDown={handleKeyDown} placeholder="Ask anything… (Enter to send, Shift+Enter for newline)" rows={3} disabled={isLoading} style={{ background: 'var(--color-bg-input)', border: '1px solid var(--color-border)', borderRadius: 10, color: 'var(--color-text-primary)', fontSize: 12, padding: '9px 11px', resize: 'none', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
-        <div style={{ alignSelf: 'flex-end', display: 'flex', gap: 6, alignItems: 'center' }}><button role="switch" aria-checked={isTutorMode} onClick={() => setIsTutorMode(v => !v)} title={isTutorMode ? 'Tutor Mode on — AI will guide without editing' : 'Enable Tutor Mode'} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '5px 4px', color: isTutorMode ? '#4ec9b0' : 'var(--color-text-secondary)', fontSize: 11, fontWeight: isTutorMode ? 600 : 400 }}><span style={{ position: 'relative', width: 26, height: 15, borderRadius: 999, background: isTutorMode ? '#4ec9b0' : 'var(--color-border)', transition: 'background .15s ease', flexShrink: 0 }}><span style={{ position: 'absolute', top: 2, left: isTutorMode ? 13 : 2, width: 11, height: 11, borderRadius: '50%', background: '#fff', transition: 'left .15s ease' }} /></span>Tutor</button>{isLoading && <button onClick={stopExecution} style={{ background: '#f4877118', border: '1px solid #f4877160', borderRadius: 999, color: '#f48771', cursor: 'pointer', fontSize: 12, padding: '5px 14px', fontWeight: 600 }}>Stop</button>}<button onClick={isRecording ? stopRecording : startRecording} disabled={isLoading || isTranscribing} title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing…' : 'Voice input'} style={{ background: isRecording ? '#f4877118' : 'none', border: `1px solid ${isRecording ? '#f48771' : 'var(--color-border)'}`, borderRadius: 999, color: isRecording ? '#f48771' : isTranscribing ? 'var(--color-text-secondary)' : 'var(--color-text-secondary)', cursor: isLoading || isTranscribing ? 'default' : 'pointer', padding: '5px 8px', display: 'inline-flex', alignItems: 'center', transition: 'background 0.15s ease, border-color 0.15s ease' }}>{isTranscribing ? <span style={{ fontSize: 11 }}>…</span> : <MicIcon />}</button><button onClick={handleSend} disabled={isLoading || !input.trim()} style={{ background: isLoading || !input.trim() ? '#ffffff18' : '#0e639c', border: 'none', borderRadius: 999, color: isLoading || !input.trim() ? 'var(--color-text-secondary)' : '#fff', cursor: isLoading || !input.trim() ? 'default' : 'pointer', fontSize: 12, padding: '5px 15px', fontWeight: 600 }}>{isLoading ? 'Thinking…' : 'Send'}</button></div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Speech</span>
+            <select value={speechProviderId} onChange={e => setSpeechProviderId(e.target.value as SpeechProviderId)} title="Speech model for Voice Memo" style={{ background: 'var(--color-bg-sidebar)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-secondary)', fontSize: 11, padding: '2px 6px', cursor: 'pointer' }}>{SPEECH_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><button role="switch" aria-checked={isTutorMode} onClick={() => setIsTutorMode(v => !v)} title={isTutorMode ? 'Tutor Mode on — AI will guide without editing' : 'Enable Tutor Mode'} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '5px 4px', color: isTutorMode ? '#4ec9b0' : 'var(--color-text-secondary)', fontSize: 11, fontWeight: isTutorMode ? 600 : 400 }}><span style={{ position: 'relative', width: 26, height: 15, borderRadius: 999, background: isTutorMode ? '#4ec9b0' : 'var(--color-border)', transition: 'background .15s ease', flexShrink: 0 }}><span style={{ position: 'absolute', top: 2, left: isTutorMode ? 13 : 2, width: 11, height: 11, borderRadius: '50%', background: '#fff', transition: 'left .15s ease' }} /></span>Tutor</button>{isLoading && <button onClick={stopExecution} style={{ background: '#f4877118', border: '1px solid #f4877160', borderRadius: 999, color: '#f48771', cursor: 'pointer', fontSize: 12, padding: '5px 14px', fontWeight: 600 }}>Stop</button>}<button onClick={isRecording ? stopRecording : startRecording} disabled={isLoading || isTranscribing} title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing…' : 'Voice input'} style={{ background: isRecording ? '#f4877118' : 'none', border: `1px solid ${isRecording ? '#f48771' : 'var(--color-border)'}`, borderRadius: 999, color: isRecording ? '#f48771' : isTranscribing ? 'var(--color-text-secondary)' : 'var(--color-text-secondary)', cursor: isLoading || isTranscribing ? 'default' : 'pointer', padding: '5px 8px', display: 'inline-flex', alignItems: 'center', transition: 'background 0.15s ease, border-color 0.15s ease' }}>{isTranscribing ? <span style={{ fontSize: 11 }}>…</span> : <MicIcon />}</button><button onClick={handleSend} disabled={isLoading || !input.trim()} style={{ background: isLoading || !input.trim() ? '#ffffff18' : '#0e639c', border: 'none', borderRadius: 999, color: isLoading || !input.trim() ? 'var(--color-text-secondary)' : '#fff', cursor: isLoading || !input.trim() ? 'default' : 'pointer', fontSize: 12, padding: '5px 15px', fontWeight: 600 }}>{isLoading ? 'Thinking…' : 'Send'}</button></div>
+        </div>
       </div>
       {showVerballyDialog && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }} onClick={() => setShowVerballyDialog(false)}>
