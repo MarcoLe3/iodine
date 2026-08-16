@@ -10,8 +10,10 @@ import { ImageViewer } from '../editor/ImageViewer';
 import { PdfViewer } from '../editor/PdfViewer';
 import MergeConflictView from '../editor/MergeConflictView';
 import { CommitDiffView } from '../editor/CommitDiffView';
+import { FilePathLink } from '../editor/FilePathLink';
 import { useFileDiff } from '../../hooks/useFileDiff';
 import { hasConflictMarkers } from '../../utils/mergeConflict';
+import { looksLikePath } from '../../utils/filePath';
 import type { OpenFile } from '../../types';
 import type { Provider } from '../../providers';
 
@@ -411,31 +413,16 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     }, [openFiles, onTabClick, onOpenFile, workspacePath, onSummaryRequest, onPreviewRequest]);
 
     /**
-     * Inline-code component for markdown rendering.
-     * If the text looks like a relative file path (no spaces, contains /, e.g. "client/src/App.tsx")
-     * it renders as a clickable link with dotted underline, opening via wikiNavigate.
-     * Block code (className="language-xxx") is passed through unchanged.
+     * Inline-code component for markdown rendering. Text that looks like a relative
+     * file path becomes a link opening via wikiNavigate. Block code (className="language-xxx")
+     * passes through unchanged.
      */
     const inlineCodeComponent = useCallback(
       ({ children, className, ...props }: React.ComponentPropsWithoutRef<'code'>) => {
         const text = String(children);
-        const isBlock = !!className;
-        // Path heuristic: no spaces, at least one /, only path-safe chars, not a URL
-        const isPath = !isBlock
-          && /^(?:[a-zA-Z0-9_@.\-]+\/)+[a-zA-Z0-9_@.\-]+$/.test(text)
-          && activeFile != null;
-        if (isPath) {
-          const absPath = resolveWorkspacePath(text, activeFile!.path);
-          return (
-            <code
-              {...props}
-              style={{ cursor: 'pointer', textDecorationLine: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px' }}
-              title={`Open ${text}`}
-              onClick={() => { wikiNavigate(absPath); }}
-            >
-              {children}
-            </code>
-          );
+        if (!className && activeFile && looksLikePath(text)) {
+          const absPath = resolveWorkspacePath(text, activeFile.path);
+          return <FilePathLink {...props} path={text} onOpen={() => wikiNavigate(absPath)}>{children}</FilePathLink>;
         }
         return <code {...props} className={className}>{children}</code>;
       },
