@@ -430,24 +430,31 @@ export function useCodingAssistant(
     setIsLoading(true);
 
     try {
-      const routeResponse = await fetch(`${FAST_API_BASE}/api/route`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({prompt: newHistory, models: provider.models}),
-        signal: controller.signal,
-      });
-
-      if (!routeResponse.ok) {
-        const text = await routeResponse.text();
-        throw new Error(`HTTP routeResponse status: ${routeResponse.status}, ${text}`);
-      } 
-
-      const routeData = await routeResponse.json();
+      let modelToUse = model;
+      if (model === 'dynamic' && provider.id === 'openai') {
+        try {
+          const routeResponse = await fetch(`${FAST_API_BASE}/api/route`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({prompt: newHistory, models: provider.models}),
+            signal: controller.signal,
+          });
+          if (routeResponse.ok) {
+            const routeData = await routeResponse.json();
+            modelToUse = routeData.selected_model.id;
+          } else {
+            modelToUse = provider.models[0]?.id ?? model;
+          }
+        } catch {
+          // Routing service unavailable — fall back to first model
+          modelToUse = provider.models[0]?.id ?? model;
+        }
+      }
 
       const response = await fetch(`${API_BASE}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newHistory, model: routeData.selected_model.id, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false }),
+        body: JSON.stringify({ messages: newHistory, model: modelToUse, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false }),
         signal: controller.signal,
       });
 

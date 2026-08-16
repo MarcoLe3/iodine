@@ -120,6 +120,20 @@ npm run dev
 
 Once running, open a project via **File → Open Project** or click **Open Folder** in the left sidebar.
 
+### Route LLM (optional)
+
+The **Route** toggle in the Coding Assistant (OpenAI only) automatically picks the best model per prompt using [RouteLLM](https://github.com/lm-sys/routellm). It requires a separate Python service:
+
+```bash
+# Install Python dependencies (one-time)
+pip install routellm fastapi uvicorn tiktoken
+
+# Start the routing service (must run from the models directory)
+cd server/src/models && python3.11 -m uvicorn main:app --reload
+```
+
+The service runs on http://localhost:8000. If it isn't running, the Coding Assistant falls back to the user-selected model silently. The **Route** toggle is hidden for Anthropic and Google providers.
+
 > **Note — Open Project search scope:** The browser's directory picker only gives the app the folder name, not the full path. The server resolves the name by searching your home directory up to 3 levels deep. If your project lives outside your home directory, or is nested more than 3 levels deep, use **Open Folder** and type the absolute path directly.
 
 ### Other Scripts
