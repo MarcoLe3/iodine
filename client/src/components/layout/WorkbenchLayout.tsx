@@ -54,6 +54,7 @@ export function WorkbenchLayout() {
   const [currentEditorView, setCurrentEditorView] = useState('source');
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const [summaryOutlineContent, setSummaryOutlineContent] = useState('');
+  const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [rightPanelWidth, setRightPanelWidth] = useState(RIGHT_PANEL_DEFAULT);
   const { isExpanded, animated: panelAnimated, onAssistantReply, onOpenFile: onPanelShrinkForFile, resetExpansion } = usePanelExpansion(DEFAULT_PANEL_EXPANSION_CONFIG);
@@ -507,6 +508,7 @@ export function WorkbenchLayout() {
               onAddToContext={handleAddToContext}
               onNodeSelect={handleNodeSelect}
               expandToPath={activeFilePath}
+              fileTreeRefreshKey={fileTreeRefreshKey}
               outlineContent={
                 currentEditorView === 'summary' && activeFilePath
                   ? (summaryOutlineContent || null)
@@ -592,6 +594,7 @@ export function WorkbenchLayout() {
               onMessageSent={recordAction}
               onWatchTrigger={() => { playBell(); rightPanelRef.current?.triggerPulse(); }}
               onAssistantReply={onAssistantReply}
+              onFileTreeRefresh={() => setFileTreeRefreshKey(key => key + 1)}
               commitDiffContext={commitDiffContext}
               onClearCommitDiffContext={() => setCommitDiffContext(null)}
             />

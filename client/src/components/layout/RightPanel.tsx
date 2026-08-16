@@ -51,12 +51,13 @@ interface RightPanelProps {
   onMessageSent?: () => void;
   onWatchTrigger?: () => void;
   onAssistantReply?: (text: string, hadToolUse: boolean) => void;
+  onFileTreeRefresh?: () => void;
   commitDiffContext?: { shortHash: string; content: string } | null;
   onClearCommitDiffContext?: () => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent, onWatchTrigger, onAssistantReply, commitDiffContext, onClearCommitDiffContext }, ref) {
+function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent, onWatchTrigger, onAssistantReply, onFileTreeRefresh, commitDiffContext, onClearCommitDiffContext }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const panelRef             = useRef<HTMLDivElement>(null);
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -251,6 +252,7 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
           onMessageSent={onMessageSent}
           onWatchTrigger={onWatchTrigger}
           onAssistantReply={onAssistantReply}
+          onFileTreeRefresh={onFileTreeRefresh}
           commitDiffContext={commitDiffContext}
           onClearCommitDiffContext={onClearCommitDiffContext} />
       </div>

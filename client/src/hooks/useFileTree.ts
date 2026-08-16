@@ -26,13 +26,23 @@ export function useFileTree(workspacePath: string | null, localTree?: FileNode |
     try {
       const result = await fetchFileTree();
       setServerTree(result);
-      autoExpand(result);
+      // Preserve the user's expanded folders on refresh; only choose defaults on the initial load.
+      setExpandedPaths(previous => {
+        if (previous.size > 0) return previous;
+        const expanded = new Set<string>();
+        expanded.add(result.path);
+        result.children
+          ?.filter(node => node.type === 'directory')
+          .slice(0, 5)
+          .forEach(node => expanded.add(node.path));
+        return expanded;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file tree');
     } finally {
       setLoading(false);
     }
-  }, [autoExpand]);
+  }, []);
 
   // Server mode: fetch when workspacePath changes (skip if a local tree is active)
   useEffect(() => {

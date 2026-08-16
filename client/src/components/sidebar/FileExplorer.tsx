@@ -19,6 +19,7 @@ interface FileExplorerProps {
   onNodeSelect?: (node: FileNode) => void;
   /** When set, auto-expands all parent folders to reveal this file path. */
   expandToPath?: string | null;
+  refreshKey?: number;
 }
 
 // Merge two GitFileStatus values into a single representative value for a directory.
@@ -77,6 +78,7 @@ export function FileExplorer({
   onAddToContext,
   onNodeSelect,
   expandToPath,
+  refreshKey,
 }: FileExplorerProps) {
   const { tree, expandedPaths, toggleExpand, loading, error, refetch } = useFileTree(workspacePath, localTree);
   const rawGitStatus = useGitStatus(workspacePath);
@@ -95,6 +97,10 @@ export function FileExplorer({
   const inputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (refreshKey !== undefined) void refetch();
+  }, [refreshKey, refetch]);
 
   // Select all text when the create input first appears
   useEffect(() => {

@@ -45,6 +45,7 @@ export function useCodingAssistant(
   onWatchTrigger?: () => void,
   onAssistantReply?: (text: string, hadToolUse: boolean) => void,
   onToolNarration?: (name: string, input: Record<string, unknown>) => void,
+  onFileTreeRefresh?: () => void,
 ) {
   const [uiMessages, setUiMessages] = useState<UIMessage[]>([]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
@@ -67,6 +68,9 @@ export function useCodingAssistant(
 
   const onToolNarrationRef = useRef(onToolNarration);
   onToolNarrationRef.current = onToolNarration;
+
+  const onFileTreeRefreshRef = useRef(onFileTreeRefresh);
+  onFileTreeRefreshRef.current = onFileTreeRefresh;
 
   // Tracks whether any tool was called in the current turn; reset at start of sendMessage.
   const toolUsedInTurnRef = useRef(false);
@@ -603,14 +607,19 @@ export function useCodingAssistant(
           } else if (eventName === 'tool_result') {
             flushNow();
             const toolUseId = payload.tool_use_id as string;
+            const succeeded = !payload.error;
+            let completedToolName: string | undefined;
             updateAssistant(msg => ({
               ...msg,
-              blocks: msg.blocks.map(b =>
-                b.type === 'tool' && b.id === toolUseId
-                  ? { ...b, result: payload.preview as string, error: payload.error as boolean, pending: false }
-                  : b
-              ),
+              blocks: msg.blocks.map(b => {
+                if (b.type !== 'tool' || b.id !== toolUseId) return b;
+                completedToolName = b.name;
+                return { ...b, result: payload.preview as string, error: payload.error as boolean, pending: false };
+              }),
             }));
+            if (succeeded && completedToolName === 'write_file') {
+              onFileTreeRefreshRef.current?.();
+            }
           } else if (eventName === 'done') {
             flushNow();
             const capturedText = streamingTextRef.current;

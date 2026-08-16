@@ -18,6 +18,13 @@ interface SidebarProps {
   onNodeSelect?: (node: FileNode) => void;
   /** When set, auto-expands all parent folders to reveal this file path. */
   expandToPath?: string | null;
+  /**
+   * Monotonically increasing signal used to reload the server-backed file tree.
+   * Agent-created files may not be visible through Git yet, so a successful
+   * write increments this key and lets FileExplorer fetch the latest tree.
+   * FileExplorer preserves the user's expanded folders during that refresh.
+   */
+  fileTreeRefreshKey?: number;
   /** Markdown content for the outline panel (null = not in outline mode). */
   outlineContent?: string | null;
   /** Called when the user clicks a heading in the outline panel. */
@@ -46,6 +53,7 @@ export function Sidebar({
   onAddToContext,
   onNodeSelect,
   expandToPath,
+  fileTreeRefreshKey,
   outlineContent,
   onOutlineNavigate,
   activeHeadingId,
@@ -90,6 +98,8 @@ export function Sidebar({
           onAddToContext={onAddToContext}
           onNodeSelect={onNodeSelect}
           expandToPath={expandToPath}
+          // Pass the signal through unchanged; FileExplorer owns the reload behavior.
+          refreshKey={fileTreeRefreshKey}
         />
       ) : (
         <SourceControlPanel
