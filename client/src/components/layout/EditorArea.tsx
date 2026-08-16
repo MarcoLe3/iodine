@@ -627,7 +627,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   title={editorView === 'conflicts' ? 'Back to source' : 'Resolve merge conflicts'}
                   style={{ ...btnStyle, background: editorView === 'conflicts' ? 'var(--editor-btn-active-bg, #007acc)' : '#6f4e37', color: editorView === 'conflicts' ? 'var(--editor-btn-active-color, #fff)' : '#fff' }}
                 >
-                  {editorView === 'conflicts' ? '⌨ Source' : '⚠ Conflicts'}
+                  {editorView === 'conflicts' ? 'Source' : 'Conflicts'}
                 </button>
               )}
 
@@ -642,7 +642,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                     color: editorView === 'preview' ? 'var(--editor-btn-active-color, #fff)' : 'var(--editor-btn-neutral-color, #fff)',
                   }}
                 >
-                  {editorView === 'preview' ? '⌨ Source' : '👁 Preview'}
+                  {editorView === 'preview' ? 'Source' : 'Preview'}
                 </button>
               )}
 
@@ -667,7 +667,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                         : 'var(--summary-button-color, #fff)',
                   }}
                 >
-                  {editorView === 'summary' ? '⌨ Source' : hasCachedSummary ? '📖 View Summary' : '✨ Generate Summary'}
+                  {editorView === 'summary' ? 'Source' : hasCachedSummary ? 'View Summary' : 'Generate Summary'}
                 </button>
               )}
             </div>
