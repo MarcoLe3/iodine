@@ -117,6 +117,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const suppressTrackingUntilRef = useRef(0);
 
     const [editorView, setEditorView] = useState<EditorView>('source');
+    const [isFolded, setIsFolded] = useState(false);
 
     // Pending navigation request: open a file at a line and highlight a range.
     // Stored in a ref so it can be applied when the Monaco editor mounts for the target file.
@@ -132,6 +133,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     // Directories always go straight to summary view.
     useEffect(() => {
       const saved = activeFile?.path ? viewByPathRef.current.get(activeFile.path) : undefined;
+      setIsFolded(false);
       const view: EditorView = (() => {
         if (activeFile?.isDirectory) return 'summary';
         if (!saved || saved === 'conflicts') return 'source';
@@ -372,6 +374,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
     const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && (!!workspacePath || !!activeFile.isExternal) && !activeFile.path.endsWith('.md');
     const showConflictsButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && !activeFile.isExternal && hasConflictMarkers(activeFile.content ?? '');
+    const showFoldButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source';
 
     /** Convert an absolute file path to a workspace-relative path. */
     const toRelPath = (abs: string) => {
@@ -575,6 +578,40 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
         })()}
 
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+
+          {/* ── Fold / unfold toggle (top-left) ── */}
+          {showFoldButton && (
+            <button
+              onClick={() => {
+                const editor = monacoEditorRef.current;
+                if (!editor) return;
+                if (isFolded) {
+                  editor.getAction('editor.unfoldAll')?.run();
+                  setIsFolded(false);
+                } else {
+                  editor.getAction('editor.foldAll')?.run();
+                  setIsFolded(true);
+                }
+              }}
+              title={isFolded ? 'Unfold all' : 'Fold all'}
+              style={{
+                position: 'absolute', top: 8, left: 8, zIndex: 10,
+                padding: '3px 8px',
+                fontSize: 13,
+                fontWeight: 700,
+                lineHeight: 1,
+                background: isFolded ? 'var(--editor-btn-active-bg, #007acc)' : 'var(--editor-btn-neutral-bg, #3a3d41)',
+                color: isFolded ? 'var(--editor-btn-active-color, #fff)' : 'var(--editor-btn-neutral-color, #fff)',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                userSelect: 'none',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+              }}
+            >
+              {isFolded ? 'v' : '>'}
+            </button>
+          )}
 
           {/* ── Floating button group (bottom-right) ── */}
           {(showPreviewButton || showSummaryButton || showConflictsButton) && (
