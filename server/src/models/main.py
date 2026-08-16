@@ -5,11 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.route_llm import router as route_router, lifespan
 
+CLIENT_BASE = "http://localhost:5173"
+
 app = FastAPI(title="Route model API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[CLIENT_BASE],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

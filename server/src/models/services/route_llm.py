@@ -6,7 +6,7 @@ from routellm.controller import Controller
 from pydantic import BaseModel, Field
 from typing import Union
 
-os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY") or "test_key"
+os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY","")
 
 class Model(BaseModel):
     id: str
