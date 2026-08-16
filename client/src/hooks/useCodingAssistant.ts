@@ -35,6 +35,7 @@ function normalizeForSave(msgs: UIMessage[]): UIMessage[] {
 // Express already has CORS configured for localhost:5173, so cross-origin works fine.
 // Non-streaming endpoints (/api/files/*, /api/agent/status) still go through the proxy.
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
+const FAST_API_BASE = 'http://localhost:8000'
 
 export function useCodingAssistant(
   provider: Provider,
@@ -429,10 +430,24 @@ export function useCodingAssistant(
     setIsLoading(true);
 
     try {
+      const routeResponse = await fetch(`${FAST_API_BASE}/api/route`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({prompt: newHistory, models: provider.models}),
+        signal: controller.signal,
+      });
+
+      if (!routeResponse.ok) {
+        const text = await routeResponse.text();
+        throw new Error(`HTTP routeResponse status: ${routeResponse.status}, ${text}`);
+      } 
+
+      const routeData = await routeResponse.json();
+
       const response = await fetch(`${API_BASE}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newHistory, model, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false }),
+        body: JSON.stringify({ messages: newHistory, model: routeData.selected_model.id, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false }),
         signal: controller.signal,
       });
 
