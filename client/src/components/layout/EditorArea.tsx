@@ -374,7 +374,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
     const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && (!!workspacePath || !!activeFile.isExternal) && !activeFile.path.endsWith('.md');
     const showConflictsButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && !activeFile.isExternal && hasConflictMarkers(activeFile.content ?? '');
-    const showFoldButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source';
+    const showFoldButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source' && !activeCommitHash;
 
     /** Convert an absolute file path to a workspace-relative path. */
     const toRelPath = (abs: string) => {
@@ -478,6 +478,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
           overflow: 'hidden',
           background: 'var(--color-bg-editor)',
           minWidth: 0,
+          position: 'relative',
         }}
       >
         <EditorTabs
@@ -614,7 +615,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
           )}
 
           {/* ── Floating button group (bottom-right) ── */}
-          {(showPreviewButton || showSummaryButton || showConflictsButton) && (
+          {!activeCommitHash && (showPreviewButton || showSummaryButton || showConflictsButton) && (
             <div style={{
               position: 'absolute', bottom: 20, right: 20, zIndex: 10,
               display: 'flex', gap: 6,
@@ -854,19 +855,20 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
             <WelcomeScreen />
           )}
 
-          {/* ── Commit diff overlay ── */}
-          {activeCommitHash && (
-            <div style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'var(--color-bg-editor)' }}>
-              <CommitDiffView
-                hash={activeCommitHash}
-                theme={document.documentElement.dataset.theme === 'light' ? 'light' : 'vs-dark'}
-                onClose={() => onCommitDiffClose?.()}
-                onCheckout={() => onCommitCheckout?.(activeCommitHash)}
-                onAddToContext={onCommitDiffAddToContext}
-              />
-            </div>
-          )}
         </div>
+
+        {/* ── Commit diff overlay — covers tabs + breadcrumb + content ── */}
+        {activeCommitHash && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'var(--color-bg-editor)' }}>
+            <CommitDiffView
+              hash={activeCommitHash}
+              theme={document.documentElement.dataset.theme === 'light' ? 'light' : 'vs-dark'}
+              onClose={() => onCommitDiffClose?.()}
+              onCheckout={() => onCommitCheckout?.(activeCommitHash)}
+              onAddToContext={onCommitDiffAddToContext}
+            />
+          </div>
+        )}
       </div>
     );
   }
