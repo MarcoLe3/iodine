@@ -28,7 +28,7 @@ Tutor Mode is Iodine's central experience. It creates a guided walkthrough, open
 <img src="https://github.com/user-attachments/assets/55a721c6-8990-407f-a343-bdecbdf42b1e" alt="Iodine IDE demo" width="100%" />
 
 <p align="center">
-  More demos on YouTube: <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 1</a> · <a href="https://www.youtube.com/watch?v=SjOQjkT9GJM">Demo 2</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 3</a>
+  More demos on YouTube: <a href="https://youtu.be/U08gCP2DpAU">Demo 1</a> · <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 2</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 3</a>
 </p>
 
 ## How Iodine helps
@@ -40,17 +40,6 @@ Iodine supports the way a good human mentor would:
 - **Explain** - Explain the code like no agent could.
 
 The assistant uses the code and context already in your workspace, so guidance stays connected to the project rather than generic examples. It can explain what is happening, suggest a next step, and help you verify the result.
-
-## Screenshots
-
-![Iodine IDE — Editor and Coding Assistant](images/screenshot_1.png)
-*Iodine IDE showcasing the main editor interface along with the AI-powered Coding Assistant.*
-
-![Iodine IDE - Tutor Mode](images/screenshot_3.png)
-*Tutor Mode guiding the user through the project.*
-
-![Iodine IDE - Preview Mode](images/screenshot_4.png)
-*Preview mode showing a live website in action.*
 
 ## More than a chat window
 
