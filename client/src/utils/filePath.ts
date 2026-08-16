@@ -24,7 +24,8 @@ export function parseFilePath(text: string): ParsedFilePath | null {
 
   const withLine = /^(.*?):(\d+)$/.exec(text);
   const path = withLine ? withLine[1] : text;
-  if (!looksLikePath(path)) return null;
+  // Shape is checked without any leading / or C:/ so absolute paths parse too.
+  if (!looksLikePath(path.replace(/^([A-Za-z]:)?\//, ''))) return null;
 
   const name = path.slice(path.lastIndexOf('/') + 1);
   const dot = name.lastIndexOf('.');
