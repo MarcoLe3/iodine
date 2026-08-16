@@ -3,6 +3,23 @@ import type { Provider } from '../providers';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
+const GREETING_PHRASES: Record<'hello' | 'welcomeBack', string[]> = {
+  hello: [
+    'Hello there, one sec.',
+    'Hi there, one sec.',
+    'Hey there, one sec.',
+    'Hello! One moment.',
+    'Hi! One sec.',
+  ],
+  welcomeBack: [
+    'Welcome back, one sec.',
+    'Good to have you back, one sec.',
+    'Welcome back! One sec.',
+    'Nice to see you again, one moment.',
+    'Welcome back — one sec.',
+  ],
+};
+
 const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
   read_file: [
     'Let me read through {file}.', 'I’ll take a closer look at {file}.', 'Let me inspect {file}.',
@@ -198,7 +215,8 @@ export function useToolNarration(provider: Provider) {
 
   /** Enqueue a greeting clip at the front of the turn so it plays before any tool narrations. */
   const enqueueGreeting = useCallback((mode: 'hello' | 'welcomeBack') => {
-    const text = mode === 'hello' ? 'Hello there.' : 'Welcome back.';
+    const phrases = GREETING_PHRASES[mode];
+    const text = phrases[Math.floor(Math.random() * phrases.length)];
     queueRef.current.push({
       skippable: false,
       fn: async () => {
