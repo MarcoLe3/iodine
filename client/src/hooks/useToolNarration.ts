@@ -93,8 +93,10 @@ export function useToolNarration(provider: Provider) {
   const audioRef      = useRef<HTMLAudioElement | null>(null);
   const generationRef = useRef(0);
   const drainingRef   = useRef(false);
+  // Cleared at the start of each turn to suppress duplicate narration within that turn.
   const narratedRef        = useRef(new Set<string>());
-  const lastFileRef        = useRef<string | null>(null);
+  // Persists across turns so repeated tool/file combinations can be announced with “again”.
+  const previouslyNarratedRef = useRef(new Set<string>());
   const hadNarrationsRef   = useRef(false);
   const hadUnskippableRef  = useRef(false);
   const unskippableCountRef = useRef(0);
@@ -148,10 +150,18 @@ export function useToolNarration(provider: Provider) {
     const path = Object.values(input).find(
       value => typeof value === 'string' && (value.includes('/') || value.includes('\\'))
     ) as string | undefined;
+    // Treat reading and opening as the same action, and normalize path separators so
+    // equivalent tool/file calls share one stable identity on every platform.
     const family = name === 'open_file' || name === 'read_file' ? 'read' : name;
-    const key = `${family}:${path ?? ''}`;
+    const normalized = path?.replace(/\\/g, '/').replace(/^\.\//, '') ?? '';
+    const key = `${family}:${normalized}`;
+
+    // A duplicate in the current turn is silent. A key seen only in an earlier turn
+    // is narrated normally below, with “again” appended to the sentence.
     if (narratedRef.current.has(key)) return;
+    const narratedInPreviousTurn = previouslyNarratedRef.current.has(key);
     narratedRef.current.add(key);
+    previouslyNarratedRef.current.add(key);
     hadNarrationsRef.current = true;
     const isUnskippable = !SKIPPABLE_TOOLS.has(name);
     if (isUnskippable) {
@@ -165,10 +175,12 @@ export function useToolNarration(provider: Provider) {
 
     const phrases  = TOOL_NARRATION_PHRASES[name] ?? ['Hmm, let me handle this.', 'Let me take care of this.'];
     const template = phrases[Math.floor(Math.random() * phrases.length)];
-    const filename  = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
-    const normalized = path?.replace(/\\/g, '/').replace(/^\.\//, '') ?? null;
-    const phrase = template.replace('{file}', normalized === lastFileRef.current ? 'the file' : filename ?? 'this');
-    if (normalized) lastFileRef.current = normalized;
+    const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
+    const basePhrase = template.replace('{file}', filename ?? 'this');
+    // Keep terminal punctuation at the end: “Let me inspect foo.ts.” → “…foo.ts again.”
+    const phrase = narratedInPreviousTurn
+      ? basePhrase.replace(/([.!?])?$/, ' again$1')
+      : basePhrase;
 
     queueRef.current.push({
       fn: async () => {
@@ -205,7 +217,6 @@ export function useToolNarration(provider: Provider) {
 
   const resetTurn = useCallback(() => {
     narratedRef.current        = new Set();
-    lastFileRef.current        = null;
     hadNarrationsRef.current   = false;
     hadUnskippableRef.current  = false;
     unskippableCountRef.current = 0;
