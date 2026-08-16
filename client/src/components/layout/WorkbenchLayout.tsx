@@ -11,7 +11,7 @@ import { useOpenFiles, sortOpenFilesByStructure } from '../../hooks/useOpenFiles
 import { useFileWatcher } from '../../hooks/useFileWatcher';
 import { useTheme } from '../../hooks/useTheme';
 import { useSourceControl } from '../../hooks/useSourceControl';
-import { getWorkspace, closeWorkspace, rephraseProactiveMessage } from '../../api/files';
+import { getWorkspace, closeWorkspace, rephraseProactiveMessage, checkoutBranch } from '../../api/files';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 import { useProactiveHelp } from '../../hooks/useProactiveHelp';
 import { createIdleChurnSignal } from '../../services/proactiveSignals';
@@ -81,6 +81,10 @@ export function WorkbenchLayout() {
   const [summaryRequestPath, setSummaryRequestPath] = useState<string | null>(null);
   // When set, the EditorArea should switch to preview for this file path (wiki-style md navigation).
   const [previewRequestPath, setPreviewRequestPath] = useState<string | null>(null);
+  // When set, the EditorArea shows the commit diff overlay for this hash.
+  const [activeCommitHash, setActiveCommitHash] = useState<string | null>(null);
+  // Commit diff context chip for the Coding Assistant.
+  const [commitDiffContext, setCommitDiffContext] = useState<{ shortHash: string; content: string } | null>(null);
   // Back/forward navigation stack (up to 20 entries).
   const [nav, setNav] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
   const navBypassRef = useRef(false);
@@ -152,6 +156,9 @@ export function WorkbenchLayout() {
   } = useOpenFiles();
 
   useFileWatcher(workspacePath, refreshFile);
+
+  // Clear the commit diff overlay when the workspace changes.
+  useEffect(() => { setActiveCommitHash(null); }, [workspacePath]);
 
   const goBack = useCallback(() => {
     if (nav.index <= 0) return;
@@ -390,6 +397,11 @@ export function WorkbenchLayout() {
     openFile({ path: absolutePath, name, type: 'file', children: null });
   }, [openFile]);
 
+  const handleCommitCheckout = useCallback(async (hash: string) => {
+    await checkoutBranch(hash, true);
+    setActiveCommitHash(null);
+  }, []);
+
   // Check if preview button should be enabled
   const canPreview = !!activeFilePath && /\.(md|markdown)$/i.test(activeFilePath);
 
@@ -505,6 +517,7 @@ export function WorkbenchLayout() {
               activeHeadingId={activeHeadingId}
               pendingCommitMessage={pendingCommitMessage}
               onPendingCommitMessageApplied={() => setPendingCommitMessage(null)}
+              onCommitSelect={setActiveCommitHash}
             />
             <ResizeDivider
               currentWidth={sidebarWidth}
@@ -542,6 +555,10 @@ export function WorkbenchLayout() {
             canGoForward={nav.index < nav.stack.length - 1}
             onGoBack={goBack}
             onGoForward={goForward}
+            activeCommitHash={activeCommitHash}
+            onCommitDiffClose={() => setActiveCommitHash(null)}
+            onCommitCheckout={handleCommitCheckout}
+            onCommitDiffAddToContext={(shortHash, content) => setCommitDiffContext({ shortHash, content })}
           />
 
           <div style={{ display: showRightPanel ? 'contents' : 'none' }}>
@@ -574,6 +591,8 @@ export function WorkbenchLayout() {
               onMessageSent={recordAction}
               onWatchTrigger={() => { playBell(); rightPanelRef.current?.triggerPulse(); }}
               onAssistantReply={onAssistantReply}
+              commitDiffContext={commitDiffContext}
+              onClearCommitDiffContext={() => setCommitDiffContext(null)}
             />
           </div>
         </div>

@@ -600,6 +600,24 @@ User presses a key in the Monaco editor
 | `client/src/components/layout/WorkbenchLayout.tsx` | Calls `rightPanelRef.current?.notifyEditorActivity()` inside `onContentChange`. Passes `onWatchTrigger` (bell + pulse) to `RightPanel`. |
 | `server/src/routes/proactive.ts` | `POST /api/proactive/watch` — streaming SSE, no tools. System prompt instructs the model to surface nits (syntax errors, typos, off-by-ones) and acknowledge progress. Snapshot labels include actual capture times (4 s, 10 s, 20 s). |
 
+## Commit Diff Viewer
+
+Clicking a non-HEAD commit in the Source Control history opens a full-screen overlay in the editor area showing commit metadata and a unified diff in Monaco, rather than immediately checking out the commit (which was the previous destructive default). Checkout is an explicit secondary action inside the overlay.
+
+| File | Role |
+|------|------|
+| `client/src/components/editor/CommitDiffView.tsx` | Overlay component. Fetches commit data on mount. Header row: short hash (monospace accent) + subject + `+ Ask Assistant` (teal, only when data is loaded) + `⎇ Checkout` (amber) + `↗ GitHub` (when `__APP_REPO__` is set) + `✕` close. Second row: author · date. Body paragraph when non-empty. Monaco `language="diff"` read-only editor fills the rest. Custom themes defined in `beforeMount`; line-level background decorations and bright `+`/`-` prefix column decorations applied in `onMount`. Exposes `CommitDiffViewHandle.getVisibleContext()` via `forwardRef`. |
+| `server/src/routes/files.ts` | `GET /api/git/commit-diff?hash=` — runs `git log -1` with a `\x1f`-separated format for metadata then `git show --format= --patch` for the diff body; returns `CommitDiffData` JSON. |
+| `client/src/api/files.ts` | `CommitDiffData` interface + `fetchCommitDiff(hash)` thin wrapper. |
+| `client/src/components/layout/EditorArea.tsx` | `activeCommitHash?`, `onCommitDiffClose?`, `onCommitCheckout?`, `onCommitDiffAddToContext?` props. Renders the overlay as `position:absolute; inset:0; zIndex:5` (same pattern as `MergeConflictView`). |
+| `client/src/components/layout/WorkbenchLayout.tsx` | `activeCommitHash` and `commitDiffContext` states. `handleCommitCheckout` calls `checkoutBranch(hash, true)` then clears the hash. Clears `activeCommitHash` on workspace change. |
+| `client/src/components/layout/Sidebar.tsx` | Threads `onCommitSelect` down to `SourceControlPanel`. |
+| `client/src/components/sidebar/SourceControlPanel.tsx` | Row click → `onSelect?.(commit.hash)` (opens diff overlay). Hover reveals a `⎇` icon button (absolute, right edge) that calls `sc.checkoutCommit` directly without opening the overlay. HEAD commit row is non-clickable as before. |
+
+**Diff color coding:** `beforeMount` registers `commit-diff-dark` / `commit-diff-light` Monaco themes with token color rules for `inserted`/`deleted`/`changed`/`token.*` tokens. `onMount` walks every line and attaches `diff-added-line` / `diff-deleted-line` / `diff-info-line` whole-line background decorations and `diff-added-prefix` / `diff-deleted-prefix` inline decorations on column 1 for bright `+`/`-` prefixes. The CSS classes live in `client/src/index.css`.
+
+**Pass to Coding Assistant:** The `+ Ask Assistant` button in the overlay formats the commit metadata + diff as a markdown block and calls `onAddToContext(shortHash, content)`. This sets `commitDiffContext` in `WorkbenchLayout`, which threads through `RightPanel` → `CodingAssistant` as a dismissable `⎇ commit <hash>` chip above the textarea. On send, `handleSend` extracts the content, clears the chip, and passes it as `extraContext` (7th arg) to `sendMessage`. `useCodingAssistant.sendMessage` appends it as `\n\n---\n${extraContext}` to the API payload only.
+
 ## Merge Conflict Resolver
 
 Files containing git merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) show an **⚠ Conflicts** button in the editor's floating button group. Clicking it opens a three-pane resolver as an absolute overlay (the Monaco editor stays mounted underneath, preserving AI visual context).

@@ -28,6 +28,8 @@ interface SidebarProps {
   pendingCommitMessage?: string | null;
   /** Called after the pending message has been consumed. */
   onPendingCommitMessageApplied?: () => void;
+  /** Called when the user clicks a non-HEAD commit to inspect its diff. */
+  onCommitSelect?: (hash: string) => void;
 }
 
 export function Sidebar({
@@ -49,6 +51,7 @@ export function Sidebar({
   activeHeadingId,
   pendingCommitMessage,
   onPendingCommitMessageApplied,
+  onCommitSelect,
 }: SidebarProps) {
   // Helper to open a file given only its absolute path (from SCM panel)
   const handleOpenByPath = (absPath: string) => {
@@ -94,6 +97,7 @@ export function Sidebar({
           onFileOpen={handleOpenByPath}
           pendingCommitMessage={pendingCommitMessage}
           onPendingCommitMessageApplied={onPendingCommitMessageApplied}
+          onCommitSelect={onCommitSelect}
         />
       )}
     </div>

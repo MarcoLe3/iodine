@@ -324,9 +324,10 @@ function RemoteBranchesSection({ branches, onCheckout }: {
 
 // ─── commit history ───────────────────────────────────────────────────────────
 
-function CommitRow({ commit, onCheckout }: {
+function CommitRow({ commit, onCheckout, onSelect }: {
   commit: GitCommit;
   onCheckout: (hash: string, shortHash: string) => void;
+  onSelect?: (hash: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const isHead = commit.refs.includes('HEAD');
@@ -337,9 +338,10 @@ function CommitRow({ commit, onCheckout }: {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={clickable ? () => onCheckout(commit.hash, commit.shortHash) : undefined}
-      title={clickable ? `Checkout commit ${commit.shortHash}` : 'Current HEAD'}
+      onClick={clickable ? () => onSelect?.(commit.hash) : undefined}
+      title={clickable ? `Inspect commit ${commit.shortHash}` : 'Current HEAD'}
       style={{
+        position: 'relative',
         padding: '5px 8px 5px 12px',
         borderBottom: '1px solid rgba(255,255,255,0.04)',
         cursor: clickable ? 'pointer' : 'default',
@@ -361,9 +363,25 @@ function CommitRow({ commit, onCheckout }: {
           {commit.shortHash}
         </span>
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', flexShrink: 0 }}>
-          {commit.relativeDate}
-        </span>
+        {/* Checkout button — appears on hover for non-HEAD commits */}
+        {hovered && clickable ? (
+          <button
+            onClick={e => { e.stopPropagation(); onCheckout(commit.hash, commit.shortHash); }}
+            title={`Checkout commit ${commit.shortHash} (detached HEAD)`}
+            style={{
+              fontSize: 10, padding: '1px 6px', flexShrink: 0,
+              background: 'rgba(214,158,46,0.15)', color: '#d69e2e',
+              border: '1px solid rgba(214,158,46,0.4)', borderRadius: 3,
+              cursor: 'pointer', lineHeight: '16px',
+            }}
+          >
+            ⎇
+          </button>
+        ) : (
+          <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', flexShrink: 0 }}>
+            {commit.relativeDate}
+          </span>
+        )}
       </div>
       {/* message */}
       <div style={{
@@ -384,16 +402,17 @@ function CommitRow({ commit, onCheckout }: {
   );
 }
 
-function HistorySection({ commits, onCheckout }: {
+function HistorySection({ commits, onCheckout, onSelect }: {
   commits: GitCommit[];
   onCheckout: (hash: string, shortHash: string) => void;
+  onSelect?: (hash: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   if (commits.length === 0) return null;
   return (
     <div>
       <SectionHeader open={open} onToggle={() => setOpen(v => !v)} title="History" count={commits.length} />
-      {open && commits.map(c => <CommitRow key={c.hash} commit={c} onCheckout={onCheckout} />)}
+      {open && commits.map(c => <CommitRow key={c.hash} commit={c} onCheckout={onCheckout} onSelect={onSelect} />)}
     </div>
   );
 }
@@ -456,7 +475,7 @@ function ConfirmDialogOverlay({ dialog }: { dialog: ConfirmDialog }) {
 
 // ─── main panel ───────────────────────────────────────────────────────────────
 
-export function SourceControlPanel({ workspacePath, onFileOpen, pendingCommitMessage, onPendingCommitMessageApplied }: { workspacePath: string | null; onFileOpen: (absPath: string) => void; pendingCommitMessage?: string | null; onPendingCommitMessageApplied?: () => void }) {
+export function SourceControlPanel({ workspacePath, onFileOpen, pendingCommitMessage, onPendingCommitMessageApplied, onCommitSelect }: { workspacePath: string | null; onFileOpen: (absPath: string) => void; pendingCommitMessage?: string | null; onPendingCommitMessageApplied?: () => void; onCommitSelect?: (hash: string) => void }) {
   const sc = useSourceControl(workspacePath);
 
   useEffect(() => {
@@ -636,7 +655,7 @@ export function SourceControlPanel({ workspacePath, onFileOpen, pendingCommitMes
 
             {/* commit history */}
             <div style={{ marginTop: 4 }}>
-              <HistorySection commits={sc.commits} onCheckout={sc.checkoutCommit} />
+              <HistorySection commits={sc.commits} onCheckout={sc.checkoutCommit} onSelect={onCommitSelect} />
             </div>
           </>
         )}

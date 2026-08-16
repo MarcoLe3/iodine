@@ -252,6 +252,15 @@ export async function fetchGitBranches(): Promise<GitBranches> {
   return request<GitBranches>('/api/git/branches');
 }
 
+export interface CommitDiffData {
+  hash: string; shortHash: string; subject: string; body: string;
+  author: string; email: string; date: string; diff: string;
+}
+
+export async function fetchCommitDiff(hash: string): Promise<CommitDiffData> {
+  return request<CommitDiffData>(`/api/git/commit-diff?hash=${encodeURIComponent(hash)}`);
+}
+
 export async function checkoutBranch(branch: string, detach = false): Promise<void> {
   await request('/api/git/checkout', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

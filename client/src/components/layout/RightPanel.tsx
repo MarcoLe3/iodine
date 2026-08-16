@@ -51,10 +51,12 @@ interface RightPanelProps {
   onMessageSent?: () => void;
   onWatchTrigger?: () => void;
   onAssistantReply?: (text: string, hadToolUse: boolean) => void;
+  commitDiffContext?: { shortHash: string; content: string } | null;
+  onClearCommitDiffContext?: () => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent, onWatchTrigger, onAssistantReply }, ref) {
+function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent, onWatchTrigger, onAssistantReply, commitDiffContext, onClearCommitDiffContext }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const panelRef             = useRef<HTMLDivElement>(null);
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -248,7 +250,9 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
           onUserTyping={() => { if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current); panelRef.current?.classList.remove('proactive-pulse'); }}
           onMessageSent={onMessageSent}
           onWatchTrigger={onWatchTrigger}
-          onAssistantReply={onAssistantReply} />
+          onAssistantReply={onAssistantReply}
+          commitDiffContext={commitDiffContext}
+          onClearCommitDiffContext={onClearCommitDiffContext} />
       </div>
     </div>
   );

@@ -824,6 +824,27 @@ router.get('/git/log', async (_req, res) => {
   }
 });
 
+router.get('/git/commit-diff', async (req, res) => {
+  if (!rootPath) return res.status(400).json({ error: 'No workspace open' });
+  const hash = req.query.hash as string | undefined;
+  if (!hash) return res.status(400).json({ error: 'Missing hash' });
+  try {
+    const SEP = '\x1f';
+    const { stdout: meta } = await execFileAsync(
+      'git', ['log', '-1', hash, `--format=%H${SEP}%h${SEP}%s${SEP}%b${SEP}%an${SEP}%ae${SEP}%aI`],
+      { cwd: rootPath },
+    );
+    const [fullHash, shortHash, subject, body, author, email, date] = meta.trim().split(SEP);
+    const { stdout: diff } = await execFileAsync(
+      'git', ['show', hash, '--format=', '--patch'],
+      { cwd: rootPath },
+    );
+    return res.json({ hash: fullHash, shortHash, subject, body: body?.trim() ?? '', author, email, date, diff });
+  } catch (err) {
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 router.get('/git/branches', async (_req, res) => {
   if (!rootPath) return res.json({ local: [], remote: [] });
   try {

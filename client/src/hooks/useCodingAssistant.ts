@@ -378,7 +378,7 @@ export function useCodingAssistant(
 
   // ── sendMessage ───────────────────────────────────────────────────────────────
 
-  const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[], tutorMode?: boolean, fresh?: boolean) => {
+  const sendMessage = useCallback(async (text: string, activeFilePath?: string | null, editorContext?: string | null, contextPaths?: string[], tutorMode?: boolean, fresh?: boolean, extraContext?: string | null) => {
     if (!text.trim() || isLoading) return;
 
     const sendWorkspacePath = workspacePathRef.current;
@@ -416,6 +416,9 @@ export function useCodingAssistant(
     }
     if (editorContext) {
       apiContent += `\n\n---\n**User Visual Context** (currently visible in editor):\n\`\`\`\n${editorContext}\n\`\`\``;
+    }
+    if (extraContext) {
+      apiContent += `\n\n---\n${extraContext}`;
     }
     const newHistory: HistoryMessage[] = [...(fresh ? [] : history), { role: 'user', content: apiContent }];
     const controller = new AbortController();

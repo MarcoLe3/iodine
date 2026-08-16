@@ -9,6 +9,7 @@ import { WelcomeScreen } from '../editor/WelcomeScreen';
 import { ImageViewer } from '../editor/ImageViewer';
 import { PdfViewer } from '../editor/PdfViewer';
 import MergeConflictView from '../editor/MergeConflictView';
+import { CommitDiffView } from '../editor/CommitDiffView';
 import { useFileDiff } from '../../hooks/useFileDiff';
 import { hasConflictMarkers } from '../../utils/mergeConflict';
 import type { OpenFile } from '../../types';
@@ -61,6 +62,14 @@ interface EditorAreaProps {
   onGoBack?: () => void;
   /** Navigate forward in the file history stack. */
   onGoForward?: () => void;
+  /** When set, show the commit diff overlay for this hash. */
+  activeCommitHash?: string | null;
+  /** Called when the commit diff overlay is closed. */
+  onCommitDiffClose?: () => void;
+  /** Called when the user clicks "Checkout" in the commit diff overlay. */
+  onCommitCheckout?: (hash: string) => void;
+  /** Called when the user clicks "+ Ask Assistant" in the commit diff overlay. */
+  onCommitDiffAddToContext?: (shortHash: string, content: string) => void;
 }
 
 export interface EditorAreaHandle {
@@ -92,7 +101,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, onSummaryOpen, canGoBack, canGoForward, onGoBack, onGoForward }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, onSummaryOpen, canGoBack, canGoForward, onGoBack, onGoForward, activeCommitHash, onCommitDiffClose, onCommitCheckout, onCommitDiffAddToContext }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -806,6 +815,19 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
             )
           ) : (
             <WelcomeScreen />
+          )}
+
+          {/* ── Commit diff overlay ── */}
+          {activeCommitHash && (
+            <div style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'var(--color-bg-editor)' }}>
+              <CommitDiffView
+                hash={activeCommitHash}
+                theme={document.documentElement.dataset.theme === 'light' ? 'light' : 'vs-dark'}
+                onClose={() => onCommitDiffClose?.()}
+                onCheckout={() => onCommitCheckout?.(activeCommitHash)}
+                onAddToContext={onCommitDiffAddToContext}
+              />
+            </div>
           )}
         </div>
       </div>
