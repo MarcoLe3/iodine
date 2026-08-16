@@ -35,9 +35,10 @@ export function parseFilePath(text: string): ParsedFilePath | null {
   };
 }
 
-/** Resolves a workspace-relative path against the workspace root. */
+/** Resolves a workspace-relative path against the workspace root. Absolute paths pass through. */
 export function resolveFromRoot(relativePath: string, workspacePath: string): string {
-  const root = workspacePath.replace(/\\/g, '/').replace(/\/$/, '');
   const relative = relativePath.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (/^([A-Za-z]:)?\//.test(relative)) return relative;
+  const root = workspacePath.replace(/\\/g, '/').replace(/\/$/, '');
   return `${root}/${relative}`;
 }

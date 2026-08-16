@@ -9,11 +9,11 @@ interface FilePathLinkProps extends React.ComponentPropsWithoutRef<'code'> {
 }
 
 /** A file path rendered as a clickable span. Used in markdown preview and in assistant output. */
-export function FilePathLink({ path, onOpen, children, ...props }: FilePathLinkProps) {
+export function FilePathLink({ path, onOpen, children, style, ...props }: FilePathLinkProps) {
   return (
     <code
       {...props}
-      style={linkStyle}
+      style={{ ...linkStyle, ...style }}
       title={`Open ${path}`}
       onClick={event => { event.stopPropagation(); onOpen(); }}
     >
