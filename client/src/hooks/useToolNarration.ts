@@ -22,6 +22,8 @@ export function useToolNarration(provider: Provider) {
   const narratedRef        = useRef(new Set<string>());
   // Persists across turns so repeated tool/file combinations can be announced with “again”.
   const previouslyNarratedRef = useRef(new Set<string>());
+  // Limits “again” to the first repeated narration in each turn.
+  const saidAgainThisTurnRef = useRef(false);
   const hadNarrationsRef   = useRef(false);
   const hadUnskippableRef  = useRef(false);
   const unskippableCountRef = useRef(0);
@@ -80,10 +82,11 @@ export function useToolNarration(provider: Provider) {
     const normalized = path?.replace(/\\/g, '/').replace(/^\.\//, '') ?? '';
     const key = `${family}:${normalized}`;
 
-    // A duplicate in the current turn is silent. A key seen only in an earlier turn
-    // is narrated normally below, with “again” appended to the sentence.
+    // A duplicate in the current turn is silent. Only the first key repeated from an
+    // earlier turn gets “again”; later repeated keys are narrated normally.
     if (narratedRef.current.has(key)) return;
-    const narratedInPreviousTurn = previouslyNarratedRef.current.has(key);
+    const shouldSayAgain = previouslyNarratedRef.current.has(key) && !saidAgainThisTurnRef.current;
+    if (shouldSayAgain) saidAgainThisTurnRef.current = true;
     narratedRef.current.add(key);
     previouslyNarratedRef.current.add(key);
     hadNarrationsRef.current = true;
@@ -102,7 +105,7 @@ export function useToolNarration(provider: Provider) {
     const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
     const basePhrase = template.replace('{file}', filename ?? 'this');
     // Keep terminal punctuation at the end: “Let me inspect foo.ts.” → “…foo.ts again.”
-    const phrase = narratedInPreviousTurn
+    const phrase = shouldSayAgain
       ? basePhrase.replace(/([.!?])?$/, ' again$1')
       : basePhrase;
 
@@ -142,6 +145,7 @@ export function useToolNarration(provider: Provider) {
 
   const resetTurn = useCallback(() => {
     narratedRef.current        = new Set();
+    saidAgainThisTurnRef.current = false;
     hadNarrationsRef.current   = false;
     hadUnskippableRef.current  = false;
     unskippableCountRef.current = 0;
