@@ -101,7 +101,6 @@ export function useToolNarration(provider: Provider) {
   const hadUnskippableRef  = useRef(false);
   const unskippableCountRef = useRef(0);
   const onEmptyRef         = useRef<(() => void) | null>(null);
-  const lastTemplateRef    = useRef<string | null>(null);
 
   const stop = useCallback(() => {
     generationRef.current++;
