@@ -294,6 +294,7 @@ export function WorkbenchLayout() {
 
   const handleViewChange = useCallback((view: SidebarView) => {
     setActiveView(view);
+    if (view !== 'scm') setActiveCommitHash(null);
   }, []);
 
   const [pendingCommitMessage, setPendingCommitMessage] = useState<string | null>(null);
