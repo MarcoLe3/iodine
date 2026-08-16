@@ -429,10 +429,24 @@ export function useCodingAssistant(
     setIsLoading(true);
 
     try {
+      const routeResponse = await fetch(`http://127.0.0.1:8000/api/route`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({prompt: newHistory, models: provider.models}),
+        signal: controller.signal,
+      });
+
+      if (!routeResponse.ok) {
+        const text = await routeResponse.text();
+        throw new Error(`HTTP routeResponse status: ${routeResponse.status}, ${text}`);
+      } 
+
+      const routeData = await routeResponse.json();
+
       const response = await fetch(`${API_BASE}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newHistory, model, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false }),
+        body: JSON.stringify({ messages: newHistory, model: routeData.selected_model.id, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false }),
         signal: controller.signal,
       });
 
