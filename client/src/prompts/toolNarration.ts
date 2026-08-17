@@ -1,17 +1,17 @@
 export const GREETING_PHRASES: Record<'hello' | 'welcomeBack', string[]> = {
   hello: [
-    'Hello there, one sec.',
-    'Hi there, one sec.',
-    'Hey there, one sec.',
+    'Hello there... one sec.',
+    'Hi there... one sec.',
+    'Hey there... one sec.',
     'Hello! One moment.',
     'Hi! One sec.',
   ],
   welcomeBack: [
-    'Welcome back, one sec.',
-    'Good to have you back, one sec.',
+    'Welcome back... one sec.',
+    'Good to have you back... one sec.',
     'Welcome back! One sec.',
-    'Nice to see you again, one moment.',
-    'Welcome back — one sec.',
+    'Nice to see you again... one moment.',
+    'Welcome back... one sec.',
   ],
 };
 
