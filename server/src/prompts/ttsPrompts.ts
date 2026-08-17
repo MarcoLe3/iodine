@@ -6,4 +6,4 @@ export const NARRATION_PROMPT =
   'But do include personal takes such as, guessing, predicting and personal opinion ' +
   'Just the spoken takeaway.';
 
-export const CONDENSATION_FALLBACK = 'Please check what I wrote below.';
+export const CONDENSATION_FALLBACK = 'Please check what I wrote.';
