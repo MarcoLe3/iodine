@@ -5,13 +5,9 @@ import { GoogleGenAI } from '@google/genai';
 import { loadApiKey } from '../services/anthropicAgent';
 import { loadOpenAIKey } from '../services/openaiAgent';
 import { loadGeminiKey } from '../services/geminiAgent';
+import { PROACTIVE_REPHRASE_SYSTEM } from '../prompts/proactiveSystem';
 
 const router = Router();
-
-const REPHRASE_SYSTEM =
-  'Rephrase this brief proactive developer assistant message. ' +
-  'Make it sound natural and conversational. Keep it to 1-2 short sentences. ' +
-  'Return only the rephrased message — no quotes, no explanation.';
 
 router.post('/proactive/rephrase', async (req, res) => {
   const { message, provider, model } = req.body as {
@@ -28,7 +24,7 @@ router.post('/proactive/rephrase', async (req, res) => {
       const response = await client.messages.create({
         model,
         max_tokens: 120,
-        system: REPHRASE_SYSTEM,
+        system: PROACTIVE_REPHRASE_SYSTEM,
         messages: [{ role: 'user', content: message }],
       });
       const block = response.content[0];
@@ -40,7 +36,7 @@ router.post('/proactive/rephrase', async (req, res) => {
         model,
         max_completion_tokens: 120,
         messages: [
-          { role: 'system', content: REPHRASE_SYSTEM },
+          { role: 'system', content: PROACTIVE_REPHRASE_SYSTEM },
           { role: 'user', content: message },
         ],
       });
@@ -51,7 +47,7 @@ router.post('/proactive/rephrase', async (req, res) => {
       const response = await ai.models.generateContent({
         model,
         contents: [{ role: 'user', parts: [{ text: message }] }],
-        config: { systemInstruction: REPHRASE_SYSTEM },
+        config: { systemInstruction: PROACTIVE_REPHRASE_SYSTEM },
       });
       rephrased = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? message;
     }
