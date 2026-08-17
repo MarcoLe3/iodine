@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchOverallDiff } from '../api/files';
 
 // ── Public interface ──────────────────────────────────────────────────────────
@@ -82,11 +82,16 @@ export function useProactiveHelp({
   const lastDiffDeltaRef  = useRef<number>(0);
   const cooldownStartedAtRef = useRef<number>(0);
   const assistantBusyRef  = useRef(false);
+  const isTriggeringRef   = useRef(false);
   const nextCheckAtRef    = useRef<number>(0);
   const onTriggerRef     = useRef(onTrigger);
   const signalsRef       = useRef(signals);
   onTriggerRef.current   = onTrigger;
   signalsRef.current     = signals;
+
+  const startCooldown = useCallback(() => {
+    cooldownStartedAtRef.current = Date.now();
+  }, []);
 
   const [status, setStatus] = useState<ProactiveStatus>({
     actionCount: 0, nextCheckInSec: 0, willTrigger: null, noReason: null, cooldownRemainingSec: 0,
@@ -127,16 +132,21 @@ export function useProactiveHelp({
 
       const snapshot: SignalSnapshot = { actionCount, diffLineDelta };
 
-      // Never interrupt an active assistant task, or fire during the global cooldown.
-      if (assistantBusyRef.current || Date.now() - cooldownStartedAtRef.current < cooldownMs) return;
+      // Never interrupt an active assistant task, overlap a trigger, or fire during cooldown.
+      if (assistantBusyRef.current || isTriggeringRef.current || Date.now() - cooldownStartedAtRef.current < cooldownMs) return;
 
       const wouldFire = signalsRef.current.some(s => s.shouldFire(snapshot));
       if (wouldFire) {
         for (const signal of signalsRef.current) {
           if (!signal.shouldFire(snapshot)) continue;
-          cooldownStartedAtRef.current = Date.now();
           const message = signal.messages[Math.floor(Math.random() * signal.messages.length)];
-          await onTriggerRef.current(message, signal.collectContext.bind(signal));
+          isTriggeringRef.current = true;
+          try {
+            await onTriggerRef.current(message, signal.collectContext.bind(signal));
+          } finally {
+            isTriggeringRef.current = false;
+            startCooldown();
+          }
           break; // only one signal fires per check
         }
       }
@@ -144,7 +154,7 @@ export function useProactiveHelp({
 
     const timer = setInterval(check, checkIntervalMs);
     return () => clearInterval(timer);
-  }, [enabled, checkIntervalMs, cooldownMs, actionCountRef]);
+  }, [enabled, checkIntervalMs, cooldownMs, actionCountRef, startCooldown]);
 
   // 1-second ticker to keep the status bar current (forward-looking).
   useEffect(() => {
@@ -197,11 +207,11 @@ export function useProactiveHelp({
 
   return {
     status,
-    startCooldown: () => { cooldownStartedAtRef.current = Date.now(); },
+    startCooldown,
     setAssistantBusy: (busy: boolean) => {
       assistantBusyRef.current = busy;
       // Give the user a full quiet window once assistant work finishes.
-      if (!busy) cooldownStartedAtRef.current = Date.now();
+      if (!busy) startCooldown();
     },
   };
 }
