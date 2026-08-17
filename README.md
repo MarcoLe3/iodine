@@ -19,11 +19,11 @@ Opening a new open source repository can feel like arriving in a city without a 
 
 It reads the project in context, explains how the pieces fit together, and guides you from your first question to your first confident contribution. Instead of only generating code, Iodine helps you become more capable of working in the codebase.
 
-## Tutor Mode
+## Mentor Mode
 
-**Open a repository. Turn on Tutor. Follow the project one file at a time.**
+**Open a repository. Turn on Mentor. Follow the project one file at a time.**
 
-Tutor Mode is Iodine's central experience. It creates a guided walkthrough, opens the relevant file, highlights the lines worth studying, and explains what you are seeing before waiting for you to continue. Every explanation is grounded in the actual project—from architecture diagrams to source code.
+Mentor Mode is Iodine's central experience. It creates a guided walkthrough, opens the relevant file, highlights the lines worth studying, and explains what you are seeing before waiting for you to continue. Every explanation is grounded in the actual project—from architecture diagrams to source code.
 
 <img src="https://github.com/user-attachments/assets/55a721c6-8990-407f-a343-bdecbdf42b1e" alt="Iodine IDE demo" width="100%" />
 
