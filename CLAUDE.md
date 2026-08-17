@@ -620,7 +620,7 @@ Clicking a non-HEAD commit in the Source Control history opens a full-screen ove
 
 ## Merge Conflict Resolver
 
-Files containing git merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) show an **⚠ Conflicts** button in the editor's floating button group. Clicking it opens a three-pane resolver as an absolute overlay (the Monaco editor stays mounted underneath, preserving AI visual context).
+Files containing git merge conflict markers show an **⚠ Conflicts** button in the editor's floating button group. Clicking it opens a three-pane resolver as an absolute overlay (the Monaco editor stays mounted underneath, preserving AI visual context).
 
 | File | Role |
 |------|------|
