@@ -93,6 +93,13 @@ export function useProactiveHelp({
     cooldownStartedAtRef.current = Date.now();
   }, []);
 
+  const setAssistantBusy = useCallback((busy: boolean) => {
+    const wasBusy = assistantBusyRef.current;
+    assistantBusyRef.current = busy;
+    // Give the user a full quiet window only when assistant work actually finishes.
+    if (wasBusy && !busy) startCooldown();
+  }, [startCooldown]);
+
   const [status, setStatus] = useState<ProactiveStatus>({
     actionCount: 0, nextCheckInSec: 0, willTrigger: null, noReason: null, cooldownRemainingSec: 0,
   });
@@ -208,10 +215,6 @@ export function useProactiveHelp({
   return {
     status,
     startCooldown,
-    setAssistantBusy: (busy: boolean) => {
-      assistantBusyRef.current = busy;
-      // Give the user a full quiet window once assistant work finishes.
-      if (!busy) startCooldown();
-    },
+    setAssistantBusy,
   };
 }
