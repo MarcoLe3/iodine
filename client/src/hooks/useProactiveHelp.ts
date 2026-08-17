@@ -62,6 +62,14 @@ interface UseProactiveHelpOptions {
   cooldownMs?: number;
 }
 
+export interface ProactiveHelpController {
+  status: ProactiveStatus;
+  /** Restart the global cooldown after direct user interaction. */
+  startCooldown: () => void;
+  /** Suppress proactive messages while the assistant is actively working. */
+  setAssistantBusy: (busy: boolean) => void;
+}
+
 export function useProactiveHelp({
   signals,
   enabled,
@@ -69,10 +77,11 @@ export function useProactiveHelp({
   onTrigger,
   checkIntervalMs = 60_000,
   cooldownMs = 120_000,
-}: UseProactiveHelpOptions): ProactiveStatus {
+}: UseProactiveHelpOptions): ProactiveHelpController {
   const prevDiffLinesRef  = useRef<number | null>(null);
   const lastDiffDeltaRef  = useRef<number>(0);
-  const lastFiredAtRef    = useRef<number>(0);
+  const cooldownStartedAtRef = useRef<number>(0);
+  const assistantBusyRef  = useRef(false);
   const nextCheckAtRef    = useRef<number>(0);
   const onTriggerRef     = useRef(onTrigger);
   const signalsRef       = useRef(signals);
@@ -118,14 +127,14 @@ export function useProactiveHelp({
 
       const snapshot: SignalSnapshot = { actionCount, diffLineDelta };
 
-      // Skip firing if still in global cooldown.
-      if (Date.now() - lastFiredAtRef.current < cooldownMs) return;
+      // Never interrupt an active assistant task, or fire during the global cooldown.
+      if (assistantBusyRef.current || Date.now() - cooldownStartedAtRef.current < cooldownMs) return;
 
       const wouldFire = signalsRef.current.some(s => s.shouldFire(snapshot));
       if (wouldFire) {
         for (const signal of signalsRef.current) {
           if (!signal.shouldFire(snapshot)) continue;
-          lastFiredAtRef.current = Date.now();
+          cooldownStartedAtRef.current = Date.now();
           const message = signal.messages[Math.floor(Math.random() * signal.messages.length)];
           await onTriggerRef.current(message, signal.collectContext.bind(signal));
           break; // only one signal fires per check
@@ -142,8 +151,9 @@ export function useProactiveHelp({
     if (!enabled) return;
     const ticker = setInterval(() => {
       const now = Date.now();
-      const cooldownRemainingSec = Math.max(0, Math.round((lastFiredAtRef.current + cooldownMs - now) / 1000));
+      const cooldownRemainingSec = Math.max(0, Math.round((cooldownStartedAtRef.current + cooldownMs - now) / 1000));
       const inCooldown = cooldownRemainingSec > 0;
+      const assistantBusy = assistantBusyRef.current;
       const snapshot: SignalSnapshot = {
         actionCount: actionCountRef.current,
         diffLineDelta: lastDiffDeltaRef.current,
@@ -153,9 +163,9 @@ export function useProactiveHelp({
       let willTrigger: boolean | null = null;
       let noReason: string | null = null;
       if (prevDiffLinesRef.current !== null) {
-        if (inCooldown) {
+        if (assistantBusy || inCooldown) {
           willTrigger = false;
-          noReason = 'cooldown';
+          noReason = assistantBusy ? 'busy' : 'cooldown';
         } else {
           let described = false;
           for (const sig of signalsRef.current) {
@@ -185,5 +195,13 @@ export function useProactiveHelp({
     return () => clearInterval(ticker);
   }, [enabled, cooldownMs, actionCountRef]);
 
-  return status;
+  return {
+    status,
+    startCooldown: () => { cooldownStartedAtRef.current = Date.now(); },
+    setAssistantBusy: (busy: boolean) => {
+      assistantBusyRef.current = busy;
+      // Give the user a full quiet window once assistant work finishes.
+      if (!busy) cooldownStartedAtRef.current = Date.now();
+    },
+  };
 }

@@ -199,7 +199,7 @@ export function WorkbenchLayout() {
     getActiveFilePath: () => activeFilePathRef.current,
   }), []); // stable — accessors read from refs at collection time
 
-  const proactiveStatus = useProactiveHelp({
+  const { status: proactiveStatus, startCooldown: startProactiveCooldown, setAssistantBusy } = useProactiveHelp({
     signals: [idleChurnSignal],
     enabled: !!workspacePath,
     actionCountRef,
@@ -591,7 +591,9 @@ export function WorkbenchLayout() {
               onNavigateToLine={handleNavigateToLine}
               onOpenUrl={handleOpenUrl}
               activeSystemNode={activeSystemNode}
-              onMessageSent={recordAction}
+              onUserTyping={startProactiveCooldown}
+              onMessageSent={() => { recordAction(); startProactiveCooldown(); }}
+              onAssistantBusyChange={setAssistantBusy}
               onWatchTrigger={() => { playBell(); rightPanelRef.current?.triggerPulse(); }}
               onAssistantReply={onAssistantReply}
               onFileTreeRefresh={() => setFileTreeRefreshKey(key => key + 1)}

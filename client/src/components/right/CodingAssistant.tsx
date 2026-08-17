@@ -176,9 +176,9 @@ export interface CodingAssistantHandle {
   notifyEditorActivity: () => void;
   focus: () => void;
 }
-interface CodingAssistantProps { workspacePath: string | null; activeFilePath: string | null; onWorkspaceOpen: (path: string) => void; provider: Provider; model: string; setProvider: (id: string) => void; setModel: (id: string) => void; getEditorContext?: () => string | null; contextNodes: FileNode[]; onRemoveContextNode: (path: string) => void; onClearContextNodes: () => void; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void; onOpenNode?: (nodeName: string, nodeId?: string) => void; activeSystemNode?: string | null; onUserTyping?: () => void; onMessageSent?: () => void; onWatchTrigger?: () => void; onAssistantReply?: (text: string, hadToolUse: boolean) => void; onFileTreeRefresh?: () => void; commitDiffContext?: { shortHash: string; content: string } | null; onClearCommitDiffContext?: () => void; }
+interface CodingAssistantProps { workspacePath: string | null; activeFilePath: string | null; onWorkspaceOpen: (path: string) => void; provider: Provider; model: string; setProvider: (id: string) => void; setModel: (id: string) => void; getEditorContext?: () => string | null; contextNodes: FileNode[]; onRemoveContextNode: (path: string) => void; onClearContextNodes: () => void; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void; onOpenNode?: (nodeName: string, nodeId?: string) => void; activeSystemNode?: string | null; onUserTyping?: () => void; onMessageSent?: () => void; onAssistantBusyChange?: (busy: boolean) => void; onWatchTrigger?: () => void; onAssistantReply?: (text: string, hadToolUse: boolean) => void; onFileTreeRefresh?: () => void; commitDiffContext?: { shortHash: string; content: string } | null; onClearCommitDiffContext?: () => void; }
 
-export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onWatchTrigger, onAssistantReply, onFileTreeRefresh, commitDiffContext, onClearCommitDiffContext }, ref) {
+export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, commitDiffContext, onClearCommitDiffContext }, ref) {
   // Narration queue for tutor-mode tool call commentary — must be defined before useCodingAssistant.
   const {
     narrate: handleToolNarration,
@@ -248,7 +248,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => {
     if (prevIsLoadingRef.current && !isLoading) textareaRef.current?.focus();
     prevIsLoadingRef.current = isLoading;
-  }, [isLoading]);
+    onAssistantBusyChange?.(isLoading);
+  }, [isLoading, onAssistantBusyChange]);
   // Fetch past conversations on mount and whenever the workspace changes
   useEffect(() => {
     if (!workspacePath) {

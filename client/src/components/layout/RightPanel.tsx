@@ -48,7 +48,9 @@ interface RightPanelProps {
   onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void;
   onOpenUrl?: (url: string) => void;
   activeSystemNode?: string | null;
+  onUserTyping?: () => void;
   onMessageSent?: () => void;
+  onAssistantBusyChange?: (busy: boolean) => void;
   onWatchTrigger?: () => void;
   onAssistantReply?: (text: string, hadToolUse: boolean) => void;
   onFileTreeRefresh?: () => void;
@@ -57,7 +59,7 @@ interface RightPanelProps {
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onMessageSent, onWatchTrigger, onAssistantReply, onFileTreeRefresh, commitDiffContext, onClearCommitDiffContext }, ref) {
+function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, commitDiffContext, onClearCommitDiffContext }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const panelRef             = useRef<HTMLDivElement>(null);
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -248,8 +250,9 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
           provider={provider} model={model} setProvider={setProvider} setModel={setModel} getEditorContext={getEditorContext}
           contextNodes={contextNodes} onRemoveContextNode={onRemoveContextNode} onClearContextNodes={onClearContextNodes}
           onNavigateToLine={onNavigateToLine} onOpenNode={handleOpenNode} activeSystemNode={activeSystemNode}
-          onUserTyping={() => { if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current); panelRef.current?.classList.remove('proactive-pulse'); }}
+          onUserTyping={() => { if (pulseAutoStopRef.current) clearTimeout(pulseAutoStopRef.current); panelRef.current?.classList.remove('proactive-pulse'); onUserTyping?.(); }}
           onMessageSent={onMessageSent}
+          onAssistantBusyChange={onAssistantBusyChange}
           onWatchTrigger={onWatchTrigger}
           onAssistantReply={onAssistantReply}
           onFileTreeRefresh={onFileTreeRefresh}
