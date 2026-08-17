@@ -204,7 +204,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const [speechProviderId, setSpeechProviderId] = useState<SpeechProviderId>(() => (localStorage.getItem('iodine:speech-provider') as SpeechProviderId) ?? 'google');
   useEffect(() => { localStorage.setItem('iodine:speech-provider', speechProviderId); }, [speechProviderId]);
   const speechOption = SPEECH_OPTIONS.find(o => o.id === speechProviderId) ?? SPEECH_OPTIONS[0];
-  const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(false); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(true); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
   const [pastConversations, setPastConversations] = useState<ConversationRecord[]>([]);
   const [showConversations, setShowConversations] = useState(false);
   const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
