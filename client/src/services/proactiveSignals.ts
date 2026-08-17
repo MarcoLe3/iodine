@@ -1,5 +1,6 @@
 import { fetchOverallDiff } from '../api/files';
 import type { ProactiveSignal, SignalSnapshot } from '../hooks/useProactiveHelp';
+import { IDLE_CHURN_MESSAGES } from '../prompts/proactiveHelp';
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
 
@@ -15,17 +16,6 @@ const MAX_DIFF_RATIO = 0.15;
 /** Hard minimum diff-line delta floor, regardless of action count. */
 const MIN_DIFF_DELTA = 3;
 
-// ── Message variants ──────────────────────────────────────────────────────────
-
-const IDLE_CHURN_MESSAGES = [
-  "Looks like you've been at it for a bit — let me know if you'd like a hand.",
-  "No rush. If something's not clicking, just ask and I'll walk you through it.",
-  "Still with you. If you're not sure where to make the change, I can point you to it.",
-  "Take your time — if you'd like a hint on what to try next, just say the word.",
-  "If you're going in circles, let me know. Sometimes a fresh angle helps.",
-  "Happy to help if you're stuck. Just describe what you're trying to do.",
-] as const;
-
 // ── Idle-churn signal factory ─────────────────────────────────────────────────
 
 interface IdleChurnOptions {
@@ -36,9 +26,9 @@ interface IdleChurnOptions {
 }
 
 /**
- * Fires when the user has taken many actions (edits, navigations, scrolls) but
- * the net change in the git diff is small — a reliable indicator of churning in
- * place rather than making forward progress.
+ * Fires when the user has made many edits but the net change in the git diff
+ * remains small — a useful indicator of churning in place rather than making
+ * forward progress.
  *
  * Add more signals following the same factory pattern and register them in
  * WorkbenchLayout alongside this one.
