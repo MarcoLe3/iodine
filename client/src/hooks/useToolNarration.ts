@@ -26,6 +26,8 @@ export function useToolNarration(provider: Provider) {
   const saidAgainThisTurnRef = useRef(false);
   // Cycles repeat wording predictably instead of choosing it at random.
   const repeatVariationRef = useRef(0);
+  // Tracks accepted tool calls so adjacent reads can continue with “And <file>.”
+  const previousFamilyRef = useRef<string | null>(null);
   const hadNarrationsRef   = useRef(false);
   const hadUnskippableRef  = useRef(false);
   const unskippableCountRef = useRef(0);
@@ -84,11 +86,16 @@ export function useToolNarration(provider: Provider) {
     const normalized = path?.replace(/\\/g, '/').replace(/^\.\//, '') ?? '';
     const key = `${family}:${normalized}`;
 
-    // A duplicate in the current turn is silent. Only the first key repeated from an
-    // earlier turn gets repeat wording; later repeated keys are narrated normally.
+    // A duplicate in the current turn is silent. Only the first read/open key repeated
+    // from an earlier turn gets repeat wording; other tools are narrated normally.
     if (narratedRef.current.has(key)) return;
-    const shouldUseRepeatWording = previouslyNarratedRef.current.has(key) && !saidAgainThisTurnRef.current;
+    const shouldUseRepeatWording =
+      family === 'read'
+      && previouslyNarratedRef.current.has(key)
+      && !saidAgainThisTurnRef.current;
     if (shouldUseRepeatWording) saidAgainThisTurnRef.current = true;
+    const continuesRead = family === 'read' && previousFamilyRef.current === 'read';
+    previousFamilyRef.current = family;
     narratedRef.current.add(key);
     previouslyNarratedRef.current.add(key);
     hadNarrationsRef.current = true;
@@ -105,7 +112,7 @@ export function useToolNarration(provider: Provider) {
     const phrases  = TOOL_NARRATION_PHRASES[name] ?? ['Hmm, let me handle this.', 'Let me take care of this.'];
     const template = phrases[Math.floor(Math.random() * phrases.length)];
     const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
-    const basePhrase = template.replace('{file}', filename ?? 'this');
+    const basePhrase = continuesRead ? `And ${filename ?? 'this'}.` : template.replace('{file}', filename ?? 'this');
     const repeatVariations = ['again', 'once more', 'more closely'] as const;
     const repeatVariation = repeatVariations[repeatVariationRef.current % repeatVariations.length];
     if (shouldUseRepeatWording) repeatVariationRef.current++;
@@ -151,6 +158,7 @@ export function useToolNarration(provider: Provider) {
   const resetTurn = useCallback(() => {
     narratedRef.current        = new Set();
     saidAgainThisTurnRef.current = false;
+    previousFamilyRef.current  = null;
     hadNarrationsRef.current   = false;
     hadUnskippableRef.current  = false;
     unskippableCountRef.current = 0;
