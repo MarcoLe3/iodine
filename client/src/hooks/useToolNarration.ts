@@ -22,8 +22,10 @@ export function useToolNarration(provider: Provider) {
   const narratedRef        = useRef(new Set<string>());
   // Persists across turns so repeated tool/file combinations can be announced with “again”.
   const previouslyNarratedRef = useRef(new Set<string>());
-  // Limits “again” to the first repeated narration in each turn.
+  // Limits repeat wording to the first repeated narration in each turn.
   const saidAgainThisTurnRef = useRef(false);
+  // Cycles repeat wording predictably instead of choosing it at random.
+  const repeatVariationRef = useRef(0);
   const hadNarrationsRef   = useRef(false);
   const hadUnskippableRef  = useRef(false);
   const unskippableCountRef = useRef(0);
@@ -83,10 +85,10 @@ export function useToolNarration(provider: Provider) {
     const key = `${family}:${normalized}`;
 
     // A duplicate in the current turn is silent. Only the first key repeated from an
-    // earlier turn gets “again”; later repeated keys are narrated normally.
+    // earlier turn gets repeat wording; later repeated keys are narrated normally.
     if (narratedRef.current.has(key)) return;
-    const shouldSayAgain = previouslyNarratedRef.current.has(key) && !saidAgainThisTurnRef.current;
-    if (shouldSayAgain) saidAgainThisTurnRef.current = true;
+    const shouldUseRepeatWording = previouslyNarratedRef.current.has(key) && !saidAgainThisTurnRef.current;
+    if (shouldUseRepeatWording) saidAgainThisTurnRef.current = true;
     narratedRef.current.add(key);
     previouslyNarratedRef.current.add(key);
     hadNarrationsRef.current = true;
@@ -104,9 +106,12 @@ export function useToolNarration(provider: Provider) {
     const template = phrases[Math.floor(Math.random() * phrases.length)];
     const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
     const basePhrase = template.replace('{file}', filename ?? 'this');
-    // Keep terminal punctuation at the end: “Let me inspect foo.ts.” → “…foo.ts again.”
-    const phrase = shouldSayAgain
-      ? basePhrase.replace(/([.!?])?$/, ' again$1')
+    const repeatVariations = ['again', 'once more', 'more closely'] as const;
+    const repeatVariation = repeatVariations[repeatVariationRef.current % repeatVariations.length];
+    if (shouldUseRepeatWording) repeatVariationRef.current++;
+    // Keep terminal punctuation at the end: “Let me inspect foo.ts.” → “…foo.ts once more.”
+    const phrase = shouldUseRepeatWording
+      ? basePhrase.replace(/([.!?])?$/, ` ${repeatVariation}$1`)
       : basePhrase;
 
     queueRef.current.push({
