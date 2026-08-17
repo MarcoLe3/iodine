@@ -9,6 +9,8 @@ import { PROVIDERS } from '../../providers';
 import type { Provider } from '../../providers';
 import type { FileNode } from '../../types';
 import { useToolNarration } from '../../hooks/useToolNarration';
+import { FilePathLink } from '../editor/FilePathLink';
+import { parseFilePath, resolveFromRoot } from '../../utils/filePath';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
@@ -18,26 +20,43 @@ const SPEECH_OPTIONS = [
 ] as const;
 type SpeechProviderId = typeof SPEECH_OPTIONS[number]['id'];
 
-function argumentSummary(input: unknown): string | null {
+function pathArgument(input: unknown): string | null {
   if (!input || typeof input !== 'object') return null;
   const values = Object.values(input as Record<string, unknown>);
-  const path = values.find(value => typeof value === 'string' && value.includes('/')) as string | undefined;
+  return (values.find(value => typeof value === 'string' && value.includes('/')) as string | undefined) ?? null;
+}
+
+function argumentSummary(input: unknown): string | null {
+  const path = pathArgument(input);
   if (!path) return null;
   const parts = path.split('/').filter(Boolean);
   return parts.length > 1 ? parts[parts.length - 2] + '/' + parts[parts.length - 1] : parts[0] ?? null;
 }
 
-function ToolBlock({ block }: { block: UIBlock & { type: 'tool' } }) {
+/** read_file uses start_line, open_file uses line. */
+function lineArgument(input: unknown): number | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const record = input as Record<string, unknown>;
+  const line = record.line ?? record.start_line;
+  return typeof line === 'number' ? line : undefined;
+}
+
+function ToolBlock({ block, workspacePath, onNavigateToLine }: { block: UIBlock & { type: 'tool' }; workspacePath: string | null; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void }) {
   const [expanded, setExpanded] = useState(false);
   const inputStr = JSON.stringify(block.input, null, 2);
   const pathLabel = argumentSummary(block.input);
+  const fullPath = pathArgument(block.input);
+  const openTarget = fullPath && workspacePath && onNavigateToLine && parseFilePath(fullPath) ? fullPath : null;
+  const labelStyle: React.CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--color-text-primary)' };
   return (
     <div style={{ background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border)', borderRadius: 6, marginBottom: 6, overflow: 'hidden' }}>
       <button onClick={() => setExpanded(e => !e)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 11, textAlign: 'left' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
           <span style={{ width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: block.pending ? '#e7c54720' : block.error ? '#f4877120' : '#4ec9b020', color: block.pending ? '#e7c547' : block.error ? '#f48771' : '#4ec9b0', fontSize: 10, fontWeight: 700 }}>{block.pending ? '…' : block.error ? '✕' : '✓'}</span>
           <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{block.name}</span>
-          {pathLabel && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--color-text-primary)' }}>· {pathLabel}</span>}
+          {pathLabel && (openTarget
+            ? <FilePathLink path={openTarget} style={{ ...labelStyle, fontFamily: 'inherit' }} onOpen={() => onNavigateToLine!(resolveFromRoot(openTarget, workspacePath!), lineArgument(block.input) ?? 1)}>· {pathLabel}</FilePathLink>
+            : <span style={labelStyle}>· {pathLabel}</span>)}
           {block.pending && <span style={{ fontSize: 10, fontStyle: 'italic' }}>running…</span>}
         </span>
         <span style={{ fontSize: 10, flexShrink: 0 }}>{expanded ? '▲' : '▼'}</span>
@@ -133,13 +152,23 @@ function SpeakingWave() {
   );
 }
 
-function MessageBubble({ msg, isLast, sendApproval, onSuggestion, onVerbally, isSpeaking, isVerballyLoading, alwaysVerbally }: { msg: UIMessage; isLast: boolean; sendApproval: (id: string, approved: boolean) => void; onSuggestion: (text: string) => void; onVerbally?: (text: string) => void; isSpeaking?: boolean; isVerballyLoading?: boolean; alwaysVerbally?: boolean }) {
+function MessageBubble({ msg, isLast, sendApproval, onSuggestion, onVerbally, isSpeaking, isVerballyLoading, alwaysVerbally, workspacePath, onNavigateToLine }: { msg: UIMessage; isLast: boolean; sendApproval: (id: string, approved: boolean) => void; onSuggestion: (text: string) => void; onVerbally?: (text: string) => void; isSpeaking?: boolean; isVerballyLoading?: boolean; alwaysVerbally?: boolean; workspacePath: string | null; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void }) {
   if (msg.role === 'user') return <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-end' }}><div style={{ display: 'inline-flex', flexDirection: 'column', maxWidth: '100%' }}><div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 4, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span>You</span><span style={{ fontWeight: 400, fontSize: 10 }}>{formatTime(msg.timestamp)}</span></div><div style={{ background: 'var(--color-bg-user-bubble)', borderRadius: 16, padding: '8px 10px', fontSize: 13, color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', textAlign: 'left' }}>{msg.content}</div></div></div>;
   const isStreaming = msg.isStreaming;
   const hasFileTool = msg.blocks.some(block => block.type === 'tool' && (block.name === 'read_file' || block.name === 'write_file'));
   const verballyText = !isStreaming ? msg.blocks.filter((b): b is UIBlock & { type: 'text' } => b.type === 'text').map(b => b.content).join('\n\n').trim() : '';
   const chipStyle = (active: boolean): React.CSSProperties => ({ background: active ? '#4ec9b020' : 'var(--color-bg-subtle)', border: `1px solid ${active ? '#4ec9b060' : 'var(--color-border)'}`, borderRadius: 999, color: active ? '#4ec9b0' : 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 11, padding: active ? '5px 22px' : '5px 10px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'padding 0.4s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease' });
-  return <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 4, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><img src="/logo.png" alt="Iodine" style={{ width: 14, height: 14, objectFit: 'contain' }} />Assistant</span><span style={{ fontWeight: 400, fontSize: 10 }}>{formatTime(msg.timestamp)}</span></div><div>{msg.blocks.map((block, i) => { if (block.type === 'text') { const showCursor = isStreaming && isLast && i === msg.blocks.length - 1; return <div key={i} className="md-body"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code({ className, children, ...props }) { const isBlock = className?.startsWith('language-'); return isBlock ? <CodeBlock className={className} {...props}>{children}</CodeBlock> : <code className="md-code-inline" {...props}>{children}</code>; } }}>{block.content}</ReactMarkdown>{showCursor && <span style={{ animation: 'blink 1s step-end infinite', opacity: 1 }}>▌</span>}</div>; } if (block.type === 'thought') return <ThoughtBlock key={i} block={block} />; if (block.type === 'command-approval') return <CommandApprovalBlock key={block.id} block={block} onApprove={() => sendApproval(block.id, true)} onReject={() => sendApproval(block.id, false)} />; return <ToolBlock key={block.id} block={block} />; })}{!isStreaming && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>{hasFileTool && <button onClick={() => onSuggestion('Open file for me')} style={chipStyle(false)}>Open file for me</button>}{(verballyText.length > 120 || (alwaysVerbally && verballyText.length > 0)) && onVerbally && <button onClick={() => onVerbally(verballyText)} style={chipStyle(isSpeaking ?? false)} disabled={isVerballyLoading}>{isVerballyLoading ? 'Preparing…' : isSpeaking ? <SpeakingWave /> : 'Voice Memo'}</button>}</div>}{isStreaming && msg.blocks.length === 0 && <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', animation: 'blink 1s step-end infinite' }}>▌</span>}</div></div>;
+  // Paths only become links once the message is complete — a half-streamed path can match too.
+  const codeComponent = ({ className, children, ...props }: React.ComponentPropsWithoutRef<'code'>) => {
+    if (className?.startsWith('language-')) return <CodeBlock className={className} {...props}>{children}</CodeBlock>;
+    const parsed = !isStreaming && workspacePath && onNavigateToLine ? parseFilePath(String(children)) : null;
+    // An extension is required so prose like `and/or` stays plain text.
+    if (parsed?.extension) {
+      return <FilePathLink {...props} className="md-code-inline" path={parsed.path} onOpen={() => onNavigateToLine!(resolveFromRoot(parsed.path, workspacePath!), parsed.line ?? 1)}>{children}</FilePathLink>;
+    }
+    return <code className="md-code-inline" {...props}>{children}</code>;
+  };
+  return <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 4, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><img src="/logo.png" alt="Iodine" style={{ width: 14, height: 14, objectFit: 'contain' }} />Assistant</span><span style={{ fontWeight: 400, fontSize: 10 }}>{formatTime(msg.timestamp)}</span></div><div>{msg.blocks.map((block, i) => { if (block.type === 'text') { const showCursor = isStreaming && isLast && i === msg.blocks.length - 1; return <div key={i} className="md-body"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: codeComponent }}>{block.content}</ReactMarkdown>{showCursor && <span style={{ animation: 'blink 1s step-end infinite', opacity: 1 }}>▌</span>}</div>; } if (block.type === 'thought') return <ThoughtBlock key={i} block={block} />; if (block.type === 'command-approval') return <CommandApprovalBlock key={block.id} block={block} onApprove={() => sendApproval(block.id, true)} onReject={() => sendApproval(block.id, false)} />; return <ToolBlock key={block.id} block={block} workspacePath={workspacePath} onNavigateToLine={onNavigateToLine} />; })}{!isStreaming && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>{hasFileTool && <button onClick={() => onSuggestion('Open file for me')} style={chipStyle(false)}>Open file for me</button>}{(verballyText.length > 120 || (alwaysVerbally && verballyText.length > 0)) && onVerbally && <button onClick={() => onVerbally(verballyText)} style={chipStyle(isSpeaking ?? false)} disabled={isVerballyLoading}>{isVerballyLoading ? 'Preparing…' : isSpeaking ? <SpeakingWave /> : 'Voice Memo'}</button>}</div>}{isStreaming && msg.blocks.length === 0 && <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', animation: 'blink 1s step-end infinite' }}>▌</span>}</div></div>;
 }
 
 export interface CodingAssistantHandle {
@@ -502,7 +531,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             <p style={{ fontSize: 12, margin: 0 }}>Ask about your code</p>
           </div>
         ) : null}
-        {!showConversations && uiMessages.map((msg, i) => <MessageBubble key={msg.id} msg={msg} isLast={i === uiMessages.length - 1} sendApproval={sendApproval} onSuggestion={handleSuggestion} onVerbally={msg.role === 'assistant' ? (text) => handleVerbally(msg.id, text) : undefined} isSpeaking={speakingMsgId === msg.id} isVerballyLoading={verballyLoadingId === msg.id} alwaysVerbally={isTutorMode} />)}
+        {!showConversations && uiMessages.map((msg, i) => <MessageBubble key={msg.id} msg={msg} isLast={i === uiMessages.length - 1} sendApproval={sendApproval} onSuggestion={handleSuggestion} onVerbally={msg.role === 'assistant' ? (text) => handleVerbally(msg.id, text) : undefined} isSpeaking={speakingMsgId === msg.id} isVerballyLoading={verballyLoadingId === msg.id} alwaysVerbally={isTutorMode} workspacePath={workspacePath} onNavigateToLine={onNavigateToLine} />)}
       </div>
       <div style={{ borderTop: '1px solid var(--color-border)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
         {activeSystemNode && onOpenNode && <button onClick={() => onOpenNode(activeSystemNode)} title="Navigate to this node in System View" style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1px solid var(--color-accent, #0e639c)', borderRadius: 999, padding: '2px 8px', fontSize: 11, color: 'var(--color-accent, #0e639c)', cursor: 'pointer', flexShrink: 0 }}>◎ {activeSystemNode}</button>}

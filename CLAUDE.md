@@ -174,7 +174,7 @@ Relative links in Markdown preview are intercepted so they open the target file 
 
 If the user navigates from **source** view, `wikiNavigate` is not called — links open the file in source mode as normal.
 
-**Inline code path auto-linking:** In both preview and summary views, any inline backtick span whose text matches a relative file path pattern (no spaces, contains `/`, only path-safe characters — e.g. `` `client/src/hooks/useOpenFiles.ts` ``) is automatically rendered as a clickable link with a dotted underline. No special markdown syntax is required in the source; the renderer detects paths at render time. Clicking calls `wikiNavigate` (same as explicit link navigation — prefers cached summary, falls back to preview for `.md`). Block code fences are unaffected (they carry a `className` and pass through unchanged). The detection is handled by `inlineCodeComponent` (a `useCallback` in `EditorArea`) passed as `code:` to both ReactMarkdown instances (preview and summary).
+**Inline code path auto-linking:** In both preview and summary views, any inline backtick span whose text matches a relative file path pattern (no spaces, contains `/`, only path-safe characters — e.g. `` `client/src/hooks/useOpenFiles.ts` ``) is automatically rendered as a clickable link with a dotted underline. No special markdown syntax is required in the source; the renderer detects paths at render time. Clicking calls `wikiNavigate` (same as explicit link navigation — prefers cached summary, falls back to preview for `.md`). Block code fences are unaffected (they carry a `className` and pass through unchanged). The detection itself lives in `client/src/utils/filePath.ts` (`looksLikePath`); `inlineCodeComponent` (a `useCallback` in `EditorArea`) calls it and is passed as `code:` to both ReactMarkdown instances (preview and summary). The clickable span is the shared `FilePathLink` component, which the Coding Assistant also uses — see **File Path Links in Coding Assistant Output**.
 
 #### Editor View Persistence & Back/Forward Navigation
 
@@ -671,6 +671,18 @@ Fenced code blocks in the Coding Assistant output have a **Copy** button in the 
 | `client/src/components/right/CodingAssistant.tsx` | `CodeBlock` component wraps `<pre className="md-pre">` and renders an absolutely-positioned button (`top: 6, right: 6`). Clicking copies the code text via `navigator.clipboard.writeText`. The button shows **Copy** normally and flashes **Copied!** (teal) for 1.5 s; a `resetTimerRef` clears any pending timer on re-click or unmount. Only fenced blocks get the button — inline `<code>` spans pass through unchanged. |
 
 **Key details:** `children` from ReactMarkdown for a fenced block is already a plain string, so `String(children).replace(/\n$/, '')` extracts the text with no tree-walking. `type="button"` prevents accidental form submission.
+
+## File Path Links in Coding Assistant Output
+
+File paths in agent replies and on tool block rows are clickable and open the file.
+
+| File | Role |
+|------|------|
+| `client/src/utils/filePath.ts` | `looksLikePath` is the shape check shared with preview. `parseFilePath` adds a trailing `:42`, rejects URLs, and reports the extension; callers apply their own rule. `resolveFromRoot` joins to the workspace root. |
+| `client/src/components/editor/FilePathLink.tsx` | The clickable span, shared with preview. Calls `stopPropagation` so a click inside another button does not also fire it. |
+| `client/src/components/right/CodingAssistant.tsx` | `pathArgument` / `lineArgument` read the tool call; `codeComponent` in `MessageBubble` links inline spans. |
+
+**Key details:** the chat requires a file extension so prose like `and/or` and folders like `images/` stay plain text; preview keeps the looser rule. Paths resolve against the workspace root, not the active file as `resolveWorkspacePath` does. Links are suppressed while a message streams, since a partial path can match.
 
 ## Pane Toggle Buttons
 
