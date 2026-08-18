@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 // Exploration/navigation narrations are skippable when the final summary is ready.
 // Edit/write narrations are kept because they announce meaningful changes.
 const SKIPPABLE_TOOLS = new Set(['read_file', 'open_file', 'list_directory', 'search_files']);
+const MAX_TOOL_NARRATIONS_PER_TURN = 4;
 
 interface NarrationEntry {
   fn: () => Promise<string>;
@@ -23,6 +24,8 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
   const previouslyNarratedRef = useRef(new Set<string>());
   // Limits repeat wording to the first repeated narration in each turn.
   const saidAgainThisTurnRef = useRef(false);
+  // Caps tool narration so long turns do not sound repetitive or robotic.
+  const toolNarrationCountRef = useRef(0);
   // Cycles repeat wording predictably instead of choosing it at random.
   const repeatVariationRef = useRef(0);
   // Tracks accepted tool calls so adjacent reads can continue with “And <file>.”
@@ -76,6 +79,8 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
   }, []);
 
   const narrate = useCallback((name: string, input: Record<string, unknown>) => {
+    if (toolNarrationCountRef.current >= MAX_TOOL_NARRATIONS_PER_TURN) return;
+
     const path = Object.values(input).find(
       value => typeof value === 'string' && (value.includes('/') || value.includes('\\'))
     ) as string | undefined;
@@ -88,6 +93,9 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     // A duplicate in the current turn is silent. Only the first read/open key repeated
     // from an earlier turn gets repeat wording; other tools are narrated normally.
     if (narratedRef.current.has(key)) return;
+    // This cap counts accepted narration requests, including clips that later fail
+    // during TTS/audio playback or are removed as skippable before they play.
+    toolNarrationCountRef.current++;
     const shouldUseRepeatWording =
       family === 'read'
       && previouslyNarratedRef.current.has(key)
@@ -157,6 +165,7 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
   const resetTurn = useCallback(() => {
     narratedRef.current        = new Set();
     saidAgainThisTurnRef.current = false;
+    toolNarrationCountRef.current = 0;
     previousFamilyRef.current  = null;
     hadNarrationsRef.current   = false;
     hadUnskippableRef.current  = false;
