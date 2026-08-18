@@ -109,7 +109,7 @@ export function useToolNarration(provider: Provider) {
     // so repeated "let me edit…" clips don't pile up and feel robotic.
     const skippable = SKIPPABLE_TOOLS.has(name) || unskippableCountRef.current > 2;
 
-    const phrases  = TOOL_NARRATION_PHRASES[name] ?? ['Hmm, let me handle this.', 'Let me take care of this.'];
+    const phrases = TOOL_NARRATION_PHRASES[name] ?? ['I can handle this.'];
     const template = phrases[Math.floor(Math.random() * phrases.length)];
     const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
     const basePhrase = continuesRead ? `And ${filename ?? 'this'}.` : template.replace('{file}', filename ?? 'this');

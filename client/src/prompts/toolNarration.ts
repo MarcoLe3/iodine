@@ -1,16 +1,17 @@
 export const GREETING_PHRASES: Record<'hello' | 'welcomeBack', string[]> = {
   hello: [
-    'Hello there... one sec.',
-    'Hi there... one sec.',
-    'Hey there... one sec.',
-    'Hello! One moment.',
+    'Hello there...',
+    'One sec.',
+    'Hi there...',
+    'Hey there....',
+    'One moment.',
     'Hi! One sec.',
   ],
   welcomeBack: [
-    'Welcome back... one sec.',
-    'Good to have you back... one sec.',
+    'Welcome back....',
+    'One sec.',
     'Welcome back! One sec.',
-    'Nice to see you again... one moment.',
+    'One moment.',
     'Welcome back... one sec.',
   ],
 };
@@ -88,5 +89,9 @@ export const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
     'Let me write up the commit summary.', 'I’ll draft a concise message for these changes.',
     'Let me turn this work into a commit message.', 'I’m preparing the Source Control message now.',
     'Let me capture the intent of these changes.', 'I’ll compose a commit message that reflects the work.',
+  ],
+  run_terminal_command: [
+    'I need your approval to run this.',
+    'Can you approve this command',
   ],
 };
