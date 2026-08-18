@@ -77,7 +77,7 @@ function parseDiff(diffOutput: string): DiffResult {
       if (originalLines.length === 0) {
         hunks.push({ startLine: plusLineNos[0], lineCount: plusLineNos.length, originalLines: [], type: 'added' });
       } else if (plusLineNos.length === 0) {
-        hunks.push({ startLine: newLine - 1, lineCount: 0, originalLines, type: 'deleted' });
+        hunks.push({ startLine: Math.max(0, newLine - 1), lineCount: 0, originalLines, type: 'deleted' });
       } else {
         hunks.push({ startLine: plusLineNos[0], lineCount: plusLineNos.length, originalLines, type: 'modified' });
       }
