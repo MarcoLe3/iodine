@@ -302,7 +302,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     fetch(`${API_BASE}/api/tts/verbally`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, provider: speechOption.id, model: speechOption.model }),
+      body: JSON.stringify({ text, provider: speechOption.id, chatProvider: provider.id, chatModel: model }),
     })
       .then(async r => {
         if (!r.ok) {
@@ -453,8 +453,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(useDirectSpeech
-              ? { text, provider: provider.id }
-              : { text, provider: provider.id, model }),
+              ? { text, provider: speechOption.id }
+              : { text, provider: speechOption.id, chatProvider: provider.id, chatModel: model }),
           }).then(async r => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return URL.createObjectURL(await r.blob());
@@ -474,7 +474,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
                 const r = await fetch(`${API_BASE}/api/tts/speak`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ text: transition, provider: provider.id }),
+                  body: JSON.stringify({ text: transition, provider: speechOption.id }),
                 });
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                 return URL.createObjectURL(await r.blob());
