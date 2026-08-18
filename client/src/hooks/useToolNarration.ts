@@ -1,5 +1,4 @@
 import { useCallback, useRef } from 'react';
-import type { Provider } from '../providers';
 import { GREETING_PHRASES, TOOL_NARRATION_PHRASES } from '../prompts/toolNarration';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
@@ -13,7 +12,7 @@ interface NarrationEntry {
   skippable: boolean;
 }
 
-export function useToolNarration(provider: Provider) {
+export function useToolNarration(speechProviderId: 'google' | 'openai') {
   const queueRef      = useRef<NarrationEntry[]>([]);
   const audioRef      = useRef<HTMLAudioElement | null>(null);
   const generationRef = useRef(0);
@@ -126,7 +125,7 @@ export function useToolNarration(provider: Provider) {
         const response = await fetch(`${API_BASE}/api/tts/speak`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: phrase, provider: provider.id }),
+          body: JSON.stringify({ text: phrase, provider: speechProviderId }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return URL.createObjectURL(await response.blob());
@@ -134,7 +133,7 @@ export function useToolNarration(provider: Provider) {
       skippable,
     });
     void drain();
-  }, [provider.id, drain]);
+  }, [speechProviderId, drain]);
 
   /** Enqueue a greeting clip at the front of the turn so it plays before any tool narrations. */
   const enqueueGreeting = useCallback((mode: 'hello' | 'welcomeBack') => {
@@ -146,14 +145,14 @@ export function useToolNarration(provider: Provider) {
         const response = await fetch(`${API_BASE}/api/tts/speak`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, provider: provider.id }),
+          body: JSON.stringify({ text, provider: speechProviderId }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return URL.createObjectURL(await response.blob());
       },
     });
     void drain();
-  }, [provider.id, drain]);
+  }, [speechProviderId, drain]);
 
   const resetTurn = useCallback(() => {
     narratedRef.current        = new Set();

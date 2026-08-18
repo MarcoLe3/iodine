@@ -28,7 +28,7 @@ Mentor Mode is Iodine's central experience. It creates a guided walkthrough, ope
 <img src="https://github.com/user-attachments/assets/55a721c6-8990-407f-a343-bdecbdf42b1e" alt="Iodine IDE demo" width="100%" />
 
 <p align="center">
-  More demos on YouTube: <a href="https://youtu.be/U08gCP2DpAU">Demo 1</a> · <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 2</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 3</a>
+  More demos on YouTube: <a href="https://youtu.be/gl_IeYgDNJw">Demo 1</a> · <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 2</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 3</a>
 </p>
 
 ## How Iodine helps

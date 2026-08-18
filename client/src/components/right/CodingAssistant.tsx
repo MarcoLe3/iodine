@@ -179,6 +179,10 @@ export interface CodingAssistantHandle {
 interface CodingAssistantProps { workspacePath: string | null; activeFilePath: string | null; onWorkspaceOpen: (path: string) => void; provider: Provider; model: string; setProvider: (id: string) => void; setModel: (id: string) => void; getEditorContext?: () => string | null; contextNodes: FileNode[]; onRemoveContextNode: (path: string) => void; onClearContextNodes: () => void; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void; onOpenNode?: (nodeName: string, nodeId?: string) => void; activeSystemNode?: string | null; onUserTyping?: () => void; onMessageSent?: () => void; onAssistantBusyChange?: (busy: boolean) => void; onWatchTrigger?: () => void; onAssistantReply?: (text: string, hadToolUse: boolean) => void; onFileTreeRefresh?: () => void; commitDiffContext?: { shortHash: string; content: string } | null; onClearCommitDiffContext?: () => void; }
 
 export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, commitDiffContext, onClearCommitDiffContext }, ref) {
+  const [speechProviderId, setSpeechProviderId] = useState<SpeechProviderId>(() => (localStorage.getItem('iodine:speech-provider') as SpeechProviderId) ?? 'google');
+  useEffect(() => { localStorage.setItem('iodine:speech-provider', speechProviderId); }, [speechProviderId]);
+  const speechOption = SPEECH_OPTIONS.find(o => o.id === speechProviderId) ?? SPEECH_OPTIONS[0];
+
   // Narration queue for tutor-mode tool call commentary — must be defined before useCodingAssistant.
   const {
     narrate: handleToolNarration,
@@ -193,7 +197,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     unskippableCountRef: turnUnskippableCountRef,
     onEmptyRef: onNarrationQueueEmptyRef,
     resetTurn: resetNarrationRefs,
-  } = useToolNarration(provider);
+  } = useToolNarration(speechProviderId);
 
   const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, stopExecution, clearMessages, sendApproval, injectProactiveMessage, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, handleToolNarration, onFileTreeRefresh);
   // Keep a ref to sendMessage so callbacks (like transcribeAndSend) never capture a stale closure.
@@ -201,9 +205,6 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   sendMessageRef.current = sendMessage;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({ injectProactiveMessage, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, notifyEditorActivity]);
-  const [speechProviderId, setSpeechProviderId] = useState<SpeechProviderId>(() => (localStorage.getItem('iodine:speech-provider') as SpeechProviderId) ?? 'google');
-  useEffect(() => { localStorage.setItem('iodine:speech-provider', speechProviderId); }, [speechProviderId]);
-  const speechOption = SPEECH_OPTIONS.find(o => o.id === speechProviderId) ?? SPEECH_OPTIONS[0];
   const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(true); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
   const [pastConversations, setPastConversations] = useState<ConversationRecord[]>([]);
   const [showConversations, setShowConversations] = useState(false);
