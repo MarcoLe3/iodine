@@ -54,12 +54,13 @@ interface RightPanelProps {
   onWatchTrigger?: () => void;
   onAssistantReply?: (text: string, hadToolUse: boolean) => void;
   onFileTreeRefresh?: () => void;
+  onSummaryRequest?: (filePath: string) => void;
   commitDiffContext?: { shortHash: string; content: string } | null;
   onClearCommitDiffContext?: () => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, commitDiffContext, onClearCommitDiffContext }, ref) {
+function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, commitDiffContext, onClearCommitDiffContext }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const panelRef             = useRef<HTMLDivElement>(null);
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -256,6 +257,7 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
           onWatchTrigger={onWatchTrigger}
           onAssistantReply={onAssistantReply}
           onFileTreeRefresh={onFileTreeRefresh}
+          onSummaryRequest={onSummaryRequest}
           commitDiffContext={commitDiffContext}
           onClearCommitDiffContext={onClearCommitDiffContext} />
       </div>

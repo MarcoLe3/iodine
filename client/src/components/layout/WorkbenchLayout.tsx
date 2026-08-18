@@ -253,6 +253,13 @@ export function WorkbenchLayout() {
     setSummaryRequestPath(node.path);
   }, [openFile]);
 
+  /** Called by the agent's invoke_summary tool — opens the file and switches to summary view. */
+  const handleAgentSummaryRequest = useCallback((absPath: string) => {
+    const name = absPath.split('/').pop() ?? absPath;
+    openFile({ path: absPath, name, type: 'file', children: null });
+    setSummaryRequestPath(absPath);
+  }, [openFile]);
+
   /** Open a directory tab and request the editor to display its AI summary. */
   const handleDirSummary = useCallback((node: FileNode) => {
     openDirectory(node);
@@ -597,6 +604,7 @@ export function WorkbenchLayout() {
               onWatchTrigger={() => { playBell(); rightPanelRef.current?.triggerPulse(); }}
               onAssistantReply={onAssistantReply}
               onFileTreeRefresh={() => setFileTreeRefreshKey(key => key + 1)}
+              onSummaryRequest={handleAgentSummaryRequest}
               commitDiffContext={commitDiffContext}
               onClearCommitDiffContext={() => setCommitDiffContext(null)}
             />

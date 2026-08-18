@@ -194,6 +194,16 @@ export const TOOL_SCHEMAS = {
       required: ['command', 'reason'],
     },
   },
+  invoke_summary: {
+    description: 'Open the AI summary view for a file. Use this when the user asks you to explain a file or module — the summary view opens in the editor alongside the system diagram and table of contents. The summary is generated automatically if it has not been created yet.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        path: { type: 'string', description: 'Workspace-relative path to the file to summarize (e.g. "client/src/hooks/useOpenFiles.ts")' },
+      },
+      required: ['path'],
+    },
+  },
   open_file: {
     description: 'Open a file in the editor and highlight a range of lines to draw the user\'s attention to specific code. Use this to walk through the codebase, point out relevant sections, or guide the user to where changes should be made without making the changes yourself. For ranges of fewer than 5 lines, also supply start_col and end_col to highlight the exact expression or token rather than the whole line — read the file content carefully to count columns accurately (1-based, tabs count as 1).',
     parameters: {

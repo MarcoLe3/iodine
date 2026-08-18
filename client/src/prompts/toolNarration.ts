@@ -90,6 +90,13 @@ export const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
     'Let me turn this work into a commit message.', 'I’m preparing the Source Control message now.',
     'Let me capture the intent of these changes.', 'I’ll compose a commit message that reflects the work.',
   ],
+  invoke_summary: [
+    'Let me pull up the summary for {file}.',
+    'I\'ll open the overview for {file}.',
+    'Let me bring up {file}.',
+    'I\'ll show you the summary of {file}.',
+    'Opening the summary for {file}.',
+  ],
   run_terminal_command: [
     'I need your approval to run this.',
     'Can you approve this command',

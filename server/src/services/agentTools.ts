@@ -36,6 +36,21 @@ export async function executeAgentTool(
     return { content: `Opened ${filePath} at line ${line}`, preview: `Opened ${filePath}:${line}`, error: false };
   }
 
+  if (name === 'invoke_summary') {
+    let filePath = typeof input.path === 'string' ? input.path.trim() : '';
+    if (!filePath) {
+      return { content: 'path is required', preview: 'path is required', error: true };
+    }
+    // Resolve to absolute if workspace-relative
+    if (!path.isAbsolute(filePath) && rootPath) {
+      filePath = path.join(rootPath, filePath);
+    }
+    if (!abortSignal.aborted) {
+      res.write(`event: invoke_summary\ndata: ${JSON.stringify({ path: filePath })}\n\n`);
+    }
+    return { content: `Summary view opened for ${filePath}`, preview: `Summary: ${path.basename(filePath)}`, error: false };
+  }
+
   if (name === 'git_commit_compose') {
     const message = typeof input.message === 'string' ? input.message.trim() : '';
     if (!message) {

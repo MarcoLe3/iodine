@@ -46,6 +46,7 @@ export function useCodingAssistant(
   onAssistantReply?: (text: string, hadToolUse: boolean) => void,
   onToolNarration?: (name: string, input: Record<string, unknown>) => void,
   onFileTreeRefresh?: () => void,
+  onSummaryRequest?: (filePath: string) => void,
 ) {
   const [uiMessages, setUiMessages] = useState<UIMessage[]>([]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
@@ -59,6 +60,9 @@ export function useCodingAssistant(
   // never goes stale (onNavigateToLine is not in the dependency array).
   const onNavigateToLineRef = useRef(onNavigateToLine);
   onNavigateToLineRef.current = onNavigateToLine;
+
+  const onSummaryRequestRef = useRef(onSummaryRequest);
+  onSummaryRequestRef.current = onSummaryRequest;
 
   const onWatchTriggerRef = useRef(onWatchTrigger);
   onWatchTriggerRef.current = onWatchTrigger;
@@ -552,6 +556,9 @@ export function useCodingAssistant(
             if (filePath) {
               onNavigateToLineRef.current?.(filePath, line, endLine, startCol, endCol);
             }
+          } else if (eventName === 'invoke_summary') {
+            const filePath = payload.path as string;
+            if (filePath) onSummaryRequestRef.current?.(filePath);
           } else if (eventName === 'git_commit_compose') {
             const message = payload.message as string;
             if (message) {
