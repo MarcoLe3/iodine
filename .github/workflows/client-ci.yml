@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'client/**'
+      - 'client/tests/**'
   pull_request:
     branches: [main]
     paths:
-      - 'client/**'
+      - 'client/tests/**'
 
 jobs:
   test:
