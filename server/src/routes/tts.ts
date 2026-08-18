@@ -9,6 +9,23 @@ import { CONDENSATION_FALLBACK, NARRATION_PROMPT } from '../prompts/ttsPrompts';
 
 const router = Router();
 
+function sanitizeForTts(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/^\s*(?:[-+*]|\d+[.)])\s+/gm, '')
+    .replace(/[*_~]+/g, '')
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/,{2,}/g, ',')
+    .trim();
+}
+
 function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitDepth = 16): Buffer {
   const dataSize = pcm.length;
   const header = Buffer.alloc(44);
@@ -30,6 +47,8 @@ function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitDepth = 16):
 
 /** Condense text into a slide-deck narration using whichever chat provider the user has selected. */
 async function condense(chatProvider: string, chatModel: string, text: string): Promise<string> {
+  const fallback = sanitizeForTts(text) || CONDENSATION_FALLBACK;
+
   if (chatProvider === 'openai') {
     const client = new OpenAI({ apiKey: await loadOpenAIKey() });
     const completion = await client.chat.completions.create({
@@ -40,7 +59,7 @@ async function condense(chatProvider: string, chatModel: string, text: string): 
       ],
       max_completion_tokens: 60,
     });
-    return completion.choices[0]?.message?.content?.trim() || CONDENSATION_FALLBACK;
+    return completion.choices[0]?.message?.content?.trim() || fallback;
 
   } else if (chatProvider === 'anthropic') {
     const client = new Anthropic({ apiKey: await loadAnthropicKey() });
@@ -50,7 +69,7 @@ async function condense(chatProvider: string, chatModel: string, text: string): 
       system: NARRATION_PROMPT,
       messages: [{ role: 'user', content: text }],
     });
-    return (msg.content[0] as { type: string; text: string })?.text?.trim() || CONDENSATION_FALLBACK;
+    return (msg.content[0] as { type: string; text: string })?.text?.trim() || fallback;
 
   } else {
     const ai = new GoogleGenAI({ apiKey: await loadGeminiKey() });
@@ -59,7 +78,7 @@ async function condense(chatProvider: string, chatModel: string, text: string): 
       contents: [{ parts: [{ text }] }],
       config: { systemInstruction: NARRATION_PROMPT },
     });
-    return condensed.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || CONDENSATION_FALLBACK;
+    return condensed.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || fallback;
   }
 }
 
@@ -74,10 +93,11 @@ router.post('/tts/verbally', async (req: Request, res: Response) => {
   if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
 
   // Step 1: condense using the chat provider/model
-  let narration = CONDENSATION_FALLBACK;
+  let narration = sanitizeForTts(text) || CONDENSATION_FALLBACK;
   try {
     narration = await condense(chatProvider, chatModel, text);
-  } catch {
+  } catch (error) {
+    console.error('TTS condensation failed:', error);
     // Continue to TTS with the fallback when condensation fails.
   }
 
@@ -126,6 +146,9 @@ router.post('/tts/speak', async (req: Request, res: Response) => {
 
   if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
 
+  const sanitizedText = sanitizeForTts(text);
+  if (!sanitizedText) return res.status(400).json({ error: 'No speakable text provided' });
+
   try {
     if (provider === 'openai') {
       const apiKey = await loadOpenAIKey();
@@ -133,7 +156,7 @@ router.post('/tts/speak', async (req: Request, res: Response) => {
       const speech = await client.audio.speech.create({
         model: 'tts-1-hd',
         voice: 'nova',
-        input: text,
+        input: sanitizedText,
       });
       res.set('Content-Type', 'audio/mpeg');
       return res.send(Buffer.from(await speech.arrayBuffer()));
@@ -143,7 +166,7 @@ router.post('/tts/speak', async (req: Request, res: Response) => {
       const ai = new GoogleGenAI({ apiKey });
       const audioResp = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
-        contents: [{ parts: [{ text }] }],
+        contents: [{ parts: [{ text: sanitizedText }] }],
         config: {
           responseModalities: ['AUDIO'],
           speechConfig: {
