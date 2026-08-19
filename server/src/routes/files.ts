@@ -672,14 +672,16 @@ router.post('/git/discard', async (req, res) => {
   const { relPath, isUntracked } = req.body as { relPath?: string; isUntracked?: boolean };
   if (!relPath) return res.status(400).json({ error: 'relPath is required' });
   try {
-    const repoRoot = await resolveRepoRoot(rootPath);
-    const absPath = path.resolve(path.join(repoRoot, relPath));
+    // path.resolve normalizes git's forward slashes to native separators (Windows)
+    const repoRoot = path.resolve(await resolveRepoRoot(rootPath));
+    const absPath = path.resolve(repoRoot, relPath);
     // Guard against path traversal
     if (!absPath.startsWith(repoRoot + path.sep) && absPath !== repoRoot) {
       return res.status(400).json({ error: 'Path outside repository' });
     }
     if (isUntracked) {
-      await fs.promises.unlink(absPath);
+      // Untracked entries can be whole directories ("?? dir/") — rm handles both files and dirs
+      await fs.promises.rm(absPath, { recursive: true, force: true });
     } else {
       await execFileAsync('git', ['restore', '--', absPath], { cwd: rootPath });
     }
