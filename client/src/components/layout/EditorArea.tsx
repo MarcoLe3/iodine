@@ -707,7 +707,11 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                     fontFamily: 'monospace',
                     display: 'flex', alignItems: 'center', gap: 4,
                   }}>
-                    {activeFile.isDirectory && <span style={{ fontSize: 13 }}>📁</span>}
+                    {activeFile.isDirectory && (
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0, color: 'cyan' }} aria-hidden="true">
+                        <path d="M.54 3.87L.5 3a2 2 0 0 1 2-2h3.19a2 2 0 0 1 1.45.63l.41.44H14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V5.07a2.5 2.5 0 0 0 .54-1.2z" />
+                      </svg>
+                    )}
                     {toRelPath(activeFile.path)}
                     {activeFile.isDirectory && <span style={{ color: 'var(--color-text-secondary)', fontFamily: 'sans-serif', fontStyle: 'italic' }}> — directory summary</span>}
                   </span>
