@@ -565,8 +565,14 @@ router.get('/git/status', async (_req, res) => {
       if (filePath.includes(' -> ')) filePath = filePath.split(' -> ')[1];
 
       const absPath = path.join(repoRoot, filePath);
-      const isStaged   = X !== ' ' && X !== '?';
-      const isUnstaged = Y !== ' ' && Y !== '?';
+      // Untracked files/dirs ("??") are working-copy changes too — mark them
+      // 'unstaged' so the file explorer highlights them like the SCM panel does.
+      if (X === '?' && Y === '?') {
+        status[absPath] = 'unstaged';
+        continue;
+      }
+      const isStaged   = X !== ' ';
+      const isUnstaged = Y !== ' ';
 
       if (isStaged && isUnstaged) status[absPath] = 'both';
       else if (isStaged)          status[absPath] = 'staged';
