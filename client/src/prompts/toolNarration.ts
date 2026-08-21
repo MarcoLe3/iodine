@@ -16,6 +16,12 @@ export const GREETING_PHRASES: Record<'hello' | 'welcomeBack', string[]> = {
   ],
 };
 
+export const QUESTION_BRIDGE_PHRASES = [
+  'Good question...',
+  'That’s a good question...',
+  'Good question. Let’s take a look...',
+];
+
 export const TOOL_NARRATION_PHRASES: Record<string, string[]> = {
   read_file: [
     'Let me read through {file}.', 'I’ll take a closer look at {file}.', 'Let me inspect {file}.',

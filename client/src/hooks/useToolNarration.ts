@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { GREETING_PHRASES, TOOL_NARRATION_PHRASES } from '../prompts/toolNarration';
+import { GREETING_PHRASES, QUESTION_BRIDGE_PHRASES, TOOL_NARRATION_PHRASES } from '../prompts/toolNarration';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
@@ -54,6 +54,9 @@ export const toolNarrationInternals = {
       ? phrases.filter(phrase => !IMPLEMENTATION_PHRASE.test(phrase))
       : phrases;
   },
+  isBridgeQuestion(text: string) {
+    return text.includes('?') && /\b(?:how does|why is|when should|where is|when can|what if)\b/i.test(text);
+  },
 };
 
 export function useToolNarration(speechProviderId: 'google' | 'openai') {
@@ -79,10 +82,12 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
   const hadUnskippableRef  = useRef(false);
   const unskippableCountRef = useRef(0);
   const onEmptyRef         = useRef<(() => void) | null>(null);
+  const pendingBridgeRef   = useRef(false);
 
   const stop = useCallback(() => {
     generationRef.current++;
     queueRef.current = [];
+    pendingBridgeRef.current = false;
     audioRef.current?.pause();
     audioRef.current = null;
     drainingRef.current = false;
@@ -138,6 +143,24 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     // A duplicate in the current turn is silent. Only the first read/open key repeated
     // from an earlier turn gets repeat wording; other tools are narrated normally.
     if (narratedRef.current.has(key)) return;
+
+    if (pendingBridgeRef.current) {
+      pendingBridgeRef.current = false;
+      const text = QUESTION_BRIDGE_PHRASES[Math.floor(Math.random() * QUESTION_BRIDGE_PHRASES.length)];
+      queueRef.current.push({
+        skippable: false,
+        fn: async () => {
+          const response = await fetch(`${API_BASE}/api/tts/speak`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, provider: speechProviderId }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return URL.createObjectURL(await response.blob());
+        },
+      });
+    }
+
     // This cap counts accepted narration requests, including clips that later fail
     // during TTS/audio playback or are removed as skippable before they play.
     toolNarrationCountRef.current++;
@@ -234,6 +257,10 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     void drain();
   }, [speechProviderId, drain]);
 
+  const setBridgeQuestion = useCallback((text: string) => {
+    pendingBridgeRef.current = toolNarrationInternals.isBridgeQuestion(text);
+  }, []);
+
   const resetTurn = useCallback(() => {
     narratedRef.current        = new Set();
     saidAgainThisTurnRef.current = false;
@@ -243,7 +270,8 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     hadNarrationsRef.current   = false;
     hadUnskippableRef.current  = false;
     unskippableCountRef.current = 0;
+    pendingBridgeRef.current   = false;
   }, []);
 
-  return { narrate, stop, drain, evictSkippable, enqueueGreeting, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, unskippableCountRef, onEmptyRef, resetTurn };
+  return { narrate, stop, drain, evictSkippable, enqueueGreeting, setBridgeQuestion, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, unskippableCountRef, onEmptyRef, resetTurn };
 }

@@ -11,6 +11,28 @@ beforeEach(() => {
 });
 
 describe('tool narration rules', () => {
+  it('detects exact question bridge phrases case-insensitively', () => {
+    expect(narration.isBridgeQuestion('How does this work?')).toBe(true);
+    expect(narration.isBridgeQuestion('WHY IS that needed?')).toBe(true);
+    expect(narration.isBridgeQuestion('When should this run?')).toBe(true);
+    expect(narration.isBridgeQuestion('When can this run?')).toBe(true);
+    expect(narration.isBridgeQuestion('What if it fails?')).toBe(true);
+    expect(narration.isBridgeQuestion('How does this work')).toBe(false);
+    expect(narration.isBridgeQuestion('How exactly does this work?')).toBe(false);
+    expect(narration.isBridgeQuestion('Where is this?')).toBe(false);
+  });
+
+  it('queues a bridge only when a matching question is followed by a tool narration', () => {
+    const { result } = renderHook(() => useToolNarration('openai'));
+
+    act(() => result.current.setBridgeQuestion('Why is this needed?'));
+    expect(result.current.queueRef.current).toHaveLength(0);
+
+    act(() => result.current.narrate('read_file', { path: 'src/App.ts' }));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.current.queueRef.current).toHaveLength(1);
+  });
+
   it('alternates file type inclusion', () => {
     expect(narration.describeFile('src/App.tsx', 0)).toBe('App file');
     expect(narration.describeFile('src/App.tsx', 1)).toBe('App TypeScript file');

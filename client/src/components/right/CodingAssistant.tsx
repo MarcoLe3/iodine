@@ -190,6 +190,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
     drain: drainNarrationQueue,
     evictSkippable,
     enqueueGreeting,
+    setBridgeQuestion,
     queueRef: narrationQueueRef,
     audioRef: narrationAudioRef,
     hadNarrationsRef: turnHadNarrationsRef,
@@ -278,7 +279,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { fetch(`${API_BASE}/api/agent/status`, { method: 'GET' }).then(r => r.json()).then(data => setProviderStatus(data.providers ?? { anthropic: data.configured })).catch(() => setProviderStatus({})); }, []);
   const handleSetWorkspace = async () => { if (!wsInput.trim()) return; setWsOpening(true); setWsError(null); try { const result = await openWorkspace(wsInput.trim()); if (result.path) { onWorkspaceOpen(result.path); setWsInput(''); } } catch (err) { setWsError(err instanceof Error ? err.message : 'Failed to open folder'); } finally { setWsOpening(false); } };
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
-  const handleSend = () => { const text = input.trim(); if (!text || isLoading || conversationsLoading) return; stopNarrationQueue(); resetNarrationRefs(); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) { clearMessages(); hasGreetedCurrentThreadRef.current = false; } if (!hasGreetedCurrentThreadRef.current && isTutorMode && !conversationLoadError) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); hasGreetedCurrentThreadRef.current = true; } const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); const extraCtx = commitDiffContext?.content ?? undefined; onClearCommitDiffContext?.(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh, extraCtx); onMessageSent?.(); };
+  const handleSend = () => { const text = input.trim(); if (!text || isLoading || conversationsLoading) return; stopNarrationQueue(); resetNarrationRefs(); setBridgeQuestion(text); setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) { clearMessages(); hasGreetedCurrentThreadRef.current = false; } if (!hasGreetedCurrentThreadRef.current && isTutorMode && !conversationLoadError) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); hasGreetedCurrentThreadRef.current = true; } const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); const extraCtx = commitDiffContext?.content ?? undefined; onClearCommitDiffContext?.(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh, extraCtx); onMessageSent?.(); };
   const handleClearAll = async () => {
     try {
       await clearAllConversations();
@@ -353,12 +354,13 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
       }
       const { text } = await r.json() as { text: string };
       if (text?.trim()) {
-        stopNarrationQueue(); resetNarrationRefs();
+        const trimmedText = text.trim();
+        stopNarrationQueue(); resetNarrationRefs(); setBridgeQuestion(trimmedText);
         const isFresh = showConversations;
         setShowConversations(false);
         if (isFresh) { clearMessages(); hasGreetedCurrentThreadRef.current = false; }
         if (!hasGreetedCurrentThreadRef.current && isTutorMode && !conversationsLoadingRef.current && !conversationLoadErrorRef.current) { enqueueGreeting(pastConversationsRef.current.length === 0 ? 'hello' : 'welcomeBack'); hasGreetedCurrentThreadRef.current = true; }
-        sendMessageRef.current(text.trim(), activeFilePath, getEditorContext?.() ?? null, undefined, isTutorMode, isFresh);
+        sendMessageRef.current(trimmedText, activeFilePath, getEditorContext?.() ?? null, undefined, isTutorMode, isFresh);
         onMessageSent?.();
       }
     } catch (err) {
