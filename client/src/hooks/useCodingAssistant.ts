@@ -45,7 +45,7 @@ export function useCodingAssistant(
   onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void,
   onWatchTrigger?: () => void,
   onAssistantReply?: (text: string, hadToolUse: boolean) => void,
-  onToolNarration?: (name: string, input: Record<string, unknown>) => void,
+  onToolNarration?: (name: string, input: Record<string, unknown>, approvalId?: string) => void,
   onFileTreeRefresh?: () => void,
   onSummaryRequest?: (filePath: string) => void,
 ) {
