@@ -28,6 +28,8 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
   const toolNarrationCountRef = useRef(0);
   // Cycles repeat wording predictably instead of choosing it at random.
   const repeatVariationRef = useRef(0);
+  // Alternates file narrations between a natural filename and filename + file type.
+  const fileNarrationCountRef = useRef(0);
   // Tracks accepted tool calls so adjacent reads can continue with “And <file>.”
   const previousFamilyRef = useRef<string | null>(null);
   const hadNarrationsRef   = useRef(false);
@@ -119,8 +121,34 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     const phrases = TOOL_NARRATION_PHRASES[name] ?? ['I can handle this.'];
     const template = phrases[Math.floor(Math.random() * phrases.length)];
     const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
+    const extension = filename?.match(/\.([^.]+)$/)?.[1].toLowerCase() ?? null;
     const displayName = filename?.replace(/\.[^.]+$/, '') ?? null;
-    const basePhrase = continuesRead ? `And ${displayName ?? 'this'}.` : template.replace('{file}', displayName ?? 'this');
+    const fileTypeNames: Record<string, string> = {
+      java: 'Java',
+      sh: 'Script',
+      cc: 'C plus plus',
+      cpp: 'C plus plus',
+      c: 'C',
+      h: 'Header',
+      ts: 'TypeScript',
+      tsx: 'TypeScript',
+      kt: 'Kotlin',
+      js: 'JavaScript',
+      jsx: 'JavaScript',
+      py: 'Python',
+      json: 'JSON',
+      md: 'Markdown',
+      css: 'CSS',
+      html: 'HTML',
+      yml: 'YAML',
+      yaml: 'YAML',
+    };
+    const fileType = extension ? fileTypeNames[extension] ?? extension.toUpperCase() : null;
+    const includeFileType = Boolean(fileType) && fileNarrationCountRef.current++ % 2 === 1;
+    const fileDescription = fileType && includeFileType
+      ? `${displayName ?? 'this'} ${fileType} file`
+      : `${displayName ?? 'this'} file`;
+    const basePhrase = continuesRead ? `And ${fileDescription}.` : template.replace('{file}', fileDescription);
     const repeatVariations = ['again', 'once more', 'more closely'] as const;
     const repeatVariation = repeatVariations[repeatVariationRef.current % repeatVariations.length];
     if (shouldUseRepeatWording) repeatVariationRef.current++;
@@ -167,6 +195,7 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     narratedRef.current        = new Set();
     saidAgainThisTurnRef.current = false;
     toolNarrationCountRef.current = 0;
+    fileNarrationCountRef.current = 0;
     previousFamilyRef.current  = null;
     hadNarrationsRef.current   = false;
     hadUnskippableRef.current  = false;

@@ -15,8 +15,8 @@ import { parseFilePath, resolveFromRoot } from '../../utils/filePath';
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
 const SPEECH_OPTIONS = [
-  { id: 'google', label: 'Gemini', model: 'gemini-2.5-flash-preview-tts' },
   { id: 'openai', label: 'OpenAI', model: 'tts-1-hd' },
+  { id: 'google', label: 'Gemini', model: 'gemini-2.5-flash-preview-tts' },
 ] as const;
 type SpeechProviderId = typeof SPEECH_OPTIONS[number]['id'];
 
