@@ -211,7 +211,19 @@ export function useCodingAssistant(
   }, []);
 
   const stopExecution = useCallback(() => {
-    abortControllerRef.current?.abort();
+    const controller = abortControllerRef.current;
+    if (!controller || controller.signal.aborted) return;
+
+    eventContextQueueRef.current.enqueue({
+      id: uid(),
+      type: 'user_interrupted',
+      source: 'stop_button',
+      timestamp: Date.now(),
+      summary: 'The user stopped the previous response.',
+      state: 'paused',
+      guidance: 'IMPORTANT: You MUST acknowledge the interruption when natural—for example, that the user may want to change direction, refine the request, or ask something before continuing. Do not use a canned acknowledgment or assume why they interrupted. Address the new message directly. Resume, adapt, or abandon the prior task when their intent is clear; clarify only when ambiguous, but do acknowledge at all times.',
+    });
+    controller.abort();
   }, []);
 
   useEffect(() => () => {
@@ -426,7 +438,7 @@ export function useCodingAssistant(
       apiContent = `${eventContext}\n\n---\n${apiContent}`;
     }
     if (proactiveContext) {
-      apiContent = `**Context at the time of the assistant's proactive message (for reference only — respond conversationally, do not call any tools):**\n${proactiveContext}\n\n---\n${text}`;
+      apiContent = `**Context at the time of the assistant's proactive message (for reference only — respond conversationally, do not call any tools):**\n${proactiveContext}\n\n---\n${apiContent}`;
     }
     if (contextPaths && contextPaths.length > 0) {
       apiContent += `\n\n---\n**Relevant paths hint** (check these paths first when looking for relevant code):\n${contextPaths.map(p => `- \`${p}\``).join('\n')}`;
