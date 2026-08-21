@@ -479,7 +479,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
           if (shouldBridge) {
             const transitions = turnUnskippableCountRef.current >= 3
               ? ['Alright.', 'Okay.']
-              : ['Understood.', 'That gives us the context.', 'The key point is this.'];
+              : ['Understood.', 'That gives us the context.'];
             const transition = transitions[Math.floor(Math.random() * transitions.length)];
             narrationQueueRef.current.push({
               skippable: false,
