@@ -101,13 +101,35 @@ export function WorkbenchLayout() {
   const [contextNodes, setContextNodes] = useState<FileNode[]>([]);
 
   // AI provider/model — shared by RightPanel (chat/system view) and EditorArea (AI summary)
-  const [provider, setProviderState] = useState<Provider>(DEFAULT_PROVIDER);
-  const [model, setModel] = useState<string>(DEFAULT_MODEL);
+  const [provider, setProviderState] = useState<Provider>(() => {
+    try {
+      const savedId = localStorage.getItem('iodine-provider');
+      return PROVIDERS.find(p => p.id === savedId) ?? DEFAULT_PROVIDER;
+    } catch {
+      return DEFAULT_PROVIDER;
+    }
+  });
+  const [model, setModelState] = useState<string>(() => {
+    try {
+      const savedId = localStorage.getItem('iodine-provider');
+      const savedModel = localStorage.getItem('iodine-model');
+      const savedProvider = PROVIDERS.find(p => p.id === savedId) ?? DEFAULT_PROVIDER;
+      return savedProvider.models.some(m => m.id === savedModel) ? savedModel! :
+        savedProvider.id === DEFAULT_PROVIDER.id ? DEFAULT_MODEL : savedProvider.models[0].id;
+    } catch {
+      return DEFAULT_MODEL;
+    }
+  });
+  const setModel = useCallback((id: string) => {
+    setModelState(id);
+    try { localStorage.setItem('iodine-model', id); } catch { /* storage unavailable */ }
+  }, []);
   const setProvider = useCallback((id: string) => {
     const p = PROVIDERS.find(p => p.id === id) ?? DEFAULT_PROVIDER;
     setProviderState(p);
     setModel(p.models[0].id);
-  }, []);
+    try { localStorage.setItem('iodine-provider', p.id); } catch { /* storage unavailable */ }
+  }, [setModel]);
 
   const pushNav = useCallback((path: string) => {
     setNav(prev => {
