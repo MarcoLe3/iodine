@@ -3,6 +3,7 @@ import { UIMessage, UIBlock, HistoryMessage } from '../types';
 import type { Provider } from '../providers';
 import { fetchOverallDiff } from '../api/files';
 import { saveConversation, clearConversations, type ConversationRecord } from '../api/conversations';
+import { createEventContextQueue, formatEventContext, type EventContext } from '../utils/eventContextQueue';
 
 function uid() {
   return typeof crypto.randomUUID === 'function'
@@ -105,6 +106,7 @@ export function useCodingAssistant(
   const pendingSaveRef = useRef<PendingConversationSave | null>(null);
   const failedSaveRef = useRef<PendingConversationSave | null>(null);
   const pendingProactiveContextRef = useRef<(() => Promise<string>) | null>(null);
+  const eventContextQueueRef = useRef(createEventContextQueue());
   const armedReplyRef = useRef<string | null>(null);
 
   // Keep workspacePath current without adding it to sendMessage's dependency array.
@@ -416,7 +418,13 @@ export function useCodingAssistant(
 
     if (sendGeneration !== sessionGenerationRef.current) return;
 
+    const pendingEvents = eventContextQueueRef.current.snapshot();
+    const eventContext = formatEventContext(pendingEvents);
+
     let apiContent = text;
+    if (eventContext) {
+      apiContent = `${eventContext}\n\n---\n${apiContent}`;
+    }
     if (proactiveContext) {
       apiContent = `**Context at the time of the assistant's proactive message (for reference only — respond conversationally, do not call any tools):**\n${proactiveContext}\n\n---\n${text}`;
     }
@@ -469,6 +477,8 @@ export function useCodingAssistant(
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);
       }
+
+      eventContextQueueRef.current.consume(pendingEvents.map(event => event.id));
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -748,6 +758,10 @@ export function useCodingAssistant(
     }
   }, []);
 
+  const enqueueEventContext = useCallback((event: EventContext) => {
+    eventContextQueueRef.current.enqueue(event);
+  }, []);
+
   return {
     uiMessages,
     isLoading,
@@ -756,6 +770,7 @@ export function useCodingAssistant(
     canRetryConversationSave,
     conversationSaveRevision,
     sendMessage,
+    enqueueEventContext,
     stopExecution,
     clearMessages,
     sendApproval,
