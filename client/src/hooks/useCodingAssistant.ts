@@ -210,16 +210,18 @@ export function useCodingAssistant(
     }
   }, []);
 
-  const stopExecution = useCallback(() => {
+  const stopExecution = useCallback((source: 'stop_button' | 'microphone' = 'stop_button') => {
     const controller = abortControllerRef.current;
     if (!controller || controller.signal.aborted) return;
 
     eventContextQueueRef.current.enqueue({
       id: uid(),
       type: 'user_interrupted',
-      source: 'stop_button',
+      source,
       timestamp: Date.now(),
-      summary: 'The user stopped the previous response.',
+      summary: source === 'microphone'
+        ? 'The user interrupted the previous response using the microphone.'
+        : 'The user stopped the previous response.',
       state: 'paused',
       guidance: 'IMPORTANT: You MUST acknowledge the interruption when natural—for example, that the user may want to change direction, refine the request, or ask something before continuing. Do not use a canned acknowledgment or assume why they interrupted. Address the new message directly. Resume, adapt, or abandon the prior task when their intent is clear; clarify only when ambiguous, but do acknowledge at all times.',
     });

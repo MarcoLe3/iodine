@@ -72,6 +72,31 @@ describe('useCodingAssistant event context', () => {
     expect(nextMessage).toContain('Source: stop_button');
   });
 
+  it('uses microphone as the sole source for a microphone interruption', async () => {
+    let resolveFirstRequest!: (response: Response) => void;
+    const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push(JSON.parse(String(init?.body)));
+      if (requests.length === 1) {
+        return new Promise<Response>(resolve => { resolveFirstRequest = resolve; });
+      }
+      return chatResponse();
+    }));
+    const { result } = renderHook(() => useCodingAssistant(DEFAULT_PROVIDER, DEFAULT_MODEL, null));
+
+    let firstSend!: Promise<void>;
+    act(() => { firstSend = result.current.sendMessage('Explain this code'); });
+    await waitFor(() => expect(result.current.isLoading).toBe(true));
+    act(() => result.current.stopExecution('microphone'));
+    resolveFirstRequest(chatResponse());
+    await act(async () => { await firstSend; });
+
+    await act(async () => { await result.current.sendMessage('Let me clarify'); });
+    const nextMessage = requests[1].messages.at(-1)?.content ?? '';
+    expect(nextMessage).toContain('Source: microphone');
+    expect(nextMessage).not.toContain('Source: stop_button');
+  });
+
   it('retains event context when a request fails', async () => {
     const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
