@@ -40,6 +40,20 @@ describe('tool narration rules', () => {
     expect(narration.getFileType(null)).toBeNull();
   });
 
+  it('avoids implementation wording for non-code files', () => {
+    const nonCodeExtensions = [
+      'md', 'mdx', 'rst', 'adoc', 'txt', 'log',
+      'html', 'htm', 'svg',
+      'json', 'yaml', 'yml', 'xml', 'toml', 'ini', 'conf', 'csv', 'tsv', 'lock',
+    ];
+    for (const extension of nonCodeExtensions) {
+      expect(narration.getPhrases('read_file', extension))
+        .not.toEqual(expect.arrayContaining([expect.stringMatching(/code|implementation|logic/i)]));
+    }
+    expect(narration.getPhrases('read_file', 'ts'))
+      .toEqual(expect.arrayContaining([expect.stringMatching(/implementation/i)]));
+  });
+
   it('deduplicates read/open calls after normalizing path separators', () => {
     const { result } = renderHook(() => useToolNarration('openai'));
 

@@ -7,6 +7,12 @@ const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 // Edit/write narrations are kept because they announce meaningful changes.
 const SKIPPABLE_TOOLS = new Set(['read_file', 'open_file', 'list_directory', 'search_files']);
 const MAX_TOOL_NARRATIONS_PER_TURN = 4;
+const NON_CODE_EXTENSIONS = new Set([
+  'md', 'mdx', 'rst', 'adoc', 'txt', 'log',
+  'html', 'htm', 'svg',
+  'json', 'yaml', 'yml', 'xml', 'toml', 'ini', 'conf', 'csv', 'tsv', 'lock',
+]);
+const IMPLEMENTATION_PHRASE = /\b(?:code|implementation|logic)\b/i;
 
 interface NarrationEntry {
   fn: () => Promise<string>;
@@ -41,6 +47,12 @@ export const toolNarrationInternals = {
   },
   formatPhrase(template: string, fileDescription: string, continuesRead: boolean) {
     return continuesRead ? `And ${fileDescription}.` : template.replace('{file}', fileDescription);
+  },
+  getPhrases(name: string, extension: string | null) {
+    const phrases = TOOL_NARRATION_PHRASES[name] ?? ['I can handle this.'];
+    return extension && NON_CODE_EXTENSIONS.has(extension)
+      ? phrases.filter(phrase => !IMPLEMENTATION_PHRASE.test(phrase))
+      : phrases;
   },
 };
 
@@ -149,11 +161,11 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     // so repeated "let me edit…" clips don't pile up and feel robotic.
     const skippable = SKIPPABLE_TOOLS.has(name) || unskippableCountRef.current > 2;
 
-    const phrases = TOOL_NARRATION_PHRASES[name] ?? ['I can handle this.'];
-    const template = phrases[Math.floor(Math.random() * phrases.length)];
     const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
     const extension = filename?.match(/\.([^.]+)$/)?.[1].toLowerCase() ?? null;
     const displayName = filename?.replace(/\.[^.]+$/, '') ?? null;
+    const phrases = toolNarrationInternals.getPhrases(name, extension);
+    const template = phrases[Math.floor(Math.random() * phrases.length)];
     const fileTypeNames: Record<string, string> = {
       java: 'Java',
       sh: 'Script',
