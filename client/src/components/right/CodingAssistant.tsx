@@ -179,7 +179,7 @@ export interface CodingAssistantHandle {
 interface CodingAssistantProps { workspacePath: string | null; activeFilePath: string | null; onWorkspaceOpen: (path: string) => void; provider: Provider; model: string; setProvider: (id: string) => void; setModel: (id: string) => void; getEditorContext?: () => string | null; contextNodes: FileNode[]; onRemoveContextNode: (path: string) => void; onClearContextNodes: () => void; onNavigateToLine?: (filePath: string, line: number, endLine?: number, startCol?: number, endCol?: number) => void; onOpenNode?: (nodeName: string, nodeId?: string) => void; activeSystemNode?: string | null; onUserTyping?: () => void; onMessageSent?: () => void; onAssistantBusyChange?: (busy: boolean) => void; onWatchTrigger?: () => void; onAssistantReply?: (text: string, hadToolUse: boolean) => void; onFileTreeRefresh?: () => void; onSummaryRequest?: (filePath: string) => void; commitDiffContext?: { shortHash: string; content: string } | null; onClearCommitDiffContext?: () => void; }
 
 export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, commitDiffContext, onClearCommitDiffContext }, ref) {
-  const [speechProviderId, setSpeechProviderId] = useState<SpeechProviderId>(() => (localStorage.getItem('iodine:speech-provider') as SpeechProviderId) ?? 'google');
+  const [speechProviderId, setSpeechProviderId] = useState<SpeechProviderId>(() => (localStorage.getItem('iodine:speech-provider') as SpeechProviderId) ?? 'openai');
   useEffect(() => { localStorage.setItem('iodine:speech-provider', speechProviderId); }, [speechProviderId]);
   const speechOption = SPEECH_OPTIONS.find(o => o.id === speechProviderId) ?? SPEECH_OPTIONS[0];
 
@@ -466,7 +466,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
           if (shouldBridge) {
             const transitions = turnUnskippableCountRef.current >= 3
               ? ['Alright.', 'Okay.']
-              : ['Aha.', 'Got it.', 'Alright so.', 'Okay.', 'Right, so.', 'Hmm, okay.'];
+              : ['Understood.', 'That gives us the context.', 'The key point is this.'];
             const transition = transitions[Math.floor(Math.random() * transitions.length)];
             narrationQueueRef.current.push({
               skippable: false,

@@ -119,7 +119,8 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     const phrases = TOOL_NARRATION_PHRASES[name] ?? ['I can handle this.'];
     const template = phrases[Math.floor(Math.random() * phrases.length)];
     const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
-    const basePhrase = continuesRead ? `And ${filename ?? 'this'}.` : template.replace('{file}', filename ?? 'this');
+    const displayName = filename?.replace(/\.[^.]+$/, '') ?? null;
+    const basePhrase = continuesRead ? `And ${displayName ?? 'this'}.` : template.replace('{file}', displayName ?? 'this');
     const repeatVariations = ['again', 'once more', 'more closely'] as const;
     const repeatVariation = repeatVariations[repeatVariationRef.current % repeatVariations.length];
     if (shouldUseRepeatWording) repeatVariationRef.current++;
