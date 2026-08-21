@@ -602,7 +602,7 @@ export function useCodingAssistant(
             flushNow();
             toolUsedInTurnRef.current = true;
             if (tutorMode) {
-              onToolNarrationRef.current?.(payload.name as string, payload.input as Record<string, unknown>);
+              onToolNarrationRef.current?.(payload.name as string, payload.input as Record<string, unknown>, payload.approval_id as string | undefined);
             }
             const toolBlock: UIBlock = {
               type: 'tool',

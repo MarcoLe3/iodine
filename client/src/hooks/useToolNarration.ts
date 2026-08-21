@@ -17,6 +17,7 @@ const IMPLEMENTATION_PHRASE = /\b(?:code|implementation|logic)\b/i;
 interface NarrationEntry {
   fn: () => Promise<string>;
   skippable: boolean;
+  approvalId?: string;
 }
 
 export const toolNarrationInternals = {
@@ -128,7 +129,12 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     queueRef.current = queueRef.current.filter(e => !e.skippable);
   }, []);
 
-  const narrate = useCallback((name: string, input: Record<string, unknown>) => {
+  /** Remove only narration associated with an approval that the user has already resolved. */
+  const evictApprovalNarration = useCallback((approvalId: string) => {
+    queueRef.current = queueRef.current.filter(entry => entry.approvalId !== approvalId);
+  }, []);
+
+  const narrate = useCallback((name: string, input: Record<string, unknown>, approvalId?: string) => {
     if (toolNarrationCountRef.current >= MAX_TOOL_NARRATIONS_PER_TURN) return;
 
     const path = Object.values(input).find(
@@ -234,6 +240,7 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
         return URL.createObjectURL(await response.blob());
       },
       skippable,
+      approvalId,
     });
     void drain();
   }, [speechProviderId, drain]);
@@ -273,5 +280,5 @@ export function useToolNarration(speechProviderId: 'google' | 'openai') {
     pendingBridgeRef.current   = false;
   }, []);
 
-  return { narrate, stop, drain, evictSkippable, enqueueGreeting, setBridgeQuestion, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, unskippableCountRef, onEmptyRef, resetTurn };
+  return { narrate, stop, drain, evictSkippable, evictApprovalNarration, enqueueGreeting, setBridgeQuestion, queueRef, audioRef, hadNarrationsRef, hadUnskippableRef, unskippableCountRef, onEmptyRef, resetTurn };
 }
