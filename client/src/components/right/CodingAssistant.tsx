@@ -14,6 +14,11 @@ import { parseFilePath, resolveFromRoot } from '../../utils/filePath';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
+export const RESPONSE_TRANSITIONS = {
+  unskippable: ['Alright.', 'Okay.'],
+  default: ['Understood.', 'That gives us the context.'],
+} as const;
+
 const SPEECH_OPTIONS = [
   { id: 'openai', label: 'OpenAI', model: 'tts-1-hd' },
   { id: 'google', label: 'Gemini', model: 'gemini-2.5-flash-preview-tts' },
@@ -478,8 +483,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             && (!turnHadUnskippableRef.current || turnUnskippableCountRef.current >= 3);
           if (shouldBridge) {
             const transitions = turnUnskippableCountRef.current >= 3
-              ? ['Alright.', 'Okay.']
-              : ['Understood.', 'That gives us the context.'];
+              ? RESPONSE_TRANSITIONS.unskippable
+              : RESPONSE_TRANSITIONS.default;
             const transition = transitions[Math.floor(Math.random() * transitions.length)];
             narrationQueueRef.current.push({
               skippable: false,
