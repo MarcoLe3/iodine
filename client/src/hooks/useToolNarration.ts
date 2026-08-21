@@ -13,6 +13,37 @@ interface NarrationEntry {
   skippable: boolean;
 }
 
+export const toolNarrationInternals = {
+  skippableTools: SKIPPABLE_TOOLS,
+  getFileParts(path?: string) {
+    const filename = path?.split(/[/\\]/).filter(Boolean).pop() ?? null;
+    const extension = filename?.match(/\.([^.]+)$/)?.[1].toLowerCase() ?? null;
+    const displayName = filename?.replace(/\.[^.]+$/, '') ?? null;
+    return { filename, extension, displayName };
+  },
+  getFileType(extension: string | null) {
+    const names: Record<string, string> = {
+      java: 'Java', sh: 'Script', cc: 'C plus plus', cpp: 'C plus plus', c: 'C', h: 'Header',
+      ts: 'TypeScript', tsx: 'TypeScript', kt: 'Kotlin', js: 'JavaScript', jsx: 'JavaScript',
+      py: 'Python', json: 'JSON', md: 'Markdown', css: 'CSS', html: 'HTML', yml: 'YAML', yaml: 'YAML',
+    };
+    return extension ? names[extension] ?? extension.toUpperCase() : null;
+  },
+  describeFile(path: string | undefined, narrationIndex: number) {
+    const { displayName, extension } = this.getFileParts(path);
+    const fileType = this.getFileType(extension);
+    return fileType && narrationIndex % 2 === 1
+      ? `${displayName ?? 'this'} ${fileType} file`
+      : `${displayName ?? 'this'} file`;
+  },
+  getFamily(name: string) {
+    return name === 'open_file' || name === 'read_file' ? 'read' : name;
+  },
+  formatPhrase(template: string, fileDescription: string, continuesRead: boolean) {
+    return continuesRead ? `And ${fileDescription}.` : template.replace('{file}', fileDescription);
+  },
+};
+
 export function useToolNarration(speechProviderId: 'google' | 'openai') {
   const queueRef      = useRef<NarrationEntry[]>([]);
   const audioRef      = useRef<HTMLAudioElement | null>(null);
