@@ -21,7 +21,9 @@ export interface RightPanelHandle {
    *  Returns the matched node/edge name, or null if no graph / no match. */
   syncActiveFile: (path: string | null) => string | null;
   /** Inject a proactive AI message into the Coding Assistant chat. */
-  injectProactiveMessage: (message: string, collectContext: () => Promise<string>, extraBlocks?: UIBlock[]) => void;
+  injectProactiveMessage: (message: string, collectContext: () => Promise<string>, extraBlocks?: UIBlock[], replaceId?: string) => void;
+  /** Show a transient "working…" bubble in the chat; returns its id (null if the assistant isn't mounted). */
+  showPendingProactive: (message: string) => string | null;
   /** Start the looping yellow attention pulse on the panel border. */
   triggerPulse: () => void;
   /** Stop the pulse immediately (e.g. user started typing). */
@@ -124,9 +126,10 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
       // Tab hidden — select only (can't pan; SVG has no rendered dimensions).
       return systemViewRef.current.selectByPath(path);
     },
-    injectProactiveMessage: (message, collectContext, extraBlocks) => {
-      codingAssistantRef.current?.injectProactiveMessage(message, collectContext, extraBlocks);
+    injectProactiveMessage: (message, collectContext, extraBlocks, replaceId) => {
+      codingAssistantRef.current?.injectProactiveMessage(message, collectContext, extraBlocks, replaceId);
     },
+    showPendingProactive: (message) => codingAssistantRef.current?.showPendingProactive(message) ?? null,
     triggerPulse: () => {
       const el = panelRef.current;
       if (!el) return;

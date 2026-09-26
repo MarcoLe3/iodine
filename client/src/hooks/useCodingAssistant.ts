@@ -184,7 +184,20 @@ export function useCodingAssistant(
   // finishes, so the null guard at the top exits immediately every time.
   }, [conversationSaveRevision, uiMessages]);
 
-  const injectProactiveMessage = useCallback((message: string, collectContext: () => Promise<string>, extraBlocks: UIBlock[] = []) => {
+  /** Show a transient "working…" assistant bubble; returns its id so injectProactiveMessage can replace it. */
+  const showPendingProactive = useCallback((message: string): string => {
+    const id = uid();
+    setUiMessages(prev => [...prev, {
+      id,
+      role: 'assistant',
+      blocks: [{ type: 'text', content: message }],
+      isStreaming: true,
+      timestamp: Date.now(),
+    }]);
+    return id;
+  }, []);
+
+  const injectProactiveMessage = useCallback((message: string, collectContext: () => Promise<string>, extraBlocks: UIBlock[] = [], replaceId?: string) => {
     const proactiveMsg: UIMessage = {
       id: uid(),
       role: 'assistant',
@@ -192,7 +205,13 @@ export function useCodingAssistant(
       isStreaming: false,
       timestamp: Date.now(),
     };
-    setUiMessages(prev => [...prev, proactiveMsg]);
+    setUiMessages(prev => {
+      const idx = replaceId ? prev.findIndex(m => m.id === replaceId) : -1;
+      if (idx === -1) return [...prev, proactiveMsg];
+      const next = [...prev];
+      next[idx] = proactiveMsg;
+      return next;
+    });
     pendingProactiveContextRef.current = collectContext;
 
     // Persist the injected message so it survives a page reload.
@@ -875,6 +894,7 @@ export function useCodingAssistant(
     clearMessages,
     sendApproval,
     injectProactiveMessage,
+    showPendingProactive,
     markAcknowledged,
     notifyEditorActivity,
     loadConversation,

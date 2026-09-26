@@ -139,6 +139,8 @@ export function WorkbenchLayout() {
   modelRef.current = model;
 
   const liveMeeting = useLiveMeeting(provider.id, async (transcript) => {
+    // Immediate feedback while the summary request runs; replaced in place below.
+    const pendingId = rightPanelRef.current?.showPendingProactive('✍️ _Writing up meeting notes…_') ?? undefined;
     // Summary on top; raw transcript tucked into a collapsible block below.
     let display = '✍️ **Meeting notes**\n\n_Summary unavailable — see the transcript below._';
     try {
@@ -162,7 +164,7 @@ export function WorkbenchLayout() {
     rightPanelRef.current?.injectProactiveMessage(display, async () => context, [
       { type: 'collapsible', title: 'Meeting transcript', content: transcript },
       { type: 'acknowledge', status: 'pending' },
-    ]);
+    ], pendingId);
   });
 
   const pushNav = useCallback((path: string) => {

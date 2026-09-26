@@ -175,7 +175,8 @@ function MessageBubble({ msg, isLast, sendApproval, onSuggestion, onVerbally, is
 }
 
 export interface CodingAssistantHandle {
-  injectProactiveMessage: (message: string, collectContext: () => Promise<string>, extraBlocks?: UIBlock[]) => void;
+  injectProactiveMessage: (message: string, collectContext: () => Promise<string>, extraBlocks?: UIBlock[], replaceId?: string) => void;
+  showPendingProactive: (message: string) => string;
   notifyEditorActivity: () => void;
   focus: () => void;
 }
@@ -191,7 +192,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { localStorage.setItem('iodine:speech-provider', speechProviderId); }, [speechProviderId]);
   const speechOption = SPEECH_OPTIONS.find(o => o.id === speechProviderId) ?? SPEECH_OPTIONS[0];
 
-  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, enqueueEventContext, stopExecution, clearMessages, sendApproval, injectProactiveMessage, markAcknowledged, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest);
+  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, enqueueEventContext, stopExecution, clearMessages, sendApproval, injectProactiveMessage, showPendingProactive, markAcknowledged, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest);
   // Keep a ref to sendMessage so callbacks (like transcribeAndSend) never capture a stale closure.
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
@@ -212,7 +213,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   }, [onFileTreeRefresh, enqueueEventContext]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  useImperativeHandle(ref, () => ({ injectProactiveMessage, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, notifyEditorActivity]);
+  useImperativeHandle(ref, () => ({ injectProactiveMessage, showPendingProactive, notifyEditorActivity, focus: () => textareaRef.current?.focus() }), [injectProactiveMessage, showPendingProactive, notifyEditorActivity]);
   const [input, setInput] = useState(''); const [isTutorMode, setIsTutorMode] = useState(true); const [providerStatus, setProviderStatus] = useState<Record<string, boolean>>({}); const [showHelp, setShowHelp] = useState(false); const apiConfigured = providerStatus[provider.id] ?? null; const [wsInput, setWsInput] = useState(''); const [wsOpening, setWsOpening] = useState(false); const [wsError, setWsError] = useState<string | null>(null); const scrollRef = useRef<HTMLDivElement>(null);
   const [pastConversations, setPastConversations] = useState<ConversationRecord[]>([]);
   const [showConversations, setShowConversations] = useState(false);
