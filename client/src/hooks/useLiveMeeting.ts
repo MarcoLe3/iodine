@@ -204,11 +204,6 @@ export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript
     setError(null);
     contextRef.current = context;
 
-    if (providerRef.current !== 'google') {
-      setError(`Live meetings require the Google provider. Switch to Google to start a meeting.`);
-      return;
-    }
-
     try {
       // 1. Exchange server-side API key for session credentials
       const res = await fetch('/api/meeting/session', {

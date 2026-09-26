@@ -220,6 +220,11 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [verballyLoadingId, setVerballyLoadingId] = useState<string | null>(null);
   const [verballyError, setVerballyError] = useState<string | null>(null);
+  const [meetingDialog, setMeetingDialog] = useState<
+    | { type: 'key-required' }
+    | { type: 'confirm-gemini'; onConfirm: () => void }
+    | null
+  >(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevIsLoadingRef = useRef(false);
   // Ref mirrors: transcribeAndSend is a useCallback whose deps don't include these
@@ -491,7 +496,17 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         {verballyError && <div style={{ padding: '6px 10px', background: '#f4877112', border: '1px solid #f4877160', borderRadius: 6, fontSize: 11, color: '#f48771', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>🔊 Voice Memo: {verballyError}</span><button onClick={() => setVerballyError(null)} style={{ background: 'none', border: 'none', color: '#f48771', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px' }}>×</button></div>}
         {meetingError && <div style={{ padding: '6px 10px', background: '#f4877112', border: '1px solid #f4877160', borderRadius: 6, fontSize: 11, color: '#f48771' }}>🎙 {meetingError}</div>}
         {isWatching && <div className="watching-alert" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '7px 10px', border: '1px solid #e7c547', borderRadius: 6, background: '#e7c54718' }}><span className="watching-dot" />Assistant is actively watching your progress</div>}
-        {!meetingActive && provider.id === 'google' && uiMessages.some(m => m.role === 'assistant') && onMeetingStart && <button onClick={() => void (async () => {
+        {meetingDialog && !meetingActive && <div role="dialog" aria-label="Live meeting" style={{ padding: '10px 12px', border: '1px solid rgba(78,201,176,0.35)', borderRadius: 8, background: 'rgba(78,201,176,0.06)', fontSize: 12, color: 'var(--color-text-primary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {meetingDialog.type === 'confirm-gemini'
+            ? <span>Live meetings are only supported by <strong>Google Gemini</strong>. This meeting will be conducted with Gemini instead of {provider.label}. Is that OK?</span>
+            : <span>Live meetings require a <strong>Google Gemini</strong> API key, which isn't configured. Click <strong>?</strong> above for setup instructions.</span>}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button onClick={() => setMeetingDialog(null)} style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 999, color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 11, padding: '4px 12px' }}>{meetingDialog.type === 'confirm-gemini' ? 'Cancel' : 'Close'}</button>
+            {meetingDialog.type === 'confirm-gemini' && <button onClick={() => { const go = meetingDialog.onConfirm; setMeetingDialog(null); go(); }} style={{ background: '#4ec9b0', border: 'none', borderRadius: 999, color: '#1e1e1e', cursor: 'pointer', fontSize: 11, padding: '4px 12px', fontWeight: 600 }}>Continue with Gemini</button>}
+          </div>
+        </div>}
+        {!meetingActive && !meetingDialog && ['google', 'anthropic', 'openai'].includes(provider.id) && uiMessages.some(m => m.role === 'assistant') && onMeetingStart && <button onClick={() => {
+          const startMeeting = () => void (async () => {
             const lines: string[] = [];
             for (const msg of uiMessages) {
               if (msg.role === 'user') {
@@ -511,7 +526,11 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
               if (diff.trim()) parts.push(`[CURRENT GIT DIFF]\n${diff}`);
             } catch { /* ignore — diff is optional context */ }
             onMeetingStart(parts.join('\n\n---\n\n'));
-          })()} title="Start a live voice meeting" style={{ alignSelf: 'stretch', background: 'rgba(78,201,176,0.1)', border: '1px solid rgba(78,201,176,0.35)', borderRadius: 8, color: '#4ec9b0', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontWeight: 600, textAlign: 'center' }}>Start a meeting</button>}
+          })();
+          if (provider.id === 'google') { startMeeting(); return; }
+          if (providerStatus.google === false) { setMeetingDialog({ type: 'key-required' }); return; }
+          setMeetingDialog({ type: 'confirm-gemini', onConfirm: startMeeting });
+        }} title="Start a live voice meeting" style={{ alignSelf: 'stretch', background: 'rgba(78,201,176,0.1)', border: '1px solid rgba(78,201,176,0.35)', borderRadius: 8, color: '#4ec9b0', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontWeight: 600, textAlign: 'center' }}>Start a meeting</button>}
         {meetingActive && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '7px 10px', border: '1px solid rgba(78,201,176,0.4)', borderRadius: 6, background: 'rgba(78,201,176,0.08)', color: '#4ec9b0' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f5a623', boxShadow: '0 0 6px #f5a62399', display: 'inline-block', flexShrink: 0, animation: 'meeting-dot-pulse 2s ease-in-out infinite' }} />Live meeting in progress — chat is paused</div>}
         <textarea ref={textareaRef} value={input} onChange={e => { setInput(e.target.value); onUserTyping?.(); }} onKeyDown={handleKeyDown} placeholder="Ask anything… (Enter to send, Shift+Enter for newline)" rows={3} disabled={isLoading || !!meetingActive} style={{ background: 'var(--color-bg-input)', border: '1px solid var(--color-border)', borderRadius: 10, color: 'var(--color-text-primary)', fontSize: 12, padding: '9px 11px', resize: 'none', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box', opacity: meetingActive ? 0.4 : 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
