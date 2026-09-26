@@ -53,6 +53,9 @@ function isValidUiBlock(value: unknown): boolean {
       && typeof value.content === 'string'
       && value.content.length <= MAX_CONTENT_LENGTH;
   }
+  if (value.type === 'acknowledge') {
+    return value.status === 'pending' || value.status === 'done' || value.status === 'dismissed';
+  }
   if (value.type === 'tool') {
     return typeof value.id === 'string'
       && typeof value.name === 'string'

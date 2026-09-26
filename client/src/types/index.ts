@@ -34,6 +34,8 @@ export type UIBlock =
   | { type: 'text'; content: string }
   | { type: 'thought'; content: string }
   | { type: 'collapsible'; title: string; content: string }
+  /** Meeting-summary ack: 'dismissed' = user replied some other way (renders nothing). */
+  | { type: 'acknowledge'; status: 'pending' | 'done' | 'dismissed' }
   | { type: 'tool'; id: string; name: string; input: Record<string, unknown>;
       result?: string; error?: boolean; pending: boolean }
   | { type: 'command-approval'; id: string; command: string; reason: string; cwd: string | null;

@@ -158,8 +158,10 @@ export function WorkbenchLayout() {
         console.warn('[meeting-summary] HTTP', r.status);
       }
     } catch (err) { console.warn('[meeting-summary] request failed', err); }
-    rightPanelRef.current?.injectProactiveMessage(display, async () => transcript, [
+    const context = `Meeting summary shown to the user:\n${display}\n\nFull meeting transcript:\n${transcript}`;
+    rightPanelRef.current?.injectProactiveMessage(display, async () => context, [
       { type: 'collapsible', title: 'Meeting transcript', content: transcript },
+      { type: 'acknowledge', status: 'pending' },
     ]);
   });
 

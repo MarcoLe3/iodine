@@ -23,6 +23,10 @@ function normalizeForSave(msgs: UIMessage[]): UIMessage[] {
         if (block.type === 'command-approval' && block.status === 'pending') {
           return { ...block, status: 'rejected' as const };
         }
+        // Proactive context lives in memory only, so an ack after reload would be empty.
+        if (block.type === 'acknowledge' && block.status === 'pending') {
+          return { ...block, status: 'dismissed' as const };
+        }
         return block;
       }),
     };
@@ -203,6 +207,23 @@ export function useCodingAssistant(
       setConversationSaveRevision(r => r + 1);
     }
   }, []);
+
+  /** Set every acknowledge block matching `from` to `to` (optionally only in one message). */
+  const setAcknowledgeStatus = useCallback((from: 'pending', to: 'done' | 'dismissed', msgId?: string) => {
+    setUiMessages(prev => prev.map(msg => {
+      if (msg.role !== 'assistant' || (msgId && msg.id !== msgId)) return msg;
+      if (!msg.blocks.some(b => b.type === 'acknowledge' && b.status === from)) return msg;
+      return {
+        ...msg,
+        blocks: msg.blocks.map(b =>
+          b.type === 'acknowledge' && b.status === from ? { ...b, status: to } : b),
+      };
+    }));
+  }, []);
+
+  const markAcknowledged = useCallback((msgId: string) => {
+    setAcknowledgeStatus('pending', 'done', msgId);
+  }, [setAcknowledgeStatus]);
 
   const sendApproval = useCallback(async (id: string, approved: boolean) => {
     // Update block status immediately so buttons disappear
@@ -443,6 +464,9 @@ export function useCodingAssistant(
     // Injected into the API content only — the UI shows only the user's typed text.
     const collectProactive = pendingProactiveContextRef.current;
     pendingProactiveContextRef.current = null;
+    // Context is consumed by this message, so any remaining Acknowledge button is moot.
+    // (The Acknowledge handler marks its own block 'done' before calling sendMessage.)
+    setAcknowledgeStatus('pending', 'dismissed');
     let proactiveContext = '';
     if (collectProactive) {
       try { proactiveContext = await collectProactive(); } catch { /* ignore — context is best-effort */ }
@@ -851,6 +875,7 @@ export function useCodingAssistant(
     clearMessages,
     sendApproval,
     injectProactiveMessage,
+    markAcknowledged,
     notifyEditorActivity,
     loadConversation,
     retryConversationSave,
