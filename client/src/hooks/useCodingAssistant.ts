@@ -102,6 +102,7 @@ export function useCodingAssistant(
   const pendingSaveRef = useRef<PendingConversationSave | null>(null);
   const failedSaveRef = useRef<PendingConversationSave | null>(null);
   const pendingProactiveContextRef = useRef<(() => Promise<string>) | null>(null);
+  const hasSummaryRef = useRef(false);
   const eventContextQueueRef = useRef(createEventContextQueue());
   const armedReplyRef = useRef<string | null>(null);
 
@@ -109,9 +110,11 @@ export function useCodingAssistant(
   const workspacePathRef = useRef(workspacePath);
   workspacePathRef.current = workspacePath;
 
-  // Mirror history state so stable callbacks can read the current value.
+  // Mirror history/uiMessages state so stable callbacks can read the current value.
   const historyRef = useRef(history);
   historyRef.current = history;
+  const uiMessagesRef = useRef(uiMessages);
+  uiMessagesRef.current = uiMessages;
 
   // A conversation belongs to exactly one workspace. Reset all in-memory
   // session state when that scope changes so history cannot cross projects.
@@ -127,6 +130,7 @@ export function useCodingAssistant(
     thoughtBufRef.current = '';
     pendingProactiveContextRef.current = null;
     armedReplyRef.current = null;
+    hasSummaryRef.current = false;
     pendingSaveRef.current = null;
     failedSaveRef.current = null;
     conversationIdRef.current = uid();
@@ -674,6 +678,33 @@ export function useCodingAssistant(
                 history: finalHistory,
               };
               setConversationSaveRevision(revision => revision + 1);
+
+              // After the 3rd assistant reply, generate a summary in the background
+              // and re-save the conversation with it so the recent list shows a label.
+              const assistantCount = finalHistory.filter(m => m.role === 'assistant').length;
+              if (assistantCount >= 3 && !hasSummaryRef.current) {
+                void (async () => {
+                  try {
+                    const resp = await fetch('/api/proactive/conversation-summary', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ history: finalHistory, provider: provider.id, model }),
+                    });
+                    if (!resp.ok || sendGeneration !== sessionGenerationRef.current) return;
+                    const { summary } = await resp.json() as { summary: string | null };
+                    if (!summary) return;
+                    hasSummaryRef.current = true;
+                    await saveConversation(sendWorkspacePath, {
+                      id: sendConversationId,
+                      timestamp: Date.now(),
+                      history: finalHistory,
+                      uiMessages: normalizeForSave(uiMessagesRef.current),
+                      summary,
+                    });
+                    setConversationSaveRevision(r => r + 1);
+                  } catch { /* best effort — summary is optional */ }
+                })();
+              }
             }
             // Notify expansion hook so it can grow/shrink the right panel.
             onAssistantReplyRef.current?.(capturedText, toolUsedInTurnRef.current);
@@ -756,6 +787,7 @@ export function useCodingAssistant(
     setIsLoading(false);
     setIsWatching(false);
     conversationIdRef.current = record.id;
+    hasSummaryRef.current = !!record.summary;
     setUiMessages(record.uiMessages);
     setHistory(record.history);
   }, []);

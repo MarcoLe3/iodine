@@ -9,6 +9,7 @@ export interface ConversationRecord {
   timestamp: number;
   history: { role: 'user' | 'assistant'; content: string }[];
   uiMessages: unknown[];
+  summary?: string;
 }
 
 interface ConversationRouterOptions {
@@ -91,6 +92,7 @@ function parseRecord(value: unknown): ConversationRecord | null {
     timestamp: value.timestamp,
     history: value.history,
     uiMessages: value.uiMessages,
+    ...(typeof value.summary === 'string' && value.summary.length <= 500 ? { summary: value.summary } : {}),
   };
 }
 
@@ -147,7 +149,8 @@ export function createConversationsRouter(options: ConversationRouterOptions = {
     const dir = conversationsDir(workspacePath);
     const target = path.join(dir, `${id}.json`);
     const temp = `${target}.${process.pid}.${Date.now()}.tmp`;
-    const record: ConversationRecord = { id, timestamp, history, uiMessages };
+    const summary = typeof body.summary === 'string' && body.summary.length <= 500 ? body.summary : undefined;
+    const record: ConversationRecord = { id, timestamp, history, uiMessages, ...(summary ? { summary } : {}) };
 
     try {
       fs.mkdirSync(dir, { recursive: true });

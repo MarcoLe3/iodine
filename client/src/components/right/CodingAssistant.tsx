@@ -469,8 +469,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderTop: '1px solid var(--color-border)', cursor: 'pointer' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{formatConversationDate(conv.timestamp)}</div>
-                  <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.history.length} message{conv.history.length !== 1 ? 's' : ''}</div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{conv.summary ?? formatConversationDate(conv.timestamp)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.summary ? formatConversationDate(conv.timestamp) : `${conv.history.length} message${conv.history.length !== 1 ? 's' : ''}`}</div>
                 </button>
               ))}
             </div>

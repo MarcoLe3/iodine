@@ -205,4 +205,57 @@ router.post('/proactive/meeting-summary', async (req, res) => {
   }
 });
 
+const CONVERSATION_SUMMARY_SYSTEM = `Summarize this conversation in one short phrase of 5–8 words. Focus on the main task or question. No punctuation at the end. No quotes. Examples: "Debugging the auth token refresh flow", "Adding dark mode to the editor", "Explaining the React reconciliation algorithm"`;
+
+router.post('/proactive/conversation-summary', async (req, res) => {
+  const { history, provider, model } = req.body as {
+    history: { role: 'user' | 'assistant'; content: string }[];
+    provider: string;
+    model: string;
+  };
+
+  const userContent = history.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n\n');
+
+  try {
+    let summary = '';
+
+    if (provider === 'anthropic') {
+      const client = new Anthropic({ apiKey: await loadApiKey() });
+      const response = await client.messages.create({
+        model,
+        max_tokens: 40,
+        system: CONVERSATION_SUMMARY_SYSTEM,
+        messages: [{ role: 'user', content: userContent }],
+      });
+      const block = response.content[0];
+      if (block?.type === 'text') summary = block.text.trim();
+
+    } else if (provider === 'openai') {
+      const client = new OpenAI({ apiKey: await loadOpenAIKey() });
+      const response = await client.chat.completions.create({
+        model,
+        max_completion_tokens: 40,
+        messages: [
+          { role: 'system', content: CONVERSATION_SUMMARY_SYSTEM },
+          { role: 'user', content: userContent },
+        ],
+      });
+      summary = response.choices[0]?.message?.content?.trim() ?? '';
+
+    } else {
+      const ai = new GoogleGenAI({ apiKey: await loadGeminiKey() });
+      const response = await ai.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ text: userContent }] }],
+        config: { systemInstruction: CONVERSATION_SUMMARY_SYSTEM },
+      });
+      summary = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+    }
+
+    res.json({ summary: summary || null });
+  } catch {
+    res.json({ summary: null });
+  }
+});
+
 export default router;

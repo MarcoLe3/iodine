@@ -7,6 +7,7 @@ export interface ConversationRecord {
   timestamp: number;
   history: HistoryMessage[];
   uiMessages: UIMessage[];
+  summary?: string;
 }
 
 export async function fetchConversations(workspacePath: string): Promise<ConversationRecord[]> {
