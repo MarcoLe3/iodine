@@ -164,7 +164,7 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
 
   const renderModelInfo = (tabId: RightTab) => {
     const isEditable = tabId === 'assistant';
-    const editableNote = isEditable ? ' <i style="color: var(--color-text-secondary);">Set in Coding Assistant</i>' : '';
+    const editableNote = isEditable ? ' <i style="color: var(--color-text-secondary);">Set in Conversation</i>' : '';
 
     return (
       <div
@@ -219,7 +219,7 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
         }}
       >
         {([
-          { id: 'assistant', label: 'Coding Assistant' },
+          { id: 'assistant', label: 'Conversation' },
           { id: 'build',     label: 'Build' },
           { id: 'system',    label: 'Iogram' },
         ] as { id: RightTab; label: string }[]).map(tab => {
