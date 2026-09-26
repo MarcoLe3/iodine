@@ -109,6 +109,10 @@ export function useCodingAssistant(
   const workspacePathRef = useRef(workspacePath);
   workspacePathRef.current = workspacePath;
 
+  // Mirror history state so stable callbacks can read the current value.
+  const historyRef = useRef(history);
+  historyRef.current = history;
+
   // A conversation belongs to exactly one workspace. Reset all in-memory
   // session state when that scope changes so history cannot cross projects.
   useEffect(() => {
@@ -180,6 +184,18 @@ export function useCodingAssistant(
     };
     setUiMessages(prev => [...prev, proactiveMsg]);
     pendingProactiveContextRef.current = collectContext;
+
+    // Persist the injected message so it survives a page reload.
+    const ws = workspacePathRef.current;
+    if (ws) {
+      pendingSaveRef.current = {
+        workspacePath: ws,
+        conversationId: conversationIdRef.current,
+        generation: sessionGenerationRef.current,
+        history: historyRef.current,
+      };
+      setConversationSaveRevision(r => r + 1);
+    }
   }, []);
 
   const sendApproval = useCallback(async (id: string, approved: boolean) => {
