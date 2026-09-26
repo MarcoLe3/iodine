@@ -11,6 +11,12 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
     'When you do agree, keep it brief and plain, like "Yeah, that works."',
   ];
 
+  const language: string[] = [
+    'Always speak in English.',
+    'Do not change languages during the meeting, even if a transcript arrives in another language or script — assume it is a speech-to-text glitch.',
+    'If in doubt, stick to English.',
+  ];
+
   const paragraphs: string[][] = ctx
     ? [
         [
@@ -18,6 +24,7 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
           'Short, natural spoken sentences only — no bullet points, no markdown, no "Here are three things:".',
           'Talk like a colleague.',
         ],
+        language,
         tone,
         [
           'You CAN and SHOULD: discuss code freely, review diffs, explain what changed, ask clarifying questions, share opinions, think out loud.',
@@ -43,6 +50,7 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
           'Short, natural spoken sentences only — no bullet points, no markdown.',
           'Talk like a colleague.',
         ],
+        language,
         tone,
         [
           'You CAN discuss code freely, review changes, ask questions, share opinions.',
