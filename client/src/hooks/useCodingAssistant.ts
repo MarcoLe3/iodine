@@ -180,11 +180,11 @@ export function useCodingAssistant(
   // finishes, so the null guard at the top exits immediately every time.
   }, [conversationSaveRevision, uiMessages]);
 
-  const injectProactiveMessage = useCallback((message: string, collectContext: () => Promise<string>) => {
+  const injectProactiveMessage = useCallback((message: string, collectContext: () => Promise<string>, extraBlocks: UIBlock[] = []) => {
     const proactiveMsg: UIMessage = {
       id: uid(),
       role: 'assistant',
-      blocks: [{ type: 'text', content: message }],
+      blocks: [{ type: 'text', content: message }, ...extraBlocks],
       isStreaming: false,
       timestamp: Date.now(),
     };

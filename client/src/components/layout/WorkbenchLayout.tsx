@@ -139,8 +139,8 @@ export function WorkbenchLayout() {
   modelRef.current = model;
 
   const liveMeeting = useLiveMeeting(provider.id, async (transcript) => {
-    // Try to summarize the transcript; fall back to the raw lines on error.
-    let display = `**Meeting transcript**\n\n${transcript}`;
+    // Summary on top; raw transcript tucked into a collapsible block below.
+    let display = '✍️ **Meeting notes**\n\n_Summary unavailable — see the transcript below._';
     try {
       const r = await fetch('/api/proactive/meeting-summary', {
         method: 'POST',
@@ -154,9 +154,13 @@ export function WorkbenchLayout() {
       if (r.ok) {
         const { summary } = await r.json() as { summary: string | null };
         if (summary) display = `✍️ **Meeting notes**\n\n${summary}`;
+      } else {
+        console.warn('[meeting-summary] HTTP', r.status);
       }
-    } catch { /* fall back to raw transcript */ }
-    rightPanelRef.current?.injectProactiveMessage(display, async () => transcript);
+    } catch (err) { console.warn('[meeting-summary] request failed', err); }
+    rightPanelRef.current?.injectProactiveMessage(display, async () => transcript, [
+      { type: 'collapsible', title: 'Meeting transcript', content: transcript },
+    ]);
   });
 
   const pushNav = useCallback((path: string) => {

@@ -6,7 +6,7 @@ import { SystemView } from '../right/SystemView';
 import type { SystemViewHandle } from '../right/SystemView';
 import { BuildAssistant } from '../right/BuildAssistant';
 import type { Provider } from '../../providers';
-import type { FileNode } from '../../types';
+import type { FileNode, UIBlock } from '../../types';
 import { useSystemGraph } from '../../hooks/useSystemGraph';
 import type { SystemGraph } from '../../api/files';
 
@@ -21,7 +21,7 @@ export interface RightPanelHandle {
    *  Returns the matched node/edge name, or null if no graph / no match. */
   syncActiveFile: (path: string | null) => string | null;
   /** Inject a proactive AI message into the Coding Assistant chat. */
-  injectProactiveMessage: (message: string, collectContext: () => Promise<string>) => void;
+  injectProactiveMessage: (message: string, collectContext: () => Promise<string>, extraBlocks?: UIBlock[]) => void;
   /** Start the looping yellow attention pulse on the panel border. */
   triggerPulse: () => void;
   /** Stop the pulse immediately (e.g. user started typing). */
@@ -124,8 +124,8 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
       // Tab hidden — select only (can't pan; SVG has no rendered dimensions).
       return systemViewRef.current.selectByPath(path);
     },
-    injectProactiveMessage: (message, collectContext) => {
-      codingAssistantRef.current?.injectProactiveMessage(message, collectContext);
+    injectProactiveMessage: (message, collectContext, extraBlocks) => {
+      codingAssistantRef.current?.injectProactiveMessage(message, collectContext, extraBlocks);
     },
     triggerPulse: () => {
       const el = panelRef.current;

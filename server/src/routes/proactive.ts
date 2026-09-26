@@ -145,13 +145,13 @@ const MEETING_SUMMARY_SYSTEM = `You are a meeting notes assistant. Given the tra
 
 Use this structure (omit a section if there's nothing to put there):
 
-**Summary**
-2–3 sentences covering what was discussed.
+**Overview**
+2–3 sentences on the purpose of the meeting and the overall outcome.
 
-**Decisions**
-- Bullet list of any decisions made.
+**What was Discussed**
+- Bullet list of the main topics, including any decisions made and why.
 
-**Action items**
+**Next Steps**
 - Bullet list of concrete things the AI should implement or follow up on after the meeting.
 
 Be specific — reference actual files, features, or bugs discussed. No filler or generic phrasing. Keep it tight.`;
@@ -170,18 +170,24 @@ router.post('/proactive/meeting-summary', async (req, res) => {
       const client = new Anthropic({ apiKey: await loadApiKey() });
       const response = await client.messages.create({
         model,
-        max_tokens: 350,
+        max_tokens: 1500,
         system: MEETING_SUMMARY_SYSTEM,
         messages: [{ role: 'user', content: transcript }],
       });
-      const block = response.content[0];
-      if (block?.type === 'text') summary = block.text.trim();
+      const textBlock = response.content.find((b) => b.type === 'text');
+      if (textBlock?.type === 'text') summary = textBlock.text.trim();
+      if (!summary) {
+        console.warn('[meeting-summary] anthropic raw', {
+          stop_reason: response.stop_reason,
+          types: response.content.map((b) => b.type),
+        });
+      }
 
     } else if (provider === 'openai') {
       const client = new OpenAI({ apiKey: await loadOpenAIKey() });
       const response = await client.chat.completions.create({
         model,
-        max_completion_tokens: 350,
+        max_completion_tokens: 4000,
         messages: [
           { role: 'system', content: MEETING_SUMMARY_SYSTEM },
           { role: 'user', content: transcript },
@@ -196,11 +202,24 @@ router.post('/proactive/meeting-summary', async (req, res) => {
         contents: [{ role: 'user', parts: [{ text: transcript }] }],
         config: { systemInstruction: MEETING_SUMMARY_SYSTEM },
       });
-      summary = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+      const parts = response.candidates?.[0]?.content?.parts ?? [];
+      summary = parts
+        .filter((p) => p.text && !p.thought)
+        .map((p) => p.text)
+        .join('')
+        .trim();
+      if (!summary) {
+        console.warn('[meeting-summary] gemini raw', {
+          finishReason: response.candidates?.[0]?.finishReason,
+          partCount: parts.length,
+        });
+      }
     }
 
+    if (!summary) console.warn('[meeting-summary] model returned empty summary', { provider, model });
     res.json({ summary: summary || null });
-  } catch {
+  } catch (err) {
+    console.error('[meeting-summary] failed', { provider, model }, err);
     res.json({ summary: null });
   }
 });

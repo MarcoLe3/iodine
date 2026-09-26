@@ -33,6 +33,7 @@ export interface WorkspaceInfo {
 export type UIBlock =
   | { type: 'text'; content: string }
   | { type: 'thought'; content: string }
+  | { type: 'collapsible'; title: string; content: string }
   | { type: 'tool'; id: string; name: string; input: Record<string, unknown>;
       result?: string; error?: boolean; pending: boolean }
   | { type: 'command-approval'; id: string; command: string; reason: string; cwd: string | null;

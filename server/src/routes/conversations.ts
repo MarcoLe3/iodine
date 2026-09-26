@@ -48,6 +48,11 @@ function isValidUiBlock(value: unknown): boolean {
   if (value.type === 'text' || value.type === 'thought') {
     return typeof value.content === 'string' && value.content.length <= MAX_CONTENT_LENGTH;
   }
+  if (value.type === 'collapsible') {
+    return typeof value.title === 'string'
+      && typeof value.content === 'string'
+      && value.content.length <= MAX_CONTENT_LENGTH;
+  }
   if (value.type === 'tool') {
     return typeof value.id === 'string'
       && typeof value.name === 'string'
