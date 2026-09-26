@@ -77,7 +77,7 @@ System View is interactive documentation generated from the code that is actuall
 2. Browse and edit files in the Monaco-powered editor with Git status and diffs.
 3. Open a file and click **🤖 Summary** for a cached AI-generated tutorial.
 4. Use the **Coding Assistant** to ask questions or make changes with workspace tools.
-5. Toggle **Mentor** for step-by-step guided walkthroughs — the assistant opens files, highlights lines, and explains without touching your code.
+5. Toggle **Mentor** for step-by-step guided walkthroughs — the assistant opens files, highlights lines, and explains one block at a time. It can still make edits when you ask.
 6. After a few exchanges, click **Start a meeting** to switch to a live voice session and talk through the code in real time.
 7. Use the **Build** tab to generate and execute project-specific commands in a terminal.
 8. Open **System View** and click **⚡ Generate** to build an interactive architecture graph.
