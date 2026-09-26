@@ -4,7 +4,11 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LiveMeetingCard } from './LiveMeetingCard';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function makeContainerRef(width = 800, height = 600) {
   const el = document.createElement('div');
@@ -15,11 +19,34 @@ function makeContainerRef(width = 800, height = 600) {
   return { current: el } as React.RefObject<HTMLDivElement>;
 }
 
-function makeAnalyserNode(fillValue = 128): AnalyserNode {
+function makeTimeDomainAnalyser(fillValue = 128): AnalyserNode {
   return {
-    frequencyBinCount: 1024,
-    getByteFrequencyData: vi.fn((arr: Uint8Array) => arr.fill(fillValue)),
+    fftSize: 256,
+    getByteTimeDomainData: vi.fn((arr: Uint8Array) => arr.fill(fillValue)),
   } as unknown as AnalyserNode;
+}
+
+/** happy-dom has no 2D canvas; stub one so the rAF draw loop actually runs. */
+function stubCanvas() {
+  const ctx = {
+    createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+    clearRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    quadraticCurveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+  };
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+  return ctx;
+}
+
+/** Capture the latest rAF callback so tests can step frames manually. */
+function stubRaf() {
+  const state: { cb: FrameRequestCallback | null } = { cb: null };
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { state.cb = cb; return 1; });
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  return () => act(() => { state.cb?.(0); });
 }
 
 describe('LiveMeetingCard', () => {
@@ -43,18 +70,18 @@ describe('LiveMeetingCard', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('drag moves card position within container bounds', () => {
+  it('starts at bottom-right and drag moves card position', () => {
     const { container } = render(<LiveMeetingCard containerRef={makeContainerRef()} onClose={vi.fn()} />);
     const card = container.firstChild as HTMLElement;
-    expect(card.style.left).toBe('20px');
-    expect(card.style.top).toBe('20px');
+    // 800 - 240 (card) - 20 (margin) = 540, 600 - 148 - 20 = 432
+    expect(card.style.left).toBe('540px');
+    expect(card.style.top).toBe('432px');
 
     fireEvent.mouseDown(card.firstChild as HTMLElement, { clientX: 0, clientY: 0 });
     act(() => { window.dispatchEvent(new MouseEvent('mousemove', { clientX: 100, clientY: 50, bubbles: true })); });
 
-    // startX(20) + dx(100) = 120, startY(20) + dy(50) = 70
-    expect(card.style.left).toBe('120px');
-    expect(card.style.top).toBe('70px');
+    expect(card.style.left).toBe('640px');
+    expect(card.style.top).toBe('482px');
 
     act(() => { window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); });
   });
@@ -72,48 +99,38 @@ describe('LiveMeetingCard', () => {
     act(() => { window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); });
   });
 
-  it('uses CSS animation when no analyserNode is provided', () => {
+  it('renders a waveform canvas', () => {
     const { container } = render(<LiveMeetingCard containerRef={makeContainerRef()} onClose={vi.fn()} />);
-    const firstBar = container.querySelector('[style*="meeting-wave"]');
-    expect(firstBar).toBeTruthy();
+    expect(container.querySelector('canvas')).toBeTruthy();
   });
 
-  it('switches to rAF-driven inline transforms when analyserNode is provided', () => {
-    let rafCb: FrameRequestCallback | null = null;
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { rafCb = cb; return 1; });
-    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  it('draws the waveform from analyserNode on each rAF tick', () => {
+    const ctx = stubCanvas();
+    const tick = stubRaf();
+    const analyser = makeTimeDomainAnalyser(200);
 
-    const { container } = render(
-      <LiveMeetingCard containerRef={makeContainerRef()} onClose={vi.fn()} analyserNode={makeAnalyserNode(200)} />,
-    );
+    render(<LiveMeetingCard containerRef={makeContainerRef()} onClose={vi.fn()} analyserNode={analyser} />);
+    tick();
 
-    // Fire one rAF tick — fillValue 200/255 ≈ 0.78, clamped to max(0.05, 0.78)
-    act(() => { rafCb?.(0); });
-
-    // Bars should now use inline scaleY transforms, not the CSS animation
-    const bars = container.querySelectorAll('[style*="scaleY"]');
-    expect(bars.length).toBe(26);
-    expect((bars[0] as HTMLElement).style.animation).toBe('');
-
-    vi.unstubAllGlobals();
+    expect(analyser.getByteTimeDomainData).toHaveBeenCalled();
+    expect(ctx.stroke).toHaveBeenCalled();
   });
 
-  it('colours bars white when user is speaking and teal when agent is speaking', () => {
+  it('glow bar reacts to mic input and stays dark when muted', () => {
+    stubCanvas();
+    const tick = stubRaf();
+    const mic = makeTimeDomainAnalyser(255);
+
     const { container, rerender } = render(
-      <LiveMeetingCard containerRef={makeContainerRef()} onClose={vi.fn()} speaking="user" />,
+      <LiveMeetingCard containerRef={makeContainerRef()} onClose={vi.fn()} micAnalyserNode={mic} isMuted={false} />,
     );
-    const firstBar = () => container.querySelector('.waveform-bar') as HTMLElement
-      ?? container.querySelectorAll('[style*="flex: 1"]')[0] as HTMLElement;
+    const glowBar = () => (container.firstChild as HTMLElement).lastChild as HTMLElement;
 
-    // Get all bar divs (inside the waveform container)
-    const getFirstBar = () => {
-      const waveform = container.firstChild?.lastChild as HTMLElement;
-      return waveform?.firstChild as HTMLElement;
-    };
+    tick();
+    expect(glowBar().style.boxShadow).not.toBe('none');
 
-    expect(getFirstBar().style.background).toContain('255, 255, 255');
-
-    rerender(<LiveMeetingCard containerRef={makeContainerRef()} onClose={vi.fn()} speaking="agent" />);
-    expect(getFirstBar().style.background).toBe('#4ec9b0');
+    rerender(<LiveMeetingCard containerRef={makeContainerRef()} onClose={vi.fn()} micAnalyserNode={mic} isMuted />);
+    tick();
+    expect(glowBar().style.boxShadow).toBe('none');
   });
 });
