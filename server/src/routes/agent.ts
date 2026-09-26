@@ -1,6 +1,17 @@
 import { Router } from 'express';
-import { readdirSync, statSync } from 'fs';
+import { readdirSync, statSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'os';
+
+/** Written while an agent SSE turn is in progress so the dev watcher defers restarts. */
+export const AGENT_LOCK_FILE = join(tmpdir(), 'iodine-agent.lock');
+
+function acquireLock() {
+  try { writeFileSync(AGENT_LOCK_FILE, String(process.pid), 'utf-8'); } catch { /* best effort */ }
+}
+function releaseLock() {
+  try { unlinkSync(AGENT_LOCK_FILE); } catch { /* already gone */ }
+}
 import { loadApiKey, runAgentLoop } from '../services/anthropicAgent';
 import { loadOpenAIKey, runOpenAIAgentLoop } from '../services/openaiAgent';
 import { loadGeminiKey, runGeminiAgentLoop } from '../services/geminiAgent';
@@ -86,6 +97,11 @@ router.post('/agent/chat', async (req, res) => {
     if (!abortSignal.aborted) res.write(': heartbeat\n\n');
   }, 15_000);
 
+  // Hold the lock so the dev watcher defers file-change restarts until this
+  // turn completes — otherwise a write_file call would restart the server
+  // mid-turn and kill the SSE stream.
+  acquireLock();
+
   try {
     if (selectedProvider === 'openai') {
       await runOpenAIAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode);
@@ -102,6 +118,7 @@ router.post('/agent/chat', async (req, res) => {
     }
   } finally {
     clearInterval(heartbeat);
+    releaseLock();
     if (!abortSignal.aborted) res.end();
   }
 });

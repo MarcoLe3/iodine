@@ -103,6 +103,7 @@ export function useCodingAssistant(
   const failedSaveRef = useRef<PendingConversationSave | null>(null);
   const pendingProactiveContextRef = useRef<(() => Promise<string>) | null>(null);
   const hasSummaryRef = useRef(false);
+  const summaryRef = useRef<string | undefined>(undefined);
   const eventContextQueueRef = useRef(createEventContextQueue());
   const armedReplyRef = useRef<string | null>(null);
 
@@ -131,6 +132,7 @@ export function useCodingAssistant(
     pendingProactiveContextRef.current = null;
     armedReplyRef.current = null;
     hasSummaryRef.current = false;
+    summaryRef.current = undefined;
     pendingSaveRef.current = null;
     failedSaveRef.current = null;
     conversationIdRef.current = uid();
@@ -694,6 +696,7 @@ export function useCodingAssistant(
                     const { summary } = await resp.json() as { summary: string | null };
                     if (!summary) return;
                     hasSummaryRef.current = true;
+                    summaryRef.current = summary;
                     await saveConversation(sendWorkspacePath, {
                       id: sendConversationId,
                       timestamp: Date.now(),
@@ -732,22 +735,39 @@ export function useCodingAssistant(
       thoughtBufRef.current = '';
       const stopped = controller.signal.aborted;
       const errText = err instanceof Error ? err.message : 'Unknown error';
-      setUiMessages(prev => prev.map(m => {
-        if (m.id !== assistantId || m.role !== 'assistant') return m;
-        const blocks = [...m.blocks];
-        for (const [content, type] of [[bufferedThought, 'thought'], [bufferedText, 'text']] as [string, 'thought' | 'text'][]) {
-          if (!content) continue;
-          const last = blocks[blocks.length - 1];
-          if (last?.type === type) blocks[blocks.length - 1] = { ...last, content: last.content + content } as UIBlock;
-          else blocks.push({ type, content } as UIBlock);
+      setUiMessages(prev => {
+        const next = prev.map(m => {
+          if (m.id !== assistantId || m.role !== 'assistant') return m;
+          const blocks = [...m.blocks];
+          for (const [content, type] of [[bufferedThought, 'thought'], [bufferedText, 'text']] as [string, 'thought' | 'text'][]) {
+            if (!content) continue;
+            const last = blocks[blocks.length - 1];
+            if (last?.type === type) blocks[blocks.length - 1] = { ...last, content: last.content + content } as UIBlock;
+            else blocks.push({ type, content } as UIBlock);
+          }
+          if (stopped) {
+            blocks.push({ type: 'text', content: '_Execution stopped._' });
+          } else {
+            blocks.push({ type: 'text', content: `Error: ${errText}` });
+          }
+          return { ...m, isStreaming: false, blocks };
+        });
+        // Save the partial turn so the conversation survives a server restart or page reload.
+        // history = newHistory (includes user message but not the incomplete assistant reply).
+        // uiMessages = next (includes partial tool blocks + error notice).
+        if (sendWorkspacePath && !stopped) {
+          void saveConversation(sendWorkspacePath, {
+            id: sendConversationId,
+            timestamp: Date.now(),
+            history: newHistory,
+            uiMessages: normalizeForSave(next),
+            ...(summaryRef.current ? { summary: summaryRef.current } : {}),
+          }).then(() => {
+            if (sendGeneration === sessionGenerationRef.current) setConversationSaveRevision(r => r + 1);
+          }).catch(() => { /* best effort */ });
         }
-        if (stopped) {
-          blocks.push({ type: 'text', content: '_Execution stopped._' });
-        } else {
-          blocks.push({ type: 'text', content: `Error: ${errText}` });
-        }
-        return { ...m, isStreaming: false, blocks };
-      }));
+        return next;
+      });
     } finally {
       if (abortControllerRef.current === controller) abortControllerRef.current = null;
       if (sendGeneration === sessionGenerationRef.current) setIsLoading(false);
@@ -788,6 +808,7 @@ export function useCodingAssistant(
     setIsWatching(false);
     conversationIdRef.current = record.id;
     hasSummaryRef.current = !!record.summary;
+    summaryRef.current = record.summary;
     setUiMessages(record.uiMessages);
     setHistory(record.history);
   }, []);

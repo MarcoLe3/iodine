@@ -12,7 +12,7 @@ Several features have branded display names shown in the UI. These names must **
 |-----------------|-------------------------------|
 | **Iogram** | `systemView` / `system` / `SystemView` |
 | **IOPEDIA** | `outline` / `OutlinePanel` |
-| **Coding Assistant** | `codingAssistant` / `CodingAssistant` |
+| **Conversation** | `codingAssistant` / `CodingAssistant` |
 
 Examples of correct usage:
 - Tab id: `'system'` ✓ — not `'iogram'`
@@ -257,11 +257,11 @@ Files and folders can be pinned to the Coding Assistant via the `+` hover menu i
 
 #### Right Panel & Provider/Model Display
 
-The right panel contains three tabs: **Coding Assistant**, **Build**, and **System View**. Each tab can use a different LLM provider and model. The **Provider/Model callout** (showing current provider name and model label) appears above all three tabs *except* the Coding Assistant tab, where the provider and model are set directly within the chat UI and displaying them would be redundant.
+The right panel contains three tabs: **Conversation**, **Build**, and **System View**. Each tab can use a different LLM provider and model. The **Provider/Model callout** (showing current provider name and model label) appears above all three tabs *except* the Conversation tab, where the provider and model are set directly within the chat UI and displaying them would be redundant.
 
 | File | Role |
 |------|------|
-| `client/src/components/layout/RightPanel.tsx` | Conditionally renders the Provider/Model info box only when `activeTab !== 'assistant'`. The callout is hidden for the Coding Assistant tab to avoid redundancy. |
+| `client/src/components/layout/RightPanel.tsx` | Conditionally renders the Provider/Model info box only when `activeTab !== 'assistant'`. The callout is hidden for the Conversation tab to avoid redundancy. |
 
 #### Commit Message Composition and SCM View Mounting
 
@@ -278,18 +278,26 @@ The `git_commit_compose` tool populates the Source Control commit editor through
 
 Completed conversations are automatically saved to disk and surfaced in the empty state so the user can resume them after a browser refresh.
 
-**Storage:** Each conversation is a JSON file at `~/.iodine/<workspace-md5>/conversations/<conversationId>.json`. The workspace hash is the same MD5 used elsewhere in the cache hierarchy. Up to 3 most-recent conversations (by `timestamp`) are returned by the server; there is no automatic pruning of older files beyond what the user explicitly clears.
+**Storage:** Each conversation is a JSON file at `~/.iodine/<workspace-md5>/conversations/<conversationId>.json`. The workspace hash is the same MD5 used elsewhere in the cache hierarchy. Up to 6 most-recent conversations (by `timestamp`) are returned by the server; there is no automatic pruning of older files beyond what the user explicitly clears.
 
-**Empty state UI:** When there are no UI messages and at least one past conversation exists, the chat area shows a "Recent" list instead of the default "Ask about your code" placeholder. Each row displays a formatted timestamp (e.g. "Today at 2:34 PM" or "Aug 6, 2026 at 11:00 AM") and a message count. Clicking a row restores the full conversation. A "Clear all" button removes all saved conversations for the current workspace. Typing and sending a new message starts a fresh conversation with a new ID.
+**Empty state UI:** When there are no UI messages and at least one past conversation exists, the chat area shows a "Recent" list instead of the default placeholder. Each row shows a **summary** (if generated) as the title with the timestamp below, or just the timestamp and message count for conversations without a summary. Clicking a row restores the full conversation. A "Clear all" button removes all saved conversations for the current workspace.
 
-**Save trigger:** Conversation is written to disk inside the `done` SSE handler, after the assistant message is finalized. A nested `setUiMessages(prev => { ...; return prev })` pattern reads the latest state without causing an extra render. Transient flags (`isStreaming`, `pending`, approval `status: 'pending' → 'rejected'`) are stripped via `normalizeForSave()` before writing.
+**Save triggers:**
+- **Normal completion:** written inside the `done` SSE handler after the assistant message is finalised.
+- **Proactive/meeting injection:** `injectProactiveMessage` saves immediately after appending the injected message, so meeting notes and proactive messages survive a page reload.
+- **Network error / server restart mid-turn:** the `catch` block in `sendMessage` saves the partial turn (tool blocks completed so far + error notice) so the conversation is not lost when the server restarts during an agent edit.
+
+Transient flags (`isStreaming`, `pending`, approval `status: 'pending' → 'rejected'`) are stripped via `normalizeForSave()` before writing.
+
+**Conversation summary:** After the 3rd assistant reply (and on any subsequent reply while no summary exists yet), a background call to `POST /api/proactive/conversation-summary` generates a short phrase (5–8 words) describing the conversation. The conversation is re-saved with the `summary` field and the recent list updates. `hasSummaryRef` and `summaryRef` in `useCodingAssistant` track whether the current session already has a summary to avoid duplicate generation. `loadConversation` seeds both refs from the loaded record.
 
 | File | Role |
 |------|------|
-| `client/src/api/conversations.ts` | `fetchConversations(workspacePath)`, `saveConversation(workspacePath, record)`, `clearConversations(workspacePath)` — thin wrappers around the REST API. |
-| `client/src/hooks/useCodingAssistant.ts` | Accepts `workspacePath` as a 3rd parameter. Owns `conversationIdRef` (reset on `clearMessages`, reused on `loadConversation`). Saves on every completed reply. Exposes `loadConversation(record)` and `clearAllConversations()`. |
-| `client/src/components/right/CodingAssistant.tsx` | `pastConversations` state fetched on mount and on workspace change. `handleClearAll` calls `clearAllConversations` and resets local state. Renders conversation list or default placeholder based on `pastConversations.length`. |
-| `server/src/routes/conversations.ts` | `GET /api/conversations?workspacePath=` returns last 3 sorted by timestamp. `POST /api/conversations` writes `<id>.json`. `DELETE /api/conversations?workspacePath=` removes all `.json` files in the workspace's conversations dir. |
+| `client/src/api/conversations.ts` | `fetchConversations(workspacePath)`, `saveConversation(workspacePath, record)`, `clearConversations(workspacePath)` — thin wrappers around the REST API. `ConversationRecord` includes optional `summary?: string`. |
+| `client/src/hooks/useCodingAssistant.ts` | Accepts `workspacePath` as a 3rd parameter. Owns `conversationIdRef` (reset on `clearMessages`, reused on `loadConversation`). `hasSummaryRef` / `summaryRef` track the generated summary. Saves on every completed reply, on `injectProactiveMessage`, and on network error. Exposes `loadConversation(record)` and `clearAllConversations()`. |
+| `client/src/components/right/CodingAssistant.tsx` | `pastConversations` state fetched on mount and on workspace change. `handleClearAll` calls `clearAllConversations` and resets local state. Renders summary (or date + count fallback) in the recent list. |
+| `server/src/routes/conversations.ts` | `GET /api/conversations?workspacePath=` returns last 6 sorted by timestamp. `POST /api/conversations` writes `<id>.json` (accepts optional `summary` field). `DELETE /api/conversations?workspacePath=` removes all `.json` files in the workspace's conversations dir. |
+| `server/src/routes/proactive.ts` | `POST /api/proactive/conversation-summary` — non-streaming single-turn LLM call, max 40 tokens, returns `{ summary: string \| null }`. |
 
 ### Workspace Management
 
@@ -429,15 +437,26 @@ Clicking a node or edge in the System View graph highlights it and opens a botto
 
 #### Terminal (PTY) Lifecycle & Cleanup
 
-Each terminal tab opens a WebSocket to `ws://localhost:3001/terminal?cwd=…&cmd=…`. The server uses **node-pty** to spawn a pseudo-terminal (PTY) for the requested shell. Robust cleanup is critical because `tsx watch` kills and restarts the Node process on every file save, which would otherwise orphan PTY children and leak OS file descriptors until `posix_spawnp` starts failing.
+Each terminal tab opens a WebSocket to `ws://localhost:3001/terminal?cwd=…&cmd=…`. The server uses **node-pty** to spawn a pseudo-terminal (PTY) for the requested shell. Robust cleanup is critical because the dev watcher kills and restarts the Node process on every file save, which would otherwise orphan PTY children and leak OS file descriptors until `posix_spawnp` starts failing.
 
 | File | Role |
 |------|------|
-| `server/src/terminal.ts` | All active PTY instances are tracked in a module-level `activePtys: Set`. SIGTERM, SIGINT, and `process.exit` handlers call `killAllPtys()` (sends SIGKILL) so `tsx watch` restarts fully clean up open shells. Spawn uses `spawnWithRetry`: on failure it waits 250 ms and retries once to handle transient `EAGAIN` errors. `MAX_TERMINALS = 20` cap prevents runaway resource use. PTY instances are removed from the set in both `ptyProc.onExit` and `ws.on('close')` to stay accurate regardless of which side closes first. |
+| `server/src/terminal.ts` | All active PTY instances are tracked in a module-level `activePtys: Set`. SIGTERM, SIGINT, and `process.exit` handlers call `killAllPtys()` (sends SIGKILL) so dev watcher restarts fully clean up open shells. Spawn uses `spawnWithRetry`: on failure it waits 250 ms and retries once to handle transient `EAGAIN` errors. `MAX_TERMINALS = 20` cap prevents runaway resource use. PTY instances are removed from the set in both `ptyProc.onExit` and `ws.on('close')` to stay accurate regardless of which side closes first. |
 
-**Key failure mode:** `posix_spawnp failed` from node-pty is an OS-level `EAGAIN` or similar, most often triggered by accumulated file descriptors from pty processes that were not killed when the dev server restarted. The fix is the SIGTERM/SIGINT handler — when `tsx watch` sends SIGTERM before relaunching, all PTY children are killed before the process exits.
+**Key failure mode:** `posix_spawnp failed` from node-pty is an OS-level `EAGAIN` or similar, most often triggered by accumulated file descriptors from pty processes that were not killed when the dev server restarted. The fix is the SIGTERM/SIGINT handler — when the watcher sends SIGTERM before relaunching, all PTY children are killed before the process exits.
 
 **Shell selection:** `process.env.SHELL` → `/bin/zsh` → `/bin/bash` → `/bin/sh`, with `existsSync` validation at each step.
+
+#### Agent Lock — Deferring Restarts During Active Turns
+
+When the agent edits a server source file mid-turn, a naive watcher would restart the process and kill the SSE stream before subsequent tool calls (`edit_file`, `write_file`) can complete. The lock mechanism prevents this.
+
+| File | Role |
+|------|------|
+| `server/src/routes/agent.ts` | `acquireLock()` writes `AGENT_LOCK_FILE` (`os.tmpdir()/iodine-agent.lock`) at the start of every `/agent/chat` SSE handler; `releaseLock()` deletes it in the `finally` block so it is always cleaned up even on error or abort. |
+| `server/watch-dev.mjs` | Replaces `tsx watch`. Watches `src/**/*.ts` with a 300 ms debounce. On change, polls `AGENT_LOCK_FILE` every second; while it exists the restart is held and a status line is printed. After the lock clears (or after a 2-minute safety timeout), the server process receives SIGTERM and is restarted once it exits. Forwards SIGTERM/SIGINT to the child so `concurrently` can tear down the whole tree cleanly. |
+
+**Dev script:** `server/package.json` `"dev"` runs `node watch-dev.mjs` instead of `tsx watch src/index.ts`.
 
 #### System View — Active File Chip
 
