@@ -584,21 +584,24 @@ export function SourceControlPanel({ workspacePath, onFileOpen, pendingCommitMes
                 rows={3}
                 style={{
                   width: '100%', background: 'var(--color-bg-workbench)',
-                  border: '1px solid var(--color-border)', borderRadius: 4,
-                  color: 'var(--color-text-primary)', fontSize: 12,
-                  padding: '6px 8px', resize: 'vertical', boxSizing: 'border-box',
-                  fontFamily: 'var(--font-ui)', outline: 'none',
+                  border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                  color: 'var(--color-text-primary)', fontSize: 12, lineHeight: 1.45,
+                  padding: '8px 10px', resize: 'vertical', boxSizing: 'border-box',
+                  fontFamily: 'var(--font-ui)', outline: 'none', display: 'block',
+                  transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast)',
                 }}
               />
-              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <button
                   onClick={sc.commit}
                   disabled={!canCommit}
                   style={{
-                    flex: 1, padding: '5px 8px', fontSize: 12, fontWeight: 600,
+                    flex: 1, padding: '6px 14px', fontSize: 12, fontWeight: 600,
                     background: canCommit ? 'var(--color-accent)' : 'var(--color-bg-hover)',
                     color: canCommit ? '#fff' : 'var(--color-text-secondary)',
-                    border: 'none', borderRadius: 4,
+                    border: 'none', borderRadius: 'var(--radius-pill)',
+                    boxShadow: canCommit ? 'var(--shadow-sm)' : 'none',
+                    transition: 'background var(--transition-fast), box-shadow var(--transition-fast)',
                     cursor: canCommit ? 'pointer' : 'default',
                   }}
                 >
@@ -609,9 +612,10 @@ export function SourceControlPanel({ workspacePath, onFileOpen, pendingCommitMes
                     onClick={sc.stageAllChanges}
                     title="Stage all changes"
                     style={{
-                      padding: '5px 10px', fontSize: 12,
+                      padding: '6px 14px', fontSize: 12,
                       background: 'var(--color-bg-hover)', color: 'var(--color-text-primary)',
-                      border: '1px solid var(--color-border)', borderRadius: 4,
+                      border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)',
+                      transition: 'background var(--transition-fast)',
                       cursor: 'pointer', whiteSpace: 'nowrap',
                     }}
                   >

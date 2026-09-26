@@ -197,10 +197,10 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
   return (
     <div
       ref={panelRef}
+      className="panel-card"
       style={{
         width,
         background: 'var(--color-bg-right-panel)',
-        borderLeft: '1px solid var(--color-border)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',

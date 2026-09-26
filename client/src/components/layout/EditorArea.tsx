@@ -474,6 +474,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     return (
       <div
         ref={containerRef}
+        className="panel-card"
         style={{
           flex: 1,
           display: 'flex',

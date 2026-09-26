@@ -472,7 +472,7 @@ export function WorkbenchLayout() {
         height: '100vh',
         width: '100vw',
         overflow: 'hidden',
-        background: 'var(--color-bg-workbench)',
+        background: 'var(--color-bg-app)',
       }}
     >
       {/* Workspace switch confirmation dialog */}
@@ -485,11 +485,11 @@ export function WorkbenchLayout() {
           <div style={{
             background: 'var(--color-bg-sidebar)',
             border: '1px solid var(--color-border)',
-            borderRadius: 6,
+            borderRadius: 'var(--radius-lg)',
             padding: '20px 24px',
             maxWidth: 420,
             width: '90%',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            boxShadow: 'var(--shadow-lg)',
           }}>
             <div style={{ fontSize: 13, color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', marginBottom: 20, lineHeight: 1.6 }}>
               {workspaceConfirm.message}
@@ -542,16 +542,21 @@ export function WorkbenchLayout() {
         onSnoozeUpdate={snoozeUpdate}
       />
 
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      {/* Padding here + the 6px ResizeDividers form the gutters between panel cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', padding: '0 6px 6px' }}>
         {/* Main row: sidebar + editor + right panel */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
           <ActivityBar
             activeView={activeView}
             onViewChange={handleViewChange}
             gitChangeCount={gitChangeCount}
           />
 
-          <div style={{ display: showSidebar ? 'contents' : 'none' }}>
+          <div
+            className="sidebar-group"
+            data-visible={showSidebar}
+            style={{ display: showSidebar ? 'contents' : 'none' }}
+          >
             <Sidebar
               activeView={activeView}
               width={sidebarWidth}
@@ -585,6 +590,7 @@ export function WorkbenchLayout() {
               min={SIDEBAR_MIN}
               max={SIDEBAR_MAX}
               side="left"
+              joined
             />
           </div>
 

@@ -31,7 +31,7 @@ Mentor Mode is Iodine's central experience. It creates a guided walkthrough, ope
 
 Once you have had a few exchanges in the chat, a **Start a meeting** button appears above the input. Click it and Iodine connects you to a live voice session that already knows your conversation history. Talk through the architecture, ask follow-up questions, think out loud — the assistant responds like a senior engineer sitting beside you, not a chatbot reading from a script. When the session ends, the full transcript is dropped back into the chat so the context is never lost and the next message picks up exactly where you left off.
 
-<img src="https://github.com/user-attachments/assets/55a721c6-8990-407f-a343-bdecbdf42b1e" alt="Iodine harness demo" width="100%" />
+<img width="1279" height="689" alt="Iodine harness demo" src="https://github.com/user-attachments/assets/7fbbe29e-9f30-4b1f-8ab4-6e204e36e84d" />
 
 <p align="center">
   More demos on YouTube: <a href="
