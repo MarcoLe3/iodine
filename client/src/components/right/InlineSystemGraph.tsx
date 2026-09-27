@@ -54,14 +54,14 @@ export function InlineSystemGraph({
   };
 
   // Sync selection + pan whenever the active system node changes externally.
-  // Also auto-expand when a match is found.
+  // Intentionally does NOT auto-expand — the panel stays collapsed unless the
+  // user toggles it (the full Iogram tab is available for a larger view).
   useEffect(() => {
     if (!activeSystemNode) return;
     const node = graph.nodes.find(n => n.name === activeSystemNode);
     if (!node) return;
     const sel: GraphSelection = { type: 'node', id: node.id };
     setSelected(sel);
-    setCollapsed(false);
     requestAnimationFrame(() => canvasRef.current?.panToItem(sel));
   }, [activeSystemNode, graph.nodes]);
 
