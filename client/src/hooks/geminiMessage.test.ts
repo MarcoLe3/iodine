@@ -185,6 +185,26 @@ describe('handleGeminiMessage', () => {
       expect(actions[0]).toEqual({ type: 'pushTranscript', entry: { role: 'agent', text: 'goodbye' } });
     });
   });
+
+  describe('interrupted', () => {
+    it('stops playback and flushes the cut-off agent text, keeping the user buffer', () => {
+      const { actions, buffers } = handleGeminiMessage(
+        { serverContent: { interrupted: true } },
+        { userBuf: 'wait', agentBuf: ' so the next step ' },
+        deps,
+      );
+      expect(actions).toEqual([
+        { type: 'stopPlayback' },
+        { type: 'pushTranscript', entry: { role: 'agent', text: 'so the next step (interrupted)' } },
+      ]);
+      expect(buffers).toEqual({ userBuf: 'wait', agentBuf: '' });
+    });
+
+    it('only stops playback when there is no agent text yet', () => {
+      const { actions } = handleGeminiMessage({ serverContent: { interrupted: true } }, empty, deps);
+      expect(actions).toEqual([{ type: 'stopPlayback' }]);
+    });
+  });
 });
 
 describe('speakingAfterAgentEnds', () => {

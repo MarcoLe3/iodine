@@ -138,6 +138,8 @@ export function useLiveMeeting(
 
   const playQueueRef      = useRef<Float32Array[]>([]);
   const isPlayingRef      = useRef(false);
+  // The chunk currently playing, so a barge-in can cut it off mid-chunk.
+  const currentSrcRef     = useRef<AudioBufferSourceNode | null>(null);
   // Analyser tapped on the Gemini playback path — drives the waveform visualisation.
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
 
@@ -152,6 +154,7 @@ export function useLiveMeeting(
       const chunk = playQueueRef.current.shift();
       if (!chunk || !audioCtxRef.current) {
         isPlayingRef.current = false;
+        currentSrcRef.current = null;
         return;
       }
       const c = audioCtxRef.current;
@@ -166,10 +169,26 @@ export function useLiveMeeting(
       } else {
         src.connect(c.destination);
       }
-      src.onended = playNext;
+      src.onended = () => {
+        // A stopped source still fires onended — ignore it if we've moved on.
+        if (currentSrcRef.current !== src) return;
+        playNext();
+      };
+      currentSrcRef.current = src;
       src.start();
     };
     playNext();
+  }, []);
+
+  /** Barge-in: cut off the current chunk and drop everything still queued. */
+  const stopPlayback = useCallback(() => {
+    playQueueRef.current = [];
+    const src = currentSrcRef.current;
+    currentSrcRef.current = null;
+    isPlayingRef.current = false;
+    if (src) {
+      try { src.stop(); } catch { /* already stopped */ }
+    }
   }, []);
 
   // ── Stop / cleanup ────────────────────────────────────────────────────────
@@ -359,6 +378,7 @@ export function useLiveMeeting(
         case 'playAudio':        enqueueAndPlay(base64Pcm16ToFloat32(action.base64)); break;
         case 'pushTranscript':   transcriptRef.current.push(action.entry); break;
         case 'endAgentSpeaking': setSpeaking(speakingAfterAgentEnds); break;
+        case 'stopPlayback':     stopPlayback(); setSpeaking('user'); break;
         case 'runTool': {
           // Execute tool calls asynchronously then send results back over the same WS.
           const { calls } = action;

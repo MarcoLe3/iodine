@@ -50,6 +50,8 @@ export type GeminiAction =
   | { type: 'playAudio'; base64: string }
   | { type: 'pushTranscript'; entry: TranscriptEntry }
   | { type: 'endAgentSpeaking' }
+  /** User barged in: drop any queued/playing agent audio immediately. */
+  | { type: 'stopPlayback' }
   | { type: 'runTool'; calls: ToolCall[] };
 
 export interface GeminiMessageResult {
@@ -221,6 +223,8 @@ type ServerContent = {
   inputTranscription?: { text?: string };
   outputTranscription?: { text?: string };
   turnComplete?: boolean;
+  /** Set by Gemini when the user starts talking over the agent. */
+  interrupted?: boolean;
 };
 
 export function handleGeminiMessage(
@@ -354,6 +358,16 @@ export function handleGeminiMessage(
   // Accumulate transcription text per turn
   if (serverContent?.inputTranscription?.text) userBuf += serverContent.inputTranscription.text;
   if (serverContent?.outputTranscription?.text) agentBuf += serverContent.outputTranscription.text;
+
+  // Barge-in: stop playback now and close out the cut-off agent text so it
+  // doesn't get merged into the next reply.
+  if (serverContent?.interrupted) {
+    actions.push({ type: 'stopPlayback' });
+    if (agentBuf.trim()) {
+      actions.push({ type: 'pushTranscript', entry: { role: 'agent', text: `${agentBuf.trim()} (interrupted)` } });
+      agentBuf = '';
+    }
+  }
 
   // Flush completed turn buffers into the transcript
   if (serverContent?.turnComplete) {
