@@ -75,7 +75,8 @@ export function setupTerminalWebSocket(server: Server): void {
     let args: string[];
     if (process.platform === 'win32') {
       // None of the POSIX shells below exist on Windows; use the system shell.
-      shell = process.env.ComSpec || 'powershell.exe';
+      // Fall back to cmd.exe (not PowerShell) — the /d /s /c args below are cmd-only.
+      shell = process.env.ComSpec || 'cmd.exe';
       args = cmdParam ? ['/d', '/s', '/c', cmdParam] : [];
     } else {
       if (!existsSync(shell)) {

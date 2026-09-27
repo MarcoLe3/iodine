@@ -1,6 +1,18 @@
 import { useRef, useState, useCallback } from 'react';
 import { buildLiveMeetingPrompt } from '../prompts/prompt';
-import { handleGeminiMessage as reduceGeminiMessage, speakingAfterAgentEnds } from './geminiMessage';
+import {
+  handleGeminiMessage as reduceGeminiMessage,
+  speakingAfterAgentEnds,
+  formatReadFileOutput,
+  formatSearchFilesOutput,
+  searchFilePaths,
+  pickDiffJump,
+  formatDiffJumpOutput,
+  formatOpenTabs,
+  type DiffJump,
+  type EditorTabs,
+} from './geminiMessage';
+import { fetchFileContent, fetchFileWithPath, fetchFileTree, fetchFileDiff } from '../api/files';
 
 // WebSocket connections bypass the Vite proxy and hit the backend directly.
 const WS_BASE = import.meta.env.DEV
@@ -75,7 +87,12 @@ export interface UseLiveMeetingReturn {
   error: string | null;
 }
 
-export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript: string) => void): UseLiveMeetingReturn {
+export function useLiveMeeting(
+  provider: string,
+  onTranscriptReady?: (transcript: string) => void,
+  navigateToFile?: (path: string, line?: number) => void,
+  getEditorTabs?: () => EditorTabs,
+): UseLiveMeetingReturn {
   const [isActive, setIsActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [speaking, setSpeaking] = useState<'user' | 'agent' | 'idle'>('idle');
@@ -111,10 +128,18 @@ export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript
   const providerRef = useRef(provider);
   providerRef.current = provider;
 
+  // Stable ref for the navigate callback so the message handler doesn't need to re-register.
+  const navigateToFileRef = useRef(navigateToFile);
+  navigateToFileRef.current = navigateToFile;
+  const getEditorTabsRef = useRef(getEditorTabs);
+  getEditorTabsRef.current = getEditorTabs;
+
   // ── Agent audio playback queue ──────────────────────────────────────────
 
   const playQueueRef      = useRef<Float32Array[]>([]);
   const isPlayingRef      = useRef(false);
+  // The chunk currently playing, so a barge-in can cut it off mid-chunk.
+  const currentSrcRef     = useRef<AudioBufferSourceNode | null>(null);
   // Analyser tapped on the Gemini playback path — drives the waveform visualisation.
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
 
@@ -129,6 +154,7 @@ export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript
       const chunk = playQueueRef.current.shift();
       if (!chunk || !audioCtxRef.current) {
         isPlayingRef.current = false;
+        currentSrcRef.current = null;
         return;
       }
       const c = audioCtxRef.current;
@@ -143,10 +169,26 @@ export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript
       } else {
         src.connect(c.destination);
       }
-      src.onended = playNext;
+      src.onended = () => {
+        // A stopped source still fires onended — ignore it if we've moved on.
+        if (currentSrcRef.current !== src) return;
+        playNext();
+      };
+      currentSrcRef.current = src;
       src.start();
     };
     playNext();
+  }, []);
+
+  /** Barge-in: cut off the current chunk and drop everything still queued. */
+  const stopPlayback = useCallback(() => {
+    playQueueRef.current = [];
+    const src = currentSrcRef.current;
+    currentSrcRef.current = null;
+    isPlayingRef.current = false;
+    if (src) {
+      try { src.stop(); } catch { /* already stopped */ }
+    }
   }, []);
 
   // ── Stop / cleanup ────────────────────────────────────────────────────────
@@ -314,7 +356,14 @@ export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript
     const { buffers, actions } = reduceGeminiMessage(
       msg,
       { userBuf: userTurnBufRef.current, agentBuf: agentTurnBufRef.current },
-      { ctx: contextRef.current, buildPrompt: buildLiveMeetingPrompt },
+      {
+        ctx: contextRef.current,
+        buildPrompt: buildLiveMeetingPrompt,
+        // Only needed for the setup message; read from the workbench at that moment.
+        tabs: msg.type === 'relay-ready' && getEditorTabsRef.current
+          ? formatOpenTabs(getEditorTabsRef.current())
+          : undefined,
+      },
     );
     userTurnBufRef.current = buffers.userBuf;
     agentTurnBufRef.current = buffers.agentBuf;
@@ -329,6 +378,78 @@ export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript
         case 'playAudio':        enqueueAndPlay(base64Pcm16ToFloat32(action.base64)); break;
         case 'pushTranscript':   transcriptRef.current.push(action.entry); break;
         case 'endAgentSpeaking': setSpeaking(speakingAfterAgentEnds); break;
+        case 'stopPlayback':     stopPlayback(); setSpeaking('user'); break;
+        case 'runTool': {
+          // Execute tool calls asynchronously then send results back over the same WS.
+          const { calls } = action;
+          void (async () => {
+            const responses: {
+              id: string;
+              name: string;
+              response: { output: string } | { error: string };
+            }[] = [];
+            for (const call of calls) {
+              try {
+                let output: string;
+                if (call.name === 'search_files') {
+                  const query = call.args.query;
+                  if (typeof query !== 'string' || !query.trim()) {
+                    throw new Error('Missing required "query" argument.');
+                  }
+                  const tree = await fetchFileTree();
+                  output = formatSearchFilesOutput(query, searchFilePaths(tree, query));
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
+                const path = call.args.path;
+                if (typeof path !== 'string' || !path.trim()) {
+                  throw new Error('Missing required "path" argument.');
+                }
+                if (call.name === 'read_file') {
+                  const content = await fetchFileContent(path);
+                  output = formatReadFileOutput(content, call.args.start_line, call.args.end_line);
+                } else if (call.name === 'open_file') {
+                  const navigate = navigateToFileRef.current;
+                  if (!navigate) throw new Error('Editor navigation is not available in this session.');
+                  // Fail hard if the file can't be loaded — never report a fake success.
+                  // Use the server-resolved absolute path so the editor and fetch agree.
+                  const { path: absPath, content } = await fetchFileWithPath(path);
+                  const line = typeof call.args.line === 'number' ? call.args.line : undefined;
+                  let jump: DiffJump | undefined;
+                  if (line === undefined) {
+                    // No explicit line: jump to the main uncommitted change, skipping imports.
+                    // A diff failure (untracked file, not a git repo) must not fail the open.
+                    try {
+                      jump = pickDiffJump((await fetchFileDiff(absPath)).hunks, content);
+                    } catch { /* open at top */ }
+                  }
+                  navigate(absPath, line ?? jump?.line);
+                  output = jump
+                    ? formatDiffJumpOutput(jump)
+                    : `Opened${line ? ` at line ${line}` : ''}.`;
+                } else {
+                  throw new Error(`Unknown tool: ${call.name}`);
+                }
+                responses.push({ id: call.id, name: call.name, response: { output } });
+              } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                responses.push({
+                  id: call.id,
+                  name: call.name,
+                  response: { error: `FAILED: ${message} Do not retry; tell the user it failed.` },
+                });
+              }
+            }
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                toolResponse: {
+                  functionResponses: responses,
+                },
+              }));
+            }
+          })();
+          break;
+        }
       }
     }
   }

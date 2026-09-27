@@ -87,6 +87,8 @@ interface EditorAreaProps {
   meetingMuted?: boolean;
   /** Called when the user clicks the mute button in the meeting card. */
   onMeetingMuteToggle?: () => void;
+  /** When true, editor is joined seamlessly to the right panel. */
+  joinedRight?: boolean;
 }
 
 export interface EditorAreaHandle {
@@ -117,7 +119,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, onSummaryOpen, canGoBack, canGoForward, onGoBack, onGoForward, activeCommitHash, onCommitDiffClose, onCommitCheckout, onCommitDiffAddToContext, activeMeeting, onMeetingClose, meetingAnalyserNode, meetingMicAnalyserNode, meetingSpeaking, meetingMuted, onMeetingMuteToggle }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, onSummaryOpen, canGoBack, canGoForward, onGoBack, onGoForward, activeCommitHash, onCommitDiffClose, onCommitCheckout, onCommitDiffAddToContext, activeMeeting, onMeetingClose, meetingAnalyserNode, meetingMicAnalyserNode, meetingSpeaking, meetingMuted, onMeetingMuteToggle, joinedRight }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -132,6 +134,9 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     // Suppresses scroll-based heading tracking briefly after a programmatic scrollToHeading
     // so the outline doesn't jerk through intermediate positions during smooth scroll.
     const suppressTrackingUntilRef = useRef(0);
+    // Per-tab Vim mode (keyed by file path). In-memory only until a settings page exists.
+    const [vimByPath, setVimByPath] = useState<Record<string, boolean>>({});
+    const vimEnabled = !!activeFile && !!vimByPath[activeFile.path];
 
     const [editorView, setEditorView] = useState<EditorView>('source');
     const [isFolded, setIsFolded] = useState(false);
@@ -391,6 +396,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
     const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && (!!workspacePath || !!activeFile.isExternal) && !activeFile.path.endsWith('.md');
     const showConflictsButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && !activeFile.isExternal && hasConflictMarkers(activeFile.content ?? '');
+    const showVimButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source' && !activeCommitHash;
     const showFoldButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source' && !activeCommitHash;
 
     /** Convert an absolute file path to a workspace-relative path. */
@@ -475,6 +481,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       <div
         ref={containerRef}
         className="panel-card"
+        data-joined-right={joinedRight ? 'true' : undefined}
         style={{
           flex: 1,
           display: 'flex',
@@ -740,6 +747,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                 onContentChange={onContentChange}
                 diffData={diffData}
                 onActivity={onActivity}
+                vimMode={vimEnabled}
                 onEditorMount={editor => {
                   monacoEditorRef.current = editor;
                   // Track Monaco scroll continuously so the position is saved
@@ -772,7 +780,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
           )}
           </div>
 
-          {activeFile && (showConflictsButton || showPreviewButton || showSummaryButton) && (
+          {activeFile && (showConflictsButton || showPreviewButton || showSummaryButton || showVimButton) && (
             <div style={{
               display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4,
               height: 24, flexShrink: 0, padding: '0 8px', boxSizing: 'border-box',
@@ -808,6 +816,15 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
                   }}
                 >
                   {editorView === 'summary' ? 'Source' : hasCachedSummary ? 'View Summary' : 'Generate Summary'}
+                </button>
+              )}
+              {showVimButton && (
+                <button
+                  onClick={() => setVimByPath(prev => ({ ...prev, [activeFile.path]: !prev[activeFile.path] }))}
+                  title={vimEnabled ? 'Disable Vim keybindings for this tab' : 'Enable Vim keybindings for this tab'}
+                  style={{ ...btnStyle, background: vimEnabled ? 'var(--editor-btn-active-bg, #007acc)' : 'var(--editor-btn-neutral-bg, #3a3d41)' }}
+                >
+                  {vimEnabled ? 'Disable Vim' : 'Enable Vim'}
                 </button>
               )}
             </div>

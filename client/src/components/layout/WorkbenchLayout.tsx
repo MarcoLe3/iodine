@@ -17,6 +17,7 @@ import { useProactiveHelp } from '../../hooks/useProactiveHelp';
 import { createIdleChurnSignal } from '../../services/proactiveSignals';
 import { usePanelExpansion, DEFAULT_PANEL_EXPANSION_CONFIG } from '../../hooks/usePanelExpansion';
 import { useLiveMeeting } from '../../hooks/useLiveMeeting';
+import type { EditorTabs } from '../../hooks/geminiMessage';
 import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL } from '../../providers';
 import type { Provider } from '../../providers';
 import type { FileNode, SidebarView } from '../../types';
@@ -138,6 +139,12 @@ export function WorkbenchLayout() {
   const modelRef = useRef(model);
   modelRef.current = model;
 
+  // Stable ref updated after handleNavigateToLine is defined (below); keeps useLiveMeeting's
+  // navigate callback always current without causing a dependency-order issue.
+  const meetingNavigateRef = useRef<((path: string, line?: number) => void) | undefined>(undefined);
+  // Same pattern for open tabs: useOpenFiles is called below, so read through a ref.
+  const meetingTabsRef = useRef<EditorTabs>({ root: null, paths: [], active: null });
+
   const liveMeeting = useLiveMeeting(provider.id, async (transcript) => {
     // Immediate feedback while the summary request runs; replaced in place below.
     const pendingId = rightPanelRef.current?.showPendingProactive('✍️ _Writing up meeting notes…_') ?? undefined;
@@ -165,7 +172,7 @@ export function WorkbenchLayout() {
       { type: 'collapsible', title: 'Meeting transcript', content: transcript },
       { type: 'acknowledge', status: 'pending' },
     ], pendingId);
-  });
+  }, (path: string, line?: number) => meetingNavigateRef.current?.(path, line), () => meetingTabsRef.current);
 
   const pushNav = useCallback((path: string) => {
     setNav(prev => {
@@ -213,6 +220,12 @@ export function WorkbenchLayout() {
     refreshFile,
     setSortedFiles,
   } = useOpenFiles();
+
+  meetingTabsRef.current = {
+    root: workspacePath ?? null,
+    paths: openFiles.filter(f => !f.path.startsWith('http')).map(f => f.path),
+    active: activeFilePath ?? null,
+  };
 
   useFileWatcher(workspacePath, refreshFile);
 
@@ -304,6 +317,7 @@ export function WorkbenchLayout() {
       editorAreaRef.current?.navigateToLine(filePath, line, endLine, startCol, endCol);
     }, 100);
   }, [openFile]);
+  meetingNavigateRef.current = (path: string, line?: number) => handleNavigateToLine(path, line ?? 1);
 
   /** Open a file and request the editor to display its AI summary. */
   const handleFileSummary = useCallback((node: FileNode) => {
@@ -640,15 +654,21 @@ export function WorkbenchLayout() {
             meetingSpeaking={liveMeeting.speaking}
             meetingMuted={liveMeeting.isMuted}
             onMeetingMuteToggle={liveMeeting.toggleMute}
+            joinedRight={showRightPanel}
           />
 
-          <div style={{ display: showRightPanel ? 'contents' : 'none' }}>
+          <div
+            className="right-panel-group"
+            data-visible={showRightPanel}
+            style={{ display: showRightPanel ? 'contents' : 'none' }}
+          >
             <ResizeDivider
               currentWidth={effectiveRightWidth}
               onResize={(w) => { setRightPanelWidth(w); resetExpansion(); }}
               min={RIGHT_MIN}
               max={RIGHT_MAX}
               side="right"
+              joined
             />
             <RightPanel
               ref={rightPanelRef}

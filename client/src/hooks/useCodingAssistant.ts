@@ -162,6 +162,8 @@ export function useCodingAssistant(
       timestamp: Date.now(),
       history: pending.history,
       uiMessages: normalizeForSave(uiMessages),
+      // Carry the summary forward so later saves don't wipe the recent-list label.
+      ...(summaryRef.current ? { summary: summaryRef.current } : {}),
     };
     void saveConversation(pending.workspacePath, record)
       .then(() => {
@@ -831,6 +833,9 @@ export function useCodingAssistant(
     setIsLoading(false);
     setIsWatching(false);
     conversationIdRef.current = uid(); // fresh ID for the next conversation
+    // Drop the previous conversation's label so it isn't stamped onto the new one.
+    hasSummaryRef.current = false;
+    summaryRef.current = undefined;
     setUiMessages([]);
     setHistory([]);
   }, []);

@@ -24,6 +24,17 @@ const LOCK_FILE = join(tmpdir(), 'iodine-agent.lock');
 const LOCK_TIMEOUT_MS = 120_000; // 2 min safety ceiling
 
 let proc = null;
+
+// With `shell: true`, proc is a wrapper shell. On Windows, proc.kill() only kills
+// that cmd.exe and leaves tsx running (holding the port), so kill the whole tree.
+function killTree(child, signal = 'SIGTERM') {
+  if (!child) return;
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    child.kill(signal);
+  }
+}
 let pendingRestart = false;
 let changeTimer = null;
 let pollTimer = null;
@@ -60,9 +71,9 @@ function doRestart() {
   }
   pendingRestart = true;
   if (proc) {
-    proc.kill('SIGTERM');
+    killTree(proc, 'SIGTERM');
     // Force-kill if the process doesn't exit cleanly within 5 s.
-    setTimeout(() => { if (proc) proc.kill('SIGKILL'); }, 5000);
+    setTimeout(() => { if (proc) killTree(proc, 'SIGKILL'); }, 5000);
   } else {
     startServer();
   }
@@ -78,8 +89,8 @@ function scheduleRestart() {
 }
 
 // Forward signals so concurrently/npm can tear down the whole tree cleanly.
-process.on('SIGTERM', () => { proc?.kill('SIGTERM'); process.exit(0); });
-process.on('SIGINT',  () => { proc?.kill('SIGTERM'); process.exit(0); });
+process.on('SIGTERM', () => { killTree(proc); process.exit(0); });
+process.on('SIGINT',  () => { killTree(proc); process.exit(0); });
 
 startServer();
 
