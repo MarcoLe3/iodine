@@ -33,6 +33,8 @@ Once you have had a few exchanges in the chat, a **Start a meeting** button appe
 
 <img width="1279" height="689" alt="Iodine harness demo" src="https://github.com/user-attachments/assets/7fbbe29e-9f30-4b1f-8ab4-6e204e36e84d" />
 
+<a href="https://drive.google.com/file/d/14YRsVyXVAj3iXjwE8YvCgMyMiDSk2_Ng/view?usp=sharing">Full Demo</a>
+
 <p align="center">
   More demos on YouTube: <a href="https://youtube.com/shorts/VeYM4Gd6_Pc?feature=share">Demo 1</a>
   · <a href="https://youtu.be/DFy1F0CQmN8">Demo 2</a> · <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 4</a> · <a href="https://youtu.be/M6C0rk1DwNs">Demo 5</a>
