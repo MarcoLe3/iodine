@@ -284,6 +284,10 @@ export async function pullBranch(): Promise<{ ok: boolean; status: string; messa
   return request<{ ok: boolean; status: string; message?: string; error?: string }>('/api/git/pull', { method: 'POST' });
 }
 
+export async function fetchTags(): Promise<{ ok: boolean; status: string; message?: string; error?: string }> {
+  return request<{ ok: boolean; status: string; message?: string; error?: string }>('/api/git/fetch-tags', { method: 'POST' });
+}
+
 export interface RefGithubUrl {
   githubUrl: string | null;
   refName: string | null;

@@ -745,6 +745,17 @@ router.post('/git/pull', async (req, res) => {
   }
 });
 
+router.post('/git/fetch-tags', async (_req, res) => {
+  if (!rootPath) return res.status(400).json({ error: 'No workspace open' });
+  try {
+    await execFileAsync('git', ['fetch', '--tags'], { cwd: rootPath });
+    return res.json({ ok: true, status: 'success', message: 'Fetched tags' });
+  } catch (err: unknown) {
+    const e = err as { stderr?: string; message: string };
+    return res.status(500).json({ ok: false, status: 'fetch_failed', error: e.stderr ?? e.message });
+  }
+});
+
 // --- Git remote URL for opening on GitHub ---
 
 router.get('/git/remote-url', async (_req, res) => {
