@@ -244,12 +244,21 @@ router.post('/proactive/conversation-summary', async (req, res) => {
       const client = new Anthropic({ apiKey: await loadApiKey() });
       const response = await client.messages.create({
         model,
-        max_tokens: 40,
+        max_tokens: 200,
         system: CONVERSATION_SUMMARY_SYSTEM,
         messages: [{ role: 'user', content: userContent }],
       });
-      const block = response.content[0];
-      if (block?.type === 'text') summary = block.text.trim();
+      summary = response.content
+        .flatMap(b => (b.type === 'text' ? [b.text] : []))
+        .join('')
+        .trim();
+      if (!summary) {
+        console.warn('[conversation-summary] empty Anthropic response', {
+          model,
+          stop_reason: response.stop_reason,
+          blockTypes: response.content.map(b => b.type),
+        });
+      }
 
     } else if (provider === 'openai') {
       const client = new OpenAI({ apiKey: await loadOpenAIKey() });
@@ -274,7 +283,8 @@ router.post('/proactive/conversation-summary', async (req, res) => {
     }
 
     res.json({ summary: summary || null });
-  } catch {
+  } catch (err) {
+    console.error('[conversation-summary] failed', { provider, model, err });
     res.json({ summary: null });
   }
 });
