@@ -515,7 +515,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             {meetingDialog.type === 'confirm-gemini' && <button onClick={() => { const go = meetingDialog.onConfirm; setMeetingDialog(null); go(); }} style={{ background: '#4ec9b0', border: 'none', borderRadius: 999, color: '#1e1e1e', cursor: 'pointer', fontSize: 11, padding: '4px 12px', fontWeight: 600 }}>Continue with Gemini</button>}
           </div>
         </div>}
-        {!meetingActive && !meetingDialog && ['google', 'anthropic', 'openai'].includes(provider.id) && uiMessages.some(m => m.role === 'assistant') && onMeetingStart && <button onClick={() => {
+        {!meetingActive && !meetingDialog && !showConversations && ['google', 'anthropic', 'openai'].includes(provider.id) && uiMessages.some(m => m.role === 'assistant') && onMeetingStart && <button onClick={() => {
           const startMeeting = () => void (async () => {
             const lines: string[] = [];
             for (const msg of uiMessages) {
