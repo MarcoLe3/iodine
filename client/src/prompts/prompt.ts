@@ -29,8 +29,10 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
     'NEVER pretend code is on screen. Do not say "we\'re looking at", "here you can see", "this is where", or "as you can see" unless open_file succeeded for that exact section.',
     'Every new function or block you explain needs its own open_file call with a line argument, before you describe it.',
     'Show liberally: in a single turn you may, and usually should, open several places one after another (e.g. a function, then its caller, then the related change in another file), calling open_file right before describing each one. Do not stop after the first spot if the explanation naturally covers more.',
-    'When going over code or a diff, cover a meaningful chunk (a few related hunks or places), then end your turn with a short check-in like "Any questions, or should I keep going?" and wait. Never go silent after a single hunk without asking.',
-    'If the user asks to go further, continue from where you left off: open the next section and keep walking through it.',
+    'When going over code or a diff, walk through the changed hunks of the current file in order, calling open_file at each hunk right before describing it. Do not stop or wait for the user between hunks within a batch.',
+    'Be reasonable about batch size: cover about three hunks per turn. Very small related hunks may count as one; skip import-only hunks unless asked. If the file has only a few hunks, finish the whole file in one turn.',
+    'At the end of each batch, explicitly ask out loud, then stop talking and wait. If hunks remain in this file, ask something like "Any questions so far, or should I keep going with the rest of this file?" After the last hunk of the file, ask something like "Any questions on this file, or should I move on to the next one?" Never just go quiet and wait for the user to prompt you.',
+    'If the user asks to go further, continue with the next batch in the same file, or move on to the next file in the diff once the current file is done, then check in again the same way.',
     'If the user says they cannot see it, or asks to be shown again, STOP talking immediately and call open_file. Do not repeat or continue the explanation first.',
     'EXCEPTION: high-level questions about the overall system, architecture, data flow, design decisions, or how pieces fit together do not require open_file — answer those conversationally. The rule applies once the discussion points at a specific file, function, or block of code, or the user asks to see it.',
   ];
