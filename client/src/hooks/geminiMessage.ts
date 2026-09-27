@@ -11,6 +11,32 @@ export interface TurnBuffers {
 export interface GeminiMessageDeps {
   ctx: string | null | undefined;
   buildPrompt: (ctx?: string | null) => string;
+  /** Pre-formatted open-tabs block (see formatOpenTabs), appended to the system instruction. */
+  tabs?: string;
+}
+
+/** Snapshot of the editor tabs, as absolute paths from the workbench. */
+export interface EditorTabs {
+  root: string | null;
+  paths: string[];
+  active: string | null;
+}
+
+/** Strip the workspace root so the agent sees paths open_file accepts as-is. */
+export function toWorkspaceRelative(p: string, root: string | null): string {
+  if (!root) return p;
+  const r = root.replace(/[/\\]+$/, '');
+  return p === r ? '.' : p.startsWith(r + '/') || p.startsWith(r + '\\') ? p.slice(r.length + 1) : p;
+}
+
+/** Tell the agent which files are open (and which is active) with exact workspace-relative paths. */
+export function formatOpenTabs(t: EditorTabs): string {
+  if (!t.paths.length) return 'Open editor tabs: none.';
+  const lines = t.paths.map(p => {
+    const rel = toWorkspaceRelative(p, t.root);
+    return p === t.active ? `- ${rel} (active — the user is looking at this)` : `- ${rel}`;
+  });
+  return `Open editor tabs (exact paths — use these directly with open_file/read_file):\n${lines.join('\n')}`;
 }
 
 export type ToolCall = { id: string; name: string; args: Record<string, unknown> };
@@ -114,6 +140,79 @@ export function formatSearchFilesOutput(query: string, matches: string[]): strin
   ].join('\n');
 }
 
+export type DiffHunkLite = { startLine: number; lineCount: number; originalLines?: string[] };
+
+export interface DiffJump {
+  /** Line to scroll to (≥ 1). */
+  line: number;
+  /** One entry per changed section, in file order, for the agent to move between. */
+  sections: { start: number; end: number; header: boolean }[];
+}
+
+/**
+ * Last line (1-based) of the file's leading import/header block: imports
+ * (including multi-line ones), blank lines and comments. 0 if none.
+ */
+export function headerEndLine(content: string): number {
+  const lines = content.split('\n');
+  let end = 0;
+  let inImport = false;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (inImport) {
+      end = i + 1;
+      if (/\bfrom\s+['"]/.test(t) || t.endsWith(';')) inImport = false;
+      continue;
+    }
+    if (/^import\b/.test(t)) {
+      end = i + 1;
+      // Single-line forms: `import x from '…'`, `import '…'`, or ending in `;`.
+      inImport = !(/\bfrom\s+['"]/.test(t) || /^import\s+['"]/.test(t) || t.endsWith(';'));
+      continue;
+    }
+    if (t === '' || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*')) continue;
+    break;
+  }
+  return end;
+}
+
+/**
+ * Where open_file should land when no line is given: the "meat" of the change.
+ * Hunks entirely inside the import header are skipped; among the rest the
+ * biggest (added + removed lines) wins, earliest on ties. Falls back to the
+ * first hunk if every change is in the header. Undefined when nothing changed.
+ */
+export function pickDiffJump(hunks: DiffHunkLite[] | undefined, content: string): DiffJump | undefined {
+  if (!hunks?.length) return undefined;
+  const headerEnd = headerEndLine(content);
+  const sorted = [...hunks].sort((a, b) => a.startLine - b.startLine);
+  const sections = sorted.map(h => {
+    const start = Math.max(1, h.startLine);
+    const end = Math.max(start, h.startLine + h.lineCount - 1);
+    return { start, end, header: end <= headerEnd, size: h.lineCount + (h.originalLines?.length ?? 0) };
+  });
+  const body = sections.filter(s => !s.header);
+  const best = body.length
+    ? body.reduce((a, b) => (b.size > a.size ? b : a))
+    : sections[0];
+  return {
+    line: best.start,
+    sections: sections.map(({ start, end, header }) => ({ start, end, header })),
+  };
+}
+
+/** Tool output for open_file when it jumped via the diff. Keeps paths out so the agent doesn't repeat them. */
+export function formatDiffJumpOutput(jump: DiffJump): string {
+  const list = jump.sections
+    .slice(0, 8)
+    .map(s => `${s.start === s.end ? s.start : `${s.start}-${s.end}`}${s.header ? ' (imports)' : ''}`)
+    .join(', ');
+  const more = jump.sections.length > 8 ? `, and ${jump.sections.length - 8} more` : '';
+  return `Opened at line ${jump.line}, the main change in the git diff. ` +
+    `Changed sections: ${list}${more}. ` +
+    'To show another section, call open_file again with that line.';
+}
+
 export const GEMINI_LIVE_MODEL = 'models/gemini-3.8-live';
 export const GEMINI_VOICE = 'Aoede';
 
@@ -149,7 +248,13 @@ export function handleGeminiMessage(
         payload: {
           setup: {
             model: GEMINI_LIVE_MODEL,
-            systemInstruction: { parts: [{ text: deps.buildPrompt(deps.ctx) }] },
+            systemInstruction: {
+              parts: [{
+                text: deps.tabs
+                  ? `${deps.buildPrompt(deps.ctx)}\n\n[OPEN TABS]\n${deps.tabs}`
+                  : deps.buildPrompt(deps.ctx),
+              }],
+            },
             generationConfig: {
               responseModalities: ['AUDIO'],
               speechConfig: {
@@ -162,7 +267,7 @@ export function handleGeminiMessage(
               functionDeclarations: [
                 {
                   name: 'read_file',
-                  description: 'Read a file from the workspace. Use to answer specific questions about code. Always announce what you are about to read before calling this.',
+                  description: 'Read a file from the workspace. Use to answer specific questions about code. Call it silently — do not announce it.',
                   parameters: {
                     type: 'OBJECT',
                     properties: {
@@ -175,12 +280,12 @@ export function handleGeminiMessage(
                 },
                 {
                   name: 'open_file',
-                  description: 'Open a file in the editor and optionally jump to a specific line. Use when you want the user to see a particular piece of code. Always say which file you are opening.',
+                  description: 'Open a file in the editor and optionally jump to a specific line. Use when you want the user to see a particular piece of code. Do not narrate the call (no "opening X and scrolling to line N") — just talk about the code once it is on screen.',
                   parameters: {
                     type: 'OBJECT',
                     properties: {
                       path: { type: 'STRING', description: 'Workspace-relative path' },
-                      line: { type: 'INTEGER', description: 'Line number to highlight (optional)' },
+                      line: { type: 'INTEGER', description: 'Line number to highlight (optional). If omitted and the file has uncommitted changes, the editor scrolls to the first changed line.' },
                     },
                     required: ['path'],
                   },

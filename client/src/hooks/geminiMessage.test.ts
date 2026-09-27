@@ -8,6 +8,9 @@ import {
   formatSearchFilesOutput,
   SEARCH_FILES_MAX_RESULTS,
   type SearchTreeNode,
+  headerEndLine,
+  pickDiffJump,
+  formatDiffJumpOutput,
   GEMINI_LIVE_MODEL,
   GEMINI_VOICE,
   type TurnBuffers,
@@ -266,6 +269,69 @@ describe('searchFilePaths', () => {
 
   it('ignores directories', () => {
     expect(searchFilePaths(tree, 'server')).not.toContain('server');
+  });
+});
+
+const src = [
+  "import { a } from './a';",   // 1
+  'import {',                   // 2
+  '  b,',                       // 3
+  '  c,',                       // 4
+  "} from './b';",              // 5
+  '',                           // 6
+  '// helper',                  // 7
+  'export function f() {',      // 8
+  ...Array.from({ length: 40 }, (_, i) => `  line${i};`), // 9–48
+  '}',                          // 49
+].join('\n');
+
+describe('headerEndLine', () => {
+  it('covers single- and multi-line imports but not code', () => {
+    expect(headerEndLine(src)).toBe(5);
+  });
+
+  it('returns 0 when there are no imports', () => {
+    expect(headerEndLine('const x = 1;')).toBe(0);
+  });
+});
+
+describe('pickDiffJump', () => {
+  it('returns undefined when there are no hunks', () => {
+    expect(pickDiffJump(undefined, src)).toBeUndefined();
+    expect(pickDiffJump([], src)).toBeUndefined();
+  });
+
+  it('skips an import-only hunk and lands on the code change', () => {
+    const jump = pickDiffJump([{ startLine: 3, lineCount: 2 }, { startLine: 20, lineCount: 1 }], src);
+    expect(jump?.line).toBe(20);
+    expect(jump?.sections).toEqual([
+      { start: 3, end: 4, header: true },
+      { start: 20, end: 20, header: false },
+    ]);
+  });
+
+  it('picks the largest body hunk, counting removed lines, earliest on ties', () => {
+    expect(pickDiffJump([
+      { startLine: 12, lineCount: 1 },
+      { startLine: 30, lineCount: 1, originalLines: ['x', 'y', 'z'] },
+    ], src)?.line).toBe(30);
+    expect(pickDiffJump([{ startLine: 40, lineCount: 2 }, { startLine: 15, lineCount: 2 }], src)?.line).toBe(15);
+  });
+
+  it('falls back to the first hunk when every change is in the header, clamping line 0', () => {
+    expect(pickDiffJump([{ startLine: 4, lineCount: 1 }, { startLine: 0, lineCount: 0 }], src)?.line).toBe(1);
+  });
+});
+
+describe('formatDiffJumpOutput', () => {
+  it('lists sections, marks imports, and never includes a path', () => {
+    const out = formatDiffJumpOutput({
+      line: 20,
+      sections: [{ start: 3, end: 4, header: true }, { start: 20, end: 20, header: false }],
+    });
+    expect(out).toContain('Opened at line 20');
+    expect(out).toContain('3-4 (imports), 20');
+    expect(out).not.toMatch(/\//);
   });
 });
 

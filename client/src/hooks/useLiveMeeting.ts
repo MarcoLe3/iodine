@@ -6,8 +6,13 @@ import {
   formatReadFileOutput,
   formatSearchFilesOutput,
   searchFilePaths,
+  pickDiffJump,
+  formatDiffJumpOutput,
+  formatOpenTabs,
+  type DiffJump,
+  type EditorTabs,
 } from './geminiMessage';
-import { fetchFileContent, fetchFileWithPath, fetchFileTree } from '../api/files';
+import { fetchFileContent, fetchFileWithPath, fetchFileTree, fetchFileDiff } from '../api/files';
 
 // WebSocket connections bypass the Vite proxy and hit the backend directly.
 const WS_BASE = import.meta.env.DEV
@@ -86,6 +91,7 @@ export function useLiveMeeting(
   provider: string,
   onTranscriptReady?: (transcript: string) => void,
   navigateToFile?: (path: string, line?: number) => void,
+  getEditorTabs?: () => EditorTabs,
 ): UseLiveMeetingReturn {
   const [isActive, setIsActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -125,6 +131,8 @@ export function useLiveMeeting(
   // Stable ref for the navigate callback so the message handler doesn't need to re-register.
   const navigateToFileRef = useRef(navigateToFile);
   navigateToFileRef.current = navigateToFile;
+  const getEditorTabsRef = useRef(getEditorTabs);
+  getEditorTabsRef.current = getEditorTabs;
 
   // ── Agent audio playback queue ──────────────────────────────────────────
 
@@ -329,7 +337,14 @@ export function useLiveMeeting(
     const { buffers, actions } = reduceGeminiMessage(
       msg,
       { userBuf: userTurnBufRef.current, agentBuf: agentTurnBufRef.current },
-      { ctx: contextRef.current, buildPrompt: buildLiveMeetingPrompt },
+      {
+        ctx: contextRef.current,
+        buildPrompt: buildLiveMeetingPrompt,
+        // Only needed for the setup message; read from the workbench at that moment.
+        tabs: msg.type === 'relay-ready' && getEditorTabsRef.current
+          ? formatOpenTabs(getEditorTabsRef.current())
+          : undefined,
+      },
     );
     userTurnBufRef.current = buffers.userBuf;
     agentTurnBufRef.current = buffers.agentBuf;
@@ -378,10 +393,20 @@ export function useLiveMeeting(
                   if (!navigate) throw new Error('Editor navigation is not available in this session.');
                   // Fail hard if the file can't be loaded — never report a fake success.
                   // Use the server-resolved absolute path so the editor and fetch agree.
-                  const { path: absPath } = await fetchFileWithPath(path);
+                  const { path: absPath, content } = await fetchFileWithPath(path);
                   const line = typeof call.args.line === 'number' ? call.args.line : undefined;
-                  navigate(absPath, line);
-                  output = `Opened ${path}${line ? ` at line ${line}` : ''}.`;
+                  let jump: DiffJump | undefined;
+                  if (line === undefined) {
+                    // No explicit line: jump to the main uncommitted change, skipping imports.
+                    // A diff failure (untracked file, not a git repo) must not fail the open.
+                    try {
+                      jump = pickDiffJump((await fetchFileDiff(absPath)).hunks, content);
+                    } catch { /* open at top */ }
+                  }
+                  navigate(absPath, line ?? jump?.line);
+                  output = jump
+                    ? formatDiffJumpOutput(jump)
+                    : `Opened${line ? ` at line ${line}` : ''}.`;
                 } else {
                   throw new Error(`Unknown tool: ${call.name}`);
                 }

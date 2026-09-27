@@ -854,7 +854,11 @@ The waveform visualises Gemini's audio output, not the user's mic.
 |------|-----------|
 | `search_files(query)` | Walks `fetchFileTree()` client-side (no server route). Every query word must appear in the path, case/punctuation-insensitive, so spoken names like "gemini message" match `geminiMessage.ts`. Exact filename matches first, capped at 10, returns workspace-relative paths. Output tells the agent to confirm a single match and read multiple matches one at a time. Limited by the tree depth (6 levels). |
 | `read_file(path, start_line?, end_line?)` | `fetchFileContent` + `formatReadFileOutput`, always capped at 200 lines. |
-| `open_file(path, line?)` | Fetches via `fetchFileWithPath` first and **fails hard** if it can't load; then calls the editor navigate callback with the **absolute path returned by the server**, so fetch and navigation always agree. |
+| `open_file(path, line?)` | Fetches via `fetchFileWithPath` first and **fails hard** if it can't load; then calls the editor navigate callback with the **absolute path returned by the server**, so fetch and navigation always agree. With no `line`, it jumps to the main uncommitted change (see **Diff jump**). The result never echoes the path (it would get read aloud). |
+
+**Diff jump** (pure helpers in `geminiMessage.ts`): `headerEndLine(content)` finds where the leading imports/comments end (multi-line imports included). `pickDiffJump(hunks, content)` picks the largest hunk outside that header (added + removed lines, earlier wins ties), falling back to the first hunk if all changes are imports. `formatDiffJumpOutput` lists every changed section (e.g. `3-4 (imports), 20-35, 88`) so the agent can go to "next change" itself. A `fetchFileDiff` failure (untracked file, no repo) opens at the top instead of failing.
+
+**Open tabs in context:** on `relay-ready`, the hook reads the workbench's open tabs (`getEditorTabs`) and passes `formatOpenTabs(...)` as `deps.tabs`; the prompt gets an `[OPEN TABS]` block with exact paths and the active tab marked. Tabs are captured once at meeting start — files opened mid-call aren't reflected.
 
 **Failure contract:** any tool error is returned as `response: { error: "FAILED: … Do not retry; tell the user it failed." }`, never as an `output` string. Tools must never report success they haven't verified — an unconditional "Opened …" caused a retry loop and hallucinated file contents.
 
@@ -862,11 +866,17 @@ The waveform visualises Gemini's audio output, not the user's mic.
 
 **Prompt rules for file selection** (`prompt.ts` `tools` paragraph):
 1. No file named or the sentence cut off → ask which file; call no tool.
-2. Vague name → guess from the git diff first, then files mentioned in the conversation; ask "Do you mean X?" and wait for a yes.
-3. Declined or no guess → say it will search, then call `search_files` with key words (transcription mishears extensions, e.g. "file.txt" for "files.ts").
-4. Multiple matches → offer one at a time, pausing for yes/no. Pausing is prompt-enforced only.
+2. File in `[OPEN TABS]` or full path spoken → open it directly, no confirmation. Never pass a bare filename to `open_file`.
+3. Vague name → guess from open tabs, then the git diff, then files mentioned in the conversation; ask "Do you mean X?" and wait for a yes.
+4. Declined or no guess → say it will search, then call `search_files` with key words (transcription mishears extensions, e.g. "file.txt" for "files.ts").
+5. Multiple matches → offer one at a time, pausing for yes/no. Pausing is prompt-enforced only.
 
-The prompt also states the tools are real (earlier context claiming otherwise is outdated) and forbids describing a file not read in this call. Diff-first guessing depends on what `ctx` contains.
+**Prompt rules for showing code and speaking:**
+- "Read / see / show me" a file means `open_file`; scroll / jump / next change means `open_file` with `line`. `read_file` is only for the agent's own understanding and is used silently.
+- Tool calls are silent by default. The agent speaks about a tool only to confirm an ambiguous file, offer candidates, announce a search after a wrong guess, or report a failure. It still names the file (short name) when switching files.
+- A full path is said aloud at most once, when confirming; short names after that. No line numbers unless asked.
+
+The prompt also states the tools are real (earlier context claiming otherwise is outdated) and forbids describing a file not read in this call.
 
 ## Implementation Notes
 
