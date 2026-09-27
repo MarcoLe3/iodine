@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import { buildLiveMeetingPrompt } from '../prompts/prompt';
+import { handleGeminiMessage as reduceGeminiMessage, speakingAfterAgentEnds } from './geminiMessage';
 
 // WebSocket connections bypass the Vite proxy and hit the backend directly.
 const WS_BASE = import.meta.env.DEV
@@ -308,87 +309,27 @@ export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript
 
   // ── Gemini message handler ─────────────────────────────────────────────────
 
+  // Decision logic lives in ./geminiMessage (pure + unit-tested); this just executes the actions.
   function handleGeminiMessage(msg: Record<string, unknown>, ws: WebSocket) {
-    // Relay error (e.g. missing API key)
-    if (msg.type === 'error') {
-      setError((msg.message as string) ?? 'Meeting relay error');
-      stop();
-      return;
-    }
+    const { buffers, actions } = reduceGeminiMessage(
+      msg,
+      { userBuf: userTurnBufRef.current, agentBuf: agentTurnBufRef.current },
+      { ctx: contextRef.current, buildPrompt: buildLiveMeetingPrompt },
+    );
+    userTurnBufRef.current = buffers.userBuf;
+    agentTurnBufRef.current = buffers.agentBuf;
 
-    // Relay ready — send the Gemini Live setup message
-    if (msg.type === 'relay-ready') {
-      const ctx = contextRef.current;
-      ws.send(JSON.stringify({
-        setup: {
-          model: 'models/gemini-3.8-live',
-          systemInstruction: {
-            parts: [{
-              text: buildLiveMeetingPrompt(ctx),
-            }],
-          },
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } },
-            },
-          },
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-        },
-      }));
-      return;
-    }
-
-    // Gemini setup complete — safe to start sending audio.
-    // Send a silent trigger so Gemini opens with its intro without waiting for the user.
-    if ('setupComplete' in msg) {
-      readyRef.current = true;
-      ws.send(JSON.stringify({
-        clientContent: {
-          turns: [{ role: 'user', parts: [{ text: 'hi' }] }],
-          turnComplete: true,
-        },
-      }));
-      return;
-    }
-
-    // Agent audio data + transcription
-    const serverContent = msg.serverContent as {
-      modelTurn?: { parts?: { inlineData?: { data?: string } }[] };
-      inputTranscription?:  { text?: string };
-      outputTranscription?: { text?: string };
-      turnComplete?: boolean;
-    } | undefined;
-
-    if (serverContent?.modelTurn?.parts) {
-      for (const part of serverContent.modelTurn.parts) {
-        if (part.inlineData?.data) {
-          setSpeaking('agent');
-          enqueueAndPlay(base64Pcm16ToFloat32(part.inlineData.data));
-        }
+    for (const action of actions) {
+      switch (action.type) {
+        case 'send':             ws.send(JSON.stringify(action.payload)); break;
+        case 'setError':         setError(action.message); break;
+        case 'stop':             stop(); break;
+        case 'markReady':        readyRef.current = true; break;
+        case 'setSpeakingAgent': setSpeaking('agent'); break;
+        case 'playAudio':        enqueueAndPlay(base64Pcm16ToFloat32(action.base64)); break;
+        case 'pushTranscript':   transcriptRef.current.push(action.entry); break;
+        case 'endAgentSpeaking': setSpeaking(speakingAfterAgentEnds); break;
       }
-    }
-
-    // Accumulate transcription text per turn
-    if (serverContent?.inputTranscription?.text) {
-      userTurnBufRef.current += serverContent.inputTranscription.text;
-    }
-    if (serverContent?.outputTranscription?.text) {
-      agentTurnBufRef.current += serverContent.outputTranscription.text;
-    }
-
-    if (serverContent?.turnComplete) {
-      // Flush completed turn buffers into the transcript
-      if (userTurnBufRef.current.trim()) {
-        transcriptRef.current.push({ role: 'user',  text: userTurnBufRef.current.trim() });
-        userTurnBufRef.current = '';
-      }
-      if (agentTurnBufRef.current.trim()) {
-        transcriptRef.current.push({ role: 'agent', text: agentTurnBufRef.current.trim() });
-        agentTurnBufRef.current = '';
-      }
-      setSpeaking(s => s === 'agent' ? 'idle' : s);
     }
   }
 
