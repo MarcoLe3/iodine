@@ -5,7 +5,7 @@ import os from 'os';
 import crypto from 'crypto';
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
-import { buildTree, readFileContent, writeFileContent, readExternalFile, writeExternalFile } from '../services/fileSystem';
+import { buildTree, readFileContent, writeFileContent, readExternalFile, writeExternalFile, resolveWorkspacePath } from '../services/fileSystem';
 import { rootPath, setRootPath, clearRootPath } from '../state';
 
 const execAsync = promisify(exec);
@@ -235,8 +235,9 @@ router.get('/files/content', async (req, res) => {
     return res.status(400).json({ error: 'path query param is required' });
   }
   try {
-    const content = await readFileContent(filePath, rootPath);
-    return res.json({ path: filePath, content, encoding: 'utf-8' });
+    const absPath = resolveWorkspacePath(filePath, rootPath);
+    const content = await readFileContent(absPath, rootPath);
+    return res.json({ path: absPath, content, encoding: 'utf-8' });
   } catch (err: unknown) {
     const e = err as NodeJS.ErrnoException & { code?: string };
     if (e.code === 'OUTSIDE_ROOT') return res.status(400).json({ error: e.message });

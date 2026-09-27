@@ -818,7 +818,9 @@ A real-time bidirectional voice session powered by the Gemini Live API (BidiGene
 
 | File | Role |
 |------|------|
-| `client/src/hooks/useLiveMeeting.ts` | Core hook. Manages mic capture (`ScriptProcessorNode`), PCM resampling (48 kHz → 16 kHz), Gemini relay WebSocket, output playback queue, output `AnalyserNode` for waveform, and transcript accumulation. `start(context?)` accepts the prior conversation as a string, stores it in `contextRef`, and sends it as `systemInstruction` on `relay-ready`. After `setupComplete` a silent `clientContent: { turns: [{role:'user', parts:[{text:'start'}]}] }` triggers Gemini's opening greeting. `stop()` formats accumulated transcript entries and calls `onTranscriptReady`. |
+| `client/src/hooks/useLiveMeeting.ts` | Core hook. Manages mic capture (`ScriptProcessorNode`), PCM resampling (48 kHz → 16 kHz), Gemini relay WebSocket, output playback queue, output `AnalyserNode` for waveform, and transcript accumulation. `start(context?)` accepts the prior conversation as a string and stores it in `contextRef`. Incoming relay messages go to the pure `handleGeminiMessage` in `geminiMessage.ts`; the hook only executes the returned actions and runs voice-agent tools (see **Live Meeting — Message Handling & Voice Tools**). `stop()` formats accumulated transcript entries and calls `onTranscriptReady`. |
+| `client/src/hooks/geminiMessage.ts` | Pure message logic, no WebSocket/React/audio. Builds the setup payload (model, prompt, voice, transcription flags, tool declarations), handles `setupComplete` (silent `'hi'` trigger for the opening greeting), audio parts, transcript buffering, `turnComplete` flush and `toolCall`. Also exports tool helpers `formatReadFileOutput`, `searchFilePaths`, `formatSearchFilesOutput`, and `speakingAfterAgentEnds`. Tested in `geminiMessage.test.ts`. |
+| `client/src/prompts/prompt.ts` | `buildLiveMeetingPrompt(ctx?)` — the agent's system instruction. Shared `tone`, `language` and `tools` paragraphs are used by both the with-context and fallback variants. |
 | `client/src/components/editor/LiveMeetingCard.tsx` | Floating card (240×148 px, `position:absolute`). Defaults to the bottom-right of the editor container via `useLayoutEffect`. Draggable via window-level `mousemove`/`mouseup` listeners. Canvas waveform: `getByteTimeDomainData` sampled at ~80 points per frame, smoothed with the quadratic bezier midpoint method, stroked with a vertical monochrome gradient (transparent → white → transparent). Idle state: animated sine wave using `Date.now()`. |
 | `server/src/meeting.ts` | WebSocket relay at `/meeting/relay`. Connects to the Gemini Live `v1beta` BidiGenerateContent endpoint, forwards text frames as text and binary frames as binary. Tracks active relay sockets for SIGTERM/SIGINT cleanup. |
 | `client/src/components/layout/EditorArea.tsx` | Renders `<LiveMeetingCard>` as `position:absolute; inset:0; zIndex:10` overlay when `activeMeeting` is true. |
@@ -838,6 +840,33 @@ The waveform visualises Gemini's audio output, not the user's mic.
 **Chat freeze during meeting:** All interactive chat controls are disabled while `meetingActive` is true. The Conversations list is closed automatically, and switching to Build or Iogram tabs is prevented.
 
 **Provider restriction:** Google only. Attempting to start with a different provider surfaces an error in the chat input area.
+
+### Live Meeting — Message Handling & Voice Tools
+
+**Pure handler + actions:** `handleGeminiMessage(msg, buffers, deps)` returns `{ buffers, actions }`. Actions are data only (`send`, `setError`, `stop`, `markReady`, `setSpeakingAgent`, `playAudio`, `pushTranscript`, `endAgentSpeaking`, `runTool`); `useLiveMeeting` executes them. Keep new message branches in the pure function and cover them in `geminiMessage.test.ts` — do not add logic to the hook's action switch beyond executing effects.
+
+- `playAudio` carries raw base64; the hook decodes it (keeps audio APIs out of tests).
+- `endAgentSpeaking` maps to `setSpeaking(speakingAfterAgentEnds)`, which only clears `'agent'` → `'idle'` and never overwrites `'user'`.
+
+**Voice tools** (declared in the setup message, executed in the hook's `runTool` case, answered with `toolResponse.functionResponses`):
+
+| Tool | Behaviour |
+|------|-----------|
+| `search_files(query)` | Walks `fetchFileTree()` client-side (no server route). Every query word must appear in the path, case/punctuation-insensitive, so spoken names like "gemini message" match `geminiMessage.ts`. Exact filename matches first, capped at 10, returns workspace-relative paths. Output tells the agent to confirm a single match and read multiple matches one at a time. Limited by the tree depth (6 levels). |
+| `read_file(path, start_line?, end_line?)` | `fetchFileContent` + `formatReadFileOutput`, always capped at 200 lines. |
+| `open_file(path, line?)` | Fetches via `fetchFileWithPath` first and **fails hard** if it can't load; then calls the editor navigate callback with the **absolute path returned by the server**, so fetch and navigation always agree. |
+
+**Failure contract:** any tool error is returned as `response: { error: "FAILED: … Do not retry; tell the user it failed." }`, never as an `output` string. Tools must never report success they haven't verified — an unconditional "Opened …" caused a retry loop and hallucinated file contents.
+
+**Path resolution:** `GET /api/files/content` resolves relative paths against the workspace root via `resolveWorkspacePath` (`server/src/services/fileSystem.ts`) and still enforces `OUTSIDE_ROOT`. Without this, relative paths resolved against the server's cwd and failed with "File not found". Tests: `server/tests/fileSystem.test.ts`.
+
+**Prompt rules for file selection** (`prompt.ts` `tools` paragraph):
+1. No file named or the sentence cut off → ask which file; call no tool.
+2. Vague name → guess from the git diff first, then files mentioned in the conversation; ask "Do you mean X?" and wait for a yes.
+3. Declined or no guess → say it will search, then call `search_files` with key words (transcription mishears extensions, e.g. "file.txt" for "files.ts").
+4. Multiple matches → offer one at a time, pausing for yes/no. Pausing is prompt-enforced only.
+
+The prompt also states the tools are real (earlier context claiming otherwise is outdated) and forbids describing a file not read in this call. Diff-first guessing depends on what `ctx` contains.
 
 ## Implementation Notes
 

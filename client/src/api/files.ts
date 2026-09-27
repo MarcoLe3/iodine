@@ -37,8 +37,12 @@ export async function fetchFileTree(): Promise<FileNode> {
 }
 
 export async function fetchFileContent(path: string): Promise<string> {
-  const data = await request<{ content: string }>(`/api/files/content?path=${encodeURIComponent(path)}`);
-  return data.content;
+  return (await fetchFileWithPath(path)).content;
+}
+
+/** Like fetchFileContent, but also returns the server-resolved absolute path. */
+export async function fetchFileWithPath(path: string): Promise<{ path: string; content: string }> {
+  return request<{ path: string; content: string }>(`/api/files/content?path=${encodeURIComponent(path)}`);
 }
 
 export async function deleteNode(nodePath: string): Promise<void> {

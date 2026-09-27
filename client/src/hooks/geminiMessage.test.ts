@@ -4,6 +4,10 @@ import {
   speakingAfterAgentEnds,
   formatReadFileOutput,
   READ_FILE_MAX_LINES,
+  searchFilePaths,
+  formatSearchFilesOutput,
+  SEARCH_FILES_MAX_RESULTS,
+  type SearchTreeNode,
   GEMINI_LIVE_MODEL,
   GEMINI_VOICE,
   type TurnBuffers,
@@ -47,6 +51,7 @@ describe('handleGeminiMessage', () => {
               functionDeclarations: [
                 expect.objectContaining({ name: 'read_file' }),
                 expect.objectContaining({ name: 'open_file' }),
+                expect.objectContaining({ name: 'search_files' }),
               ],
             }],
           },
@@ -218,5 +223,81 @@ describe('formatReadFileOutput', () => {
 
   it('ignores invalid start/end values', () => {
     expect(formatReadFileOutput('a\nb', 'x', -3)).toBe('1: a\n2: b');
+  });
+});
+
+const file = (path: string): SearchTreeNode => ({
+  name: path.split('/').pop()!, path, type: 'file', children: null,
+});
+const dir = (path: string, children: SearchTreeNode[]): SearchTreeNode => ({
+  name: path.split('/').pop()!, path, type: 'directory', children,
+});
+
+const tree = dir('/ws', [
+  dir('/ws/client', [
+    file('/ws/client/src/api/files.ts'),
+    file('/ws/client/src/hooks/geminiMessage.ts'),
+    file('/ws/client/src/hooks/geminiMessage.test.ts'),
+  ]),
+  dir('/ws/server', [
+    file('/ws/server/src/routes/files.ts'),
+    file('/ws/server/src/services/fileSystem.ts'),
+  ]),
+]);
+
+describe('searchFilePaths', () => {
+  it('matches spoken names and returns workspace-relative paths', () => {
+    expect(searchFilePaths(tree, 'gemini message')[0]).toBe('client/src/hooks/geminiMessage.ts');
+  });
+
+  it('returns every candidate for an ambiguous name, exact names first', () => {
+    const hits = searchFilePaths(tree, 'files.ts');
+    expect(hits.slice(0, 2).sort()).toEqual(['client/src/api/files.ts', 'server/src/routes/files.ts']);
+  });
+
+  it('can narrow with directory words', () => {
+    expect(searchFilePaths(tree, 'api files')).toEqual(['client/src/api/files.ts']);
+  });
+
+  it('returns nothing for an empty or unmatched query', () => {
+    expect(searchFilePaths(tree, '   ')).toEqual([]);
+    expect(searchFilePaths(tree, 'nonexistent')).toEqual([]);
+  });
+
+  it('ignores directories', () => {
+    expect(searchFilePaths(tree, 'server')).not.toContain('server');
+  });
+});
+
+describe('formatSearchFilesOutput', () => {
+  it('returns the single path and asks for confirmation when unambiguous', () => {
+    const out = formatSearchFilesOutput('x', ['a/b.ts']);
+    expect(out).toContain('1 match: a/b.ts');
+    expect(out).toContain('Confirm with the user');
+  });
+
+  it('tells the agent to offer candidates one at a time with pauses', () => {
+    const out = formatSearchFilesOutput('files', ['a/files.ts', 'b/files.ts']);
+    expect(out).toContain('one at a time');
+    expect(out).toContain('pausing after each');
+  });
+
+  it('tells the agent to ask the user when ambiguous', () => {
+    const out = formatSearchFilesOutput('files', ['a/files.ts', 'b/files.ts']);
+    expect(out).toContain('ask the user which one');
+    expect(out).toContain('a/files.ts');
+    expect(out).toContain('b/files.ts');
+  });
+
+  it(`caps the list at ${SEARCH_FILES_MAX_RESULTS}`, () => {
+    const many = Array.from({ length: SEARCH_FILES_MAX_RESULTS + 5 }, (_, i) => `f${i}.ts`);
+    const out = formatSearchFilesOutput('f', many);
+    expect(out).toContain('f0.ts');
+    expect(out).not.toContain(`f${SEARCH_FILES_MAX_RESULTS}.ts`);
+    expect(out).toContain('5 more');
+  });
+
+  it('reports no matches clearly', () => {
+    expect(formatSearchFilesOutput('zzz', [])).toContain('No files matched');
   });
 });

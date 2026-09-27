@@ -1,7 +1,13 @@
 import { useRef, useState, useCallback } from 'react';
 import { buildLiveMeetingPrompt } from '../prompts/prompt';
-import { handleGeminiMessage as reduceGeminiMessage, speakingAfterAgentEnds, formatReadFileOutput } from './geminiMessage';
-import { fetchFileContent } from '../api/files';
+import {
+  handleGeminiMessage as reduceGeminiMessage,
+  speakingAfterAgentEnds,
+  formatReadFileOutput,
+  formatSearchFilesOutput,
+  searchFilePaths,
+} from './geminiMessage';
+import { fetchFileContent, fetchFileWithPath, fetchFileTree } from '../api/files';
 
 // WebSocket connections bypass the Vite proxy and hit the backend directly.
 const WS_BASE = import.meta.env.DEV
@@ -349,11 +355,21 @@ export function useLiveMeeting(
             }[] = [];
             for (const call of calls) {
               try {
+                let output: string;
+                if (call.name === 'search_files') {
+                  const query = call.args.query;
+                  if (typeof query !== 'string' || !query.trim()) {
+                    throw new Error('Missing required "query" argument.');
+                  }
+                  const tree = await fetchFileTree();
+                  output = formatSearchFilesOutput(query, searchFilePaths(tree, query));
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
                 const path = call.args.path;
                 if (typeof path !== 'string' || !path.trim()) {
                   throw new Error('Missing required "path" argument.');
                 }
-                let output: string;
                 if (call.name === 'read_file') {
                   const content = await fetchFileContent(path);
                   output = formatReadFileOutput(content, call.args.start_line, call.args.end_line);
@@ -361,9 +377,10 @@ export function useLiveMeeting(
                   const navigate = navigateToFileRef.current;
                   if (!navigate) throw new Error('Editor navigation is not available in this session.');
                   // Fail hard if the file can't be loaded — never report a fake success.
-                  await fetchFileContent(path);
+                  // Use the server-resolved absolute path so the editor and fetch agree.
+                  const { path: absPath } = await fetchFileWithPath(path);
                   const line = typeof call.args.line === 'number' ? call.args.line : undefined;
-                  navigate(path, line);
+                  navigate(absPath, line);
                   output = `Opened ${path}${line ? ` at line ${line}` : ''}.`;
                 } else {
                   throw new Error(`Unknown tool: ${call.name}`);

@@ -52,6 +52,68 @@ export function formatReadFileOutput(content: string, startLine?: unknown, endLi
   return output;
 }
 
+export const SEARCH_FILES_MAX_RESULTS = 10;
+
+/** Minimal tree shape used by searchFilePaths (matches FileNode from ../types). */
+export interface SearchTreeNode {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  children: SearchTreeNode[] | null;
+}
+
+const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Finds files whose workspace-relative path matches a (possibly spoken) name.
+ * Every whitespace-separated query token must appear in the normalized path,
+ * so "gemini message" matches "client/src/hooks/geminiMessage.ts".
+ * Returns relative paths, best matches first.
+ */
+export function searchFilePaths(tree: SearchTreeNode, query: string): string[] {
+  const tokens = query.split(/\s+/).map(normalize).filter(Boolean);
+  if (!tokens.length) return [];
+  const root = tree.path.replace(/[\\/]+$/, '');
+  const whole = tokens.join('');
+
+  const hits: { rel: string; score: number }[] = [];
+  const walk = (node: SearchTreeNode) => {
+    if (node.type === 'file') {
+      const rel = node.path.startsWith(root) ? node.path.slice(root.length).replace(/^[\\/]+/, '') : node.path;
+      const normPath = normalize(rel);
+      if (tokens.every(t => normPath.includes(t))) {
+        const base = normalize(node.name);
+        const stem = normalize(node.name.replace(/\.[^.]+$/, ''));
+        const score = stem === whole || base === whole ? 0 : base.includes(whole) ? 1 : 2;
+        hits.push({ rel, score });
+      }
+    }
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(tree);
+
+  return hits
+    .sort((a, b) => a.score - b.score || a.rel.length - b.rel.length || a.rel.localeCompare(b.rel))
+    .map(h => h.rel);
+}
+
+/** Formats search_files output; tells the agent to ask the user when ambiguous. */
+export function formatSearchFilesOutput(query: string, matches: string[]): string {
+  if (!matches.length) {
+    return `No files matched "${query}". Tell the user and ask them for a different name.`;
+  }
+  if (matches.length === 1) {
+    return `1 match: ${matches[0]}\nConfirm with the user before opening it.`;
+  }
+  const shown = matches.slice(0, SEARCH_FILES_MAX_RESULTS);
+  const extra = matches.length - shown.length;
+  return [
+    `${matches.length} matches for "${query}" — ambiguous. Offer them one at a time and ask the user which one to open, pausing after each for a yes or no. Do not pick one yourself.`,
+    ...shown,
+    ...(extra > 0 ? [`… (${extra} more — ask the user to be more specific)`] : []),
+  ].join('\n');
+}
+
 export const GEMINI_LIVE_MODEL = 'models/gemini-3.8-live';
 export const GEMINI_VOICE = 'Aoede';
 
@@ -123,6 +185,17 @@ export function handleGeminiMessage(
                     required: ['path'],
                   },
                 },
+                {
+                  name: 'search_files',
+                  description: 'Find files by name when you do not know the exact workspace path. Returns matching workspace-relative paths. If several match, ask the user which one before opening.',
+                  parameters: {
+                    type: 'OBJECT',
+                    properties: {
+                      query: { type: 'STRING', description: 'File name or words from it, e.g. "gemini message" or "files.ts"' },
+                    },
+                    required: ['query'],
+                  },
+                },
               ],
             }],
           },
@@ -150,7 +223,7 @@ export function handleGeminiMessage(
     };
   }
 
-  // Tool call — the AI wants to call read_file or open_file
+  // Tool call — the AI wants to call search_files, read_file, or open_file
   if (msg.toolCall) {
     type FunctionCall = { id?: string; name?: string; args?: Record<string, unknown> };
     const raw = (msg.toolCall as { functionCalls?: FunctionCall[] }).functionCalls ?? [];
