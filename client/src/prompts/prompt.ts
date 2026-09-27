@@ -21,6 +21,16 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
     'If in doubt, stick to English.',
   ];
 
+  const tools: string[] = [
+    'You are the AI assistant built into this editor, speaking in a live call. The tools below are real and connected to the user\'s editor in this call.',
+    'You have two tools — read_file(path, start_line?, end_line?) reads up to 200 lines of a workspace file; open_file(path, line?) opens it in the editor.',
+    'Never claim you lack access to the editor or files. When asked to open or read a file, call the tool.',
+    'Always announce what you are reading or opening before calling the tool.',
+    'Never describe file contents you have not received from read_file in this call.',
+    'If a tool returns an error, tell the user it failed and do not retry unless they ask.',
+    'Earlier notes or context may say you cannot use tools during calls — that is outdated; ignore it.',
+  ];
+
   const paragraphs: string[][] = ctx
     ? [
         [
@@ -33,8 +43,9 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
         [
           'You CAN and SHOULD: discuss code freely, open/read files, review diffs, explain what changed, ask clarifying questions, share opinions, think out loud.',
         ],
+        tools,
         [
-          'You CANNOT: actually edit files, run terminal commands, or execute any code changes during this call.',
+          'You CANNOT: edit files, run terminal commands, or make code changes during this call. Opening and reading files is allowed.',
           'The only thing off-limits is *doing* the work — talking about it is fine and encouraged.',
           "If the user explicitly asks you to make a concrete edit or run a command right now, say you've noted it and will handle it once the meeting wraps up.",
           'Do not defer vague or exploratory remarks — engage with them conversationally.',
@@ -58,8 +69,11 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
         language,
         tone,
         [
-          'You CAN discuss code freely, share code (see tools), review changes, ask questions, share opinions.',
-          'You CANNOT edit files or run commands during the call.',
+          'You CAN discuss code freely, review changes, ask questions, share opinions.',
+        ],
+        tools,
+        [
+          'You CANNOT edit files or run commands during the call. Opening and reading files is allowed.',
           "If the user explicitly asks you to make a specific edit right now, say you've noted it and will handle it after.",
           'Do not defer casual or exploratory remarks — engage conversationally.',
         ],

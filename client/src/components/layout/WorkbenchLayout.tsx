@@ -138,6 +138,10 @@ export function WorkbenchLayout() {
   const modelRef = useRef(model);
   modelRef.current = model;
 
+  // Stable ref updated after handleNavigateToLine is defined (below); keeps useLiveMeeting's
+  // navigate callback always current without causing a dependency-order issue.
+  const meetingNavigateRef = useRef<((path: string, line?: number) => void) | undefined>(undefined);
+
   const liveMeeting = useLiveMeeting(provider.id, async (transcript) => {
     // Immediate feedback while the summary request runs; replaced in place below.
     const pendingId = rightPanelRef.current?.showPendingProactive('✍️ _Writing up meeting notes…_') ?? undefined;
@@ -165,7 +169,7 @@ export function WorkbenchLayout() {
       { type: 'collapsible', title: 'Meeting transcript', content: transcript },
       { type: 'acknowledge', status: 'pending' },
     ], pendingId);
-  });
+  }, (path: string, line?: number) => meetingNavigateRef.current?.(path, line));
 
   const pushNav = useCallback((path: string) => {
     setNav(prev => {
@@ -304,6 +308,7 @@ export function WorkbenchLayout() {
       editorAreaRef.current?.navigateToLine(filePath, line, endLine, startCol, endCol);
     }, 100);
   }, [openFile]);
+  meetingNavigateRef.current = (path: string, line?: number) => handleNavigateToLine(path, line ?? 1);
 
   /** Open a file and request the editor to display its AI summary. */
   const handleFileSummary = useCallback((node: FileNode) => {

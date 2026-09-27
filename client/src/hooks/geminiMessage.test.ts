@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   handleGeminiMessage,
   speakingAfterAgentEnds,
+  formatReadFileOutput,
+  READ_FILE_MAX_LINES,
   GEMINI_LIVE_MODEL,
   GEMINI_VOICE,
   type TurnBuffers,
@@ -41,9 +43,47 @@ describe('handleGeminiMessage', () => {
             },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
+            tools: [{
+              functionDeclarations: [
+                expect.objectContaining({ name: 'read_file' }),
+                expect.objectContaining({ name: 'open_file' }),
+              ],
+            }],
           },
         },
       }]);
+    });
+  });
+
+  describe('toolCall', () => {
+    it('emits a runTool action with normalized calls', () => {
+      const msg = {
+        toolCall: {
+          functionCalls: [
+            { id: '1', name: 'read_file', args: { path: 'a.ts' } },
+            { id: '2', name: 'open_file' },
+          ],
+        },
+      };
+      const { actions } = handleGeminiMessage(msg, empty, deps);
+      expect(actions).toEqual([{
+        type: 'runTool',
+        calls: [
+          { id: '1', name: 'read_file', args: { path: 'a.ts' } },
+          { id: '2', name: 'open_file', args: {} },
+        ],
+      }]);
+    });
+
+    it('drops calls missing id or name, and emits nothing if none remain', () => {
+      const msg = { toolCall: { functionCalls: [{ name: 'read_file' }, { id: 'x' }] } };
+      expect(handleGeminiMessage(msg, empty, deps).actions).toEqual([]);
+    });
+
+    it('leaves buffers untouched', () => {
+      const buffers = { userBuf: 'u', agentBuf: 'a' };
+      const r = handleGeminiMessage({ toolCall: { functionCalls: [] } }, buffers, deps);
+      expect(r.buffers).toBe(buffers);
     });
   });
 
@@ -150,5 +190,33 @@ describe('speakingAfterAgentEnds', () => {
 
   it('leaves idle as idle', () => {
     expect(speakingAfterAgentEnds('idle')).toBe('idle');
+  });
+});
+
+describe('formatReadFileOutput', () => {
+  const file = Array.from({ length: 500 }, (_, i) => `line${i + 1}`).join('\n');
+
+  it('numbers lines and caps at READ_FILE_MAX_LINES by default', () => {
+    const out = formatReadFileOutput(file).split('\n');
+    expect(out[0]).toBe('1: line1');
+    expect(out[READ_FILE_MAX_LINES - 1]).toBe(`${READ_FILE_MAX_LINES}: line${READ_FILE_MAX_LINES}`);
+    expect(out.at(-1)).toBe(`… (${500 - READ_FILE_MAX_LINES} more lines)`);
+  });
+
+  it('respects a requested range', () => {
+    expect(formatReadFileOutput(file, 10, 12)).toBe('10: line10\n11: line11\n12: line12\n… (488 more lines)');
+  });
+
+  it('clamps an oversized range to the cap', () => {
+    const out = formatReadFileOutput(file, 1, 450).split('\n');
+    expect(out).toHaveLength(READ_FILE_MAX_LINES + 1);
+  });
+
+  it('omits the trailer when the file ends within range', () => {
+    expect(formatReadFileOutput('a\nb', 1)).toBe('1: a\n2: b');
+  });
+
+  it('ignores invalid start/end values', () => {
+    expect(formatReadFileOutput('a\nb', 'x', -3)).toBe('1: a\n2: b');
   });
 });
