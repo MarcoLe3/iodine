@@ -46,7 +46,7 @@ describe('handleGeminiMessage', () => {
             systemInstruction: { parts: [{ text: 'PROMPT' }] },
             generationConfig: {
               responseModalities: ['AUDIO'],
-              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_VOICE } } },
+              speechConfig: { languageCode: 'en-US', voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_VOICE } } },
             },
             inputAudioTranscription: {},
             outputAudioTranscription: {},

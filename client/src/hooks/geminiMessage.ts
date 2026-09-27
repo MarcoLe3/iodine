@@ -258,6 +258,7 @@ export function handleGeminiMessage(
             generationConfig: {
               responseModalities: ['AUDIO'],
               speechConfig: {
+                languageCode: 'en-US',
                 voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_VOICE } },
               },
             },
