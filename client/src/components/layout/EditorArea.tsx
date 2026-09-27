@@ -87,6 +87,8 @@ interface EditorAreaProps {
   meetingMuted?: boolean;
   /** Called when the user clicks the mute button in the meeting card. */
   onMeetingMuteToggle?: () => void;
+  /** When true, editor is joined seamlessly to the right panel. */
+  joinedRight?: boolean;
 }
 
 export interface EditorAreaHandle {
@@ -117,7 +119,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
-  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, onSummaryOpen, canGoBack, canGoForward, onGoBack, onGoForward, activeCommitHash, onCommitDiffClose, onCommitCheckout, onCommitDiffAddToContext, activeMeeting, onMeetingClose, meetingAnalyserNode, meetingMicAnalyserNode, meetingSpeaking, meetingMuted, onMeetingMuteToggle }, ref) {
+  function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, onSummaryOpen, canGoBack, canGoForward, onGoBack, onGoForward, activeCommitHash, onCommitDiffClose, onCommitCheckout, onCommitDiffAddToContext, activeMeeting, onMeetingClose, meetingAnalyserNode, meetingMicAnalyserNode, meetingSpeaking, meetingMuted, onMeetingMuteToggle, joinedRight }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
       (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
@@ -479,6 +481,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       <div
         ref={containerRef}
         className="panel-card"
+        data-joined-right={joinedRight ? 'true' : undefined}
         style={{
           flex: 1,
           display: 'flex',

@@ -654,15 +654,21 @@ export function WorkbenchLayout() {
             meetingSpeaking={liveMeeting.speaking}
             meetingMuted={liveMeeting.isMuted}
             onMeetingMuteToggle={liveMeeting.toggleMute}
+            joinedRight={showRightPanel}
           />
 
-          <div style={{ display: showRightPanel ? 'contents' : 'none' }}>
+          <div
+            className="right-panel-group"
+            data-visible={showRightPanel}
+            style={{ display: showRightPanel ? 'contents' : 'none' }}
+          >
             <ResizeDivider
               currentWidth={effectiveRightWidth}
               onResize={(w) => { setRightPanelWidth(w); resetExpansion(); }}
               min={RIGHT_MIN}
               max={RIGHT_MAX}
               side="right"
+              joined
             />
             <RightPanel
               ref={rightPanelRef}
