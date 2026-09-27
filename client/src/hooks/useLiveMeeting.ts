@@ -176,7 +176,7 @@ export function useLiveMeeting(provider: string, onTranscriptReady?: (transcript
     const lines = transcriptRef.current;
     if (lines.length > 0) {
       const formatted = lines
-        .map(e => `**${e.role === 'user' ? 'You' : 'Gemini'}:** ${e.text.trim()}`)
+        .map(e => `**${e.role === 'user' ? 'You' : 'Assistant'}:** ${e.text.trim()}`)
         .join('\n\n');
       onTranscriptRef.current?.(formatted);
     }

@@ -154,7 +154,9 @@ Use this structure (omit a section if there's nothing to put there):
 **Next Steps**
 - Bullet list of concrete things the AI should implement or follow up on after the meeting.
 
-Be specific — reference actual files, features, or bugs discussed. No filler or generic phrasing. Keep it tight.`;
+Be specific — reference actual files, features, or bugs discussed. No filler or generic phrasing. Keep it tight.
+
+Refer to the AI participant as "the assistant", never by a model or vendor name (e.g. Gemini, Claude, GPT), even if the transcript uses one.`;
 
 router.post('/proactive/meeting-summary', async (req, res) => {
   const { transcript, provider, model } = req.body as {
