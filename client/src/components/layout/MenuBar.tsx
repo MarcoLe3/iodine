@@ -972,7 +972,7 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
               </div>
               {(() => {
                 const cmd = import.meta.env.PROD
-                  ? 'npm install -g iodine@latest'
+                  ? 'npm install -g iodine-ide@latest'
                   : 'git pull origin main\ngit fetch --tags\nnpm install\nnpm run dev';
                 const note = import.meta.env.PROD
                   ? 'Then restart the app.'

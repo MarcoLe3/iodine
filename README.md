@@ -108,7 +108,7 @@ System View is interactive documentation generated from the code that is actuall
 ### Option A — npm (recommended)
 
 ```bash
-npm install -g iodine
+npm install -g iodine-ide
 ```
 
 Then export your API keys in your shell before running:
@@ -123,7 +123,7 @@ iodine
 
 Iodine starts the server and opens http://localhost:3001 in your browser automatically. To use a different port: `PORT=4000 iodine`.
 
-To update: `npm install -g iodine@latest`, then restart.
+To update: `npm install -g iodine-ide@latest`, then restart.
 
 ### Option B — run from source
 
