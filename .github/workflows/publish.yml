@@ -20,8 +20,8 @@ jobs:
         run: npm ci
 
       - name: Stamp version from tag
-        # GITHUB_REF_NAME is e.g. "v0.2.1" — strip the leading "v" for npm
-        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version
+        # GITHUB_REF_NAME is e.g. "v0.4.0" — strip the leading "v" for npm
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
 
       - name: Build
         run: npm run build
