@@ -219,11 +219,12 @@ export function WorkbenchLayout() {
     reorderFiles,
     refreshFile,
     setSortedFiles,
+    openSettings,
   } = useOpenFiles();
 
   meetingTabsRef.current = {
     root: workspacePath ?? null,
-    paths: openFiles.filter(f => !f.path.startsWith('http')).map(f => f.path),
+    paths: openFiles.filter(f => !f.path.startsWith('http') && !f.isSettings).map(f => f.path),
     active: activeFilePath ?? null,
   };
 
@@ -562,6 +563,7 @@ export function WorkbenchLayout() {
         onToggleBottomTray={() => setShowBottomTray(v => !v)}
         updateInfo={updateInfo}
         onSnoozeUpdate={snoozeUpdate}
+        onOpenSettings={openSettings}
       />
 
       {/* Padding here + the 6px ResizeDividers form the gutters between panel cards */}

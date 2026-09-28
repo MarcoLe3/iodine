@@ -23,6 +23,7 @@ interface MenuBarProps {
   onToggleBottomTray: () => void;
   updateInfo?: UpdateInfo | null;
   onSnoozeUpdate?: () => void;
+  onOpenSettings: () => void;
 }
 
 function PaneIcon({ pane }: { pane: 'left' | 'right' | 'bottom' }) {
@@ -73,7 +74,7 @@ function MoonIcon() {
   );
 }
 
-export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onCloseUneditedTabs, onSortTabsByFileStructure, onOpenExternalFile, onOpenWorkspaceFile, workspacePath, theme, onToggleTheme, openTabsCount, showSidebar, showRightPanel, showBottomTray, onToggleSidebar, onToggleRightPanel, onToggleBottomTray, updateInfo, onSnoozeUpdate }: MenuBarProps) {
+export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onCloseUneditedTabs, onSortTabsByFileStructure, onOpenExternalFile, onOpenWorkspaceFile, workspacePath, theme, onToggleTheme, openTabsCount, showSidebar, showRightPanel, showBottomTray, onToggleSidebar, onToggleRightPanel, onToggleBottomTray, updateInfo, onSnoozeUpdate, onOpenSettings }: MenuBarProps) {
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [editorMenuOpen, setEditorMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -572,6 +573,20 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
                   {item.label}
                 </button>
               ))}
+
+              <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0' }} />
+
+              <button
+                onMouseDown={() => { setEditorMenuOpen(false); onOpenSettings(); }}
+                style={{
+                  display: 'block', width: '100%', padding: '5px 16px',
+                  textAlign: 'left', color: 'var(--color-text-primary)', fontSize: 13,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-selected)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                Settings…
+              </button>
             </div>
           )}
         </div>
