@@ -968,33 +968,45 @@ export function MenuBar({ onOpenProject, onCloseProject, onCloseAllTabs, onClose
             </div>
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-                To update, run these commands from the Iodine directory:
+                {import.meta.env.PROD ? 'To update, run:' : 'To update, run these commands from the Iodine directory:'}
               </div>
-              <div style={{ position: 'relative' }}>
-                <pre style={{
-                  margin: 0, padding: '9px 76px 9px 10px', overflowX: 'auto',
-                  background: 'var(--color-bg-editor)', border: '1px solid var(--color-border)',
-                  borderRadius: 4, color: 'var(--color-text-primary)', fontSize: 11,
-                  lineHeight: 1.6, fontFamily: "'Cascadia Code','Fira Code',Menlo,monospace",
-                }}>{'git pull origin main\ngit fetch --tags\nnpm install\nnpm run dev'}</pre>
-                <button
-                  onClick={async () => {
-                    await navigator.clipboard.writeText('git pull origin main\ngit fetch --tags\nnpm install\nnpm run dev');
-                    setCommandsCopied(true);
-                    setTimeout(() => setCommandsCopied(false), 2000);
-                  }}
-                  style={{
-                    position: 'absolute', top: 6, right: 6, padding: '4px 8px',
-                    borderRadius: 3, background: 'var(--color-bg-hover)',
-                    color: 'var(--color-text-primary)', fontSize: 11, cursor: 'pointer',
-                  }}
-                >
-                  {commandsCopied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6 }}>
-                Stop the current server first, then restart it with <code>npm run dev</code>.
-              </div>
+              {(() => {
+                const cmd = import.meta.env.PROD
+                  ? 'npm install -g iodine@latest'
+                  : 'git pull origin main\ngit fetch --tags\nnpm install\nnpm run dev';
+                const note = import.meta.env.PROD
+                  ? 'Then restart the app.'
+                  : 'Stop the current server first, then restart it with npm run dev.';
+                return (
+                  <>
+                    <div style={{ position: 'relative' }}>
+                      <pre style={{
+                        margin: 0, padding: '9px 76px 9px 10px', overflowX: 'auto',
+                        background: 'var(--color-bg-editor)', border: '1px solid var(--color-border)',
+                        borderRadius: 4, color: 'var(--color-text-primary)', fontSize: 11,
+                        lineHeight: 1.6, fontFamily: "'Cascadia Code','Fira Code',Menlo,monospace",
+                      }}>{cmd}</pre>
+                      <button
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(cmd);
+                          setCommandsCopied(true);
+                          setTimeout(() => setCommandsCopied(false), 2000);
+                        }}
+                        style={{
+                          position: 'absolute', top: 6, right: 6, padding: '4px 8px',
+                          borderRadius: 3, background: 'var(--color-bg-hover)',
+                          color: 'var(--color-text-primary)', fontSize: 11, cursor: 'pointer',
+                        }}
+                      >
+                        {commandsCopied ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6 }}>
+                      {note}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button

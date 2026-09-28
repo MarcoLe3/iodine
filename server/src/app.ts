@@ -1,3 +1,4 @@
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import filesRouter from './routes/files';
@@ -33,6 +34,14 @@ export function createApp() {
   app.use('/api', ttsRouter);
   app.use('/api', sttRouter);
   app.use('/api', meetingRouter);
+
+  // In production (npm install -g iodine), serve the pre-built Vite client.
+  // __dirname is server/dist/, so ../../client/dist resolves to the package root's client/dist.
+  if (process.env.NODE_ENV === 'production') {
+    const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+    app.use(express.static(clientDist));
+    app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  }
 
   return app;
 }

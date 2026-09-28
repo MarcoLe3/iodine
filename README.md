@@ -105,9 +105,32 @@ System View is interactive documentation generated from the code that is actuall
 - npm 9+
 - At least one AI provider API key — Anthropic, OpenAI, or Google
 
-### Installation & Running
+### Option A — npm (recommended)
 
 ```bash
+npm install -g iodine
+```
+
+Then export your API keys in your shell before running:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+export GOOGLE_API_KEY=...
+
+iodine
+```
+
+Iodine starts the server and opens http://localhost:3001 in your browser automatically. To use a different port: `PORT=4000 iodine`.
+
+To update: `npm install -g iodine@latest`, then restart.
+
+### Option B — run from source
+
+```bash
+git clone https://github.com/hyunwookshin/iodine.git
+cd iodine
+
 # Install all dependencies (client + server)
 npm install
 
@@ -124,6 +147,8 @@ npm run dev
 - **Server** (Express): http://localhost:3001
 
 Once running, open a project via **File → Open Project** or click **Open Folder** in the left sidebar.
+
+To update: `git pull origin main && npm install`, then restart with `npm run dev`.
 
 ### Route LLM (optional)
 
