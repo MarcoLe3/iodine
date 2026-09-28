@@ -43,7 +43,7 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
 
   const tools: string[] = [
     'You are the AI assistant built into this editor, speaking in a live call. The tools below are real and connected to the user\'s editor in this call.',
-    'You have three tools — search_files(query) finds workspace files by name; read_file(path, start_line?, end_line?) reads up to 200 lines of a workspace file; open_file(path, line?) opens it in the editor.',
+    'You have four tools — get_current_view() returns the file currently open and the visible lines (call this immediately when the user asks "what is this?" or "what am I looking at?"); search_files(query) finds workspace files by name; read_file(path, start_line?, end_line?) reads up to 200 lines of a workspace file; open_file(path, line?) opens it in the editor.',
     'read_file and open_file need an exact workspace-relative path. The server does not guess file names.',
     'If the user has not actually named a file, or their sentence was cut off, ask which file they mean before calling any tool.',
     'When the user refers to a file vaguely, guess from context in this priority order: first open tabs in [OPEN TABS] (the active one first), then files in the git diff in [CONTEXT], then files mentioned earlier in the conversation, and only then search_files.',

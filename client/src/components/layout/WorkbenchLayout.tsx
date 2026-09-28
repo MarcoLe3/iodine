@@ -172,7 +172,16 @@ export function WorkbenchLayout() {
       { type: 'collapsible', title: 'Meeting transcript', content: transcript },
       { type: 'acknowledge', status: 'pending' },
     ], pendingId);
-  }, (path: string, line?: number) => meetingNavigateRef.current?.(path, line), () => meetingTabsRef.current);
+  }, (path: string, line?: number) => meetingNavigateRef.current?.(path, line), () => meetingTabsRef.current, () => {
+    const content = editorAreaRef.current?.getVisibleContext();
+    if (!content) return null;
+    const abs = activeFilePathRef.current;
+    const root = workspacePathRef.current;
+    const path = abs && root
+      ? (abs.startsWith(root + '/') ? abs.slice(root.length + 1) : abs)
+      : (abs ?? '');
+    return path ? { path, content } : null;
+  });
 
   const pushNav = useCallback((path: string) => {
     setNav(prev => {

@@ -66,6 +66,15 @@ export function speakingAfterAgentEnds(s: SpeakingState): SpeakingState {
   return s === 'agent' ? 'idle' : s;
 }
 
+export interface CurrentView { path: string; content: string }
+
+/** Formats the editor's visible code for the get_current_view tool. */
+export function formatCurrentViewOutput(view: CurrentView | null | undefined): string {
+  return view
+    ? `Path: ${view.path}\n\n${view.content}`
+    : 'No file is currently open in the editor.';
+}
+
 export const READ_FILE_MAX_LINES = 200;
 
 /** Formats file content for the read_file tool, capped at READ_FILE_MAX_LINES lines. */
@@ -304,6 +313,14 @@ export function handleGeminiMessage(
                       query: { type: 'STRING', description: 'File name or words from it, e.g. "gemini message" or "files.ts"' },
                     },
                     required: ['query'],
+                  },
+                },
+                {
+                  name: 'get_current_view',
+                  description: 'Return the file currently open in the editor and the exact lines visible on screen (or the user\'s selection). Call this immediately when the user asks "what is this?", "what am I looking at?", "what\'s in this file?", or anything about the current code on screen. No path argument needed.',
+                  parameters: {
+                    type: 'OBJECT',
+                    properties: {},
                   },
                 },
               ],

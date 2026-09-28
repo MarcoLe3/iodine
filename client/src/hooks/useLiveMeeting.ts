@@ -9,6 +9,7 @@ import {
   pickDiffJump,
   formatDiffJumpOutput,
   formatOpenTabs,
+  formatCurrentViewOutput,
   type DiffJump,
   type EditorTabs,
 } from './geminiMessage';
@@ -92,6 +93,7 @@ export function useLiveMeeting(
   onTranscriptReady?: (transcript: string) => void,
   navigateToFile?: (path: string, line?: number) => void,
   getEditorTabs?: () => EditorTabs,
+  getVisibleCode?: () => { path: string; content: string } | null,
 ): UseLiveMeetingReturn {
   const [isActive, setIsActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -132,6 +134,8 @@ export function useLiveMeeting(
   const navigateToFileRef = useRef(navigateToFile);
   navigateToFileRef.current = navigateToFile;
   const getEditorTabsRef = useRef(getEditorTabs);
+  const getVisibleCodeRef = useRef(getVisibleCode);
+  getVisibleCodeRef.current = getVisibleCode;
   getEditorTabsRef.current = getEditorTabs;
 
   // ── Agent audio playback queue ──────────────────────────────────────────
@@ -391,6 +395,11 @@ export function useLiveMeeting(
             for (const call of calls) {
               try {
                 let output: string;
+                if (call.name === 'get_current_view') {
+                  output = formatCurrentViewOutput(getVisibleCodeRef.current?.());
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
                 if (call.name === 'search_files') {
                   const query = call.args.query;
                   if (typeof query !== 'string' || !query.trim()) {
