@@ -52,6 +52,7 @@ export function useCodingAssistant(
   onAssistantReply?: (text: string, hadToolUse: boolean) => void,
   onFileTreeRefresh?: () => void,
   onSummaryRequest?: (filePath: string) => void,
+  redactSecretsEnabled: boolean = true,
 ) {
   const [uiMessages, setUiMessages] = useState<UIMessage[]>([]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
@@ -77,6 +78,10 @@ export function useCodingAssistant(
 
   const onFileTreeRefreshRef = useRef(onFileTreeRefresh);
   onFileTreeRefreshRef.current = onFileTreeRefresh;
+
+  // Ref so toggling the setting takes effect without rebuilding sendMessage.
+  const redactSecretsEnabledRef = useRef(redactSecretsEnabled);
+  redactSecretsEnabledRef.current = redactSecretsEnabled;
 
   // Tracks whether any tool was called in the current turn; reset at start of sendMessage.
   const toolUsedInTurnRef = useRef(false);
@@ -516,7 +521,10 @@ export function useCodingAssistant(
       apiContent += `\n\n---\n${extraContext}`;
     }
     // Firewall: mask secrets from every client-side source before it reaches the AI.
-    apiContent = redactSecrets(apiContent);
+    const redact = redactSecretsEnabledRef.current;
+    if (redact) {
+      apiContent = redactSecrets(apiContent);
+    }
     const newHistory: HistoryMessage[] = [...(fresh ? [] : history), { role: 'user', content: apiContent }];
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -550,7 +558,7 @@ export function useCodingAssistant(
       const response = await fetch(`${API_BASE}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newHistory, model: modelToUse, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false }),
+        body: JSON.stringify({ messages: newHistory, model: modelToUse, provider: provider.id, activeFile: activeFilePath ?? null, tutorMode: tutorMode ?? false, redactSecrets: redact }),
         signal: controller.signal,
       });
 

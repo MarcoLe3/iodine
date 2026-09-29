@@ -10,6 +10,7 @@
 
 export const SETTINGS_SECTIONS = [
   { id: 'editor', label: 'Editor' },
+  { id: 'privacy', label: 'Privacy' },
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
@@ -52,6 +53,14 @@ export const SETTINGS = {
     description:
       'Enable Vim keybindings in all editor tabs by default. The per-tab "Enable/Disable Vim" button still overrides this for individual tabs.',
     default: false,
+  },
+  'privacy.redactSecrets': {
+    type: 'boolean',
+    section: 'privacy',
+    label: 'Redact Secrets',
+    description:
+      'Mask API keys, tokens and passwords as [REDACTED:***] before anything is sent to the AI. When on, the AI only sees masked values and may write the mask back if it edits those lines — turn this off before asking it to edit files that contain secrets.',
+    default: true,
   },
 } satisfies Record<string, SettingDefinition>;
 

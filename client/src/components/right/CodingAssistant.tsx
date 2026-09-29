@@ -13,6 +13,7 @@ import { parseFilePath, resolveFromRoot } from '../../utils/filePath';
 import { RevertButton } from './RevertButton';
 import { InlineSystemGraph } from './InlineSystemGraph';
 import type { SystemGraph } from '../../api/files';
+import { useSetting } from '../../settings';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
@@ -192,7 +193,8 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { localStorage.setItem('iodine:speech-provider', speechProviderId); }, [speechProviderId]);
   const speechOption = SPEECH_OPTIONS.find(o => o.id === speechProviderId) ?? SPEECH_OPTIONS[0];
 
-  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, enqueueEventContext, stopExecution, clearMessages, sendApproval, injectProactiveMessage, showPendingProactive, markAcknowledged, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest);
+  const [redactSecretsEnabled] = useSetting('privacy.redactSecrets');
+  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, enqueueEventContext, stopExecution, clearMessages, sendApproval, injectProactiveMessage, showPendingProactive, markAcknowledged, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, redactSecretsEnabled);
   // Keep a ref to sendMessage so callbacks (like transcribeAndSend) never capture a stale closure.
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
