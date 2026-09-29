@@ -4,6 +4,7 @@ import type { Provider } from '../providers';
 import { fetchOverallDiff } from '../api/files';
 import { saveConversation, clearConversations, type ConversationRecord } from '../api/conversations';
 import { createEventContextQueue, formatEventContext, type EventContext } from '../utils/eventContextQueue';
+import { redactSecrets } from '../utils/redactSecrets';
 
 function uid() {
   return typeof crypto.randomUUID === 'function'
@@ -514,6 +515,8 @@ export function useCodingAssistant(
     if (extraContext) {
       apiContent += `\n\n---\n${extraContext}`;
     }
+    // Firewall: mask secrets from every client-side source before it reaches the AI.
+    apiContent = redactSecrets(apiContent);
     const newHistory: HistoryMessage[] = [...(fresh ? [] : history), { role: 'user', content: apiContent }];
     const controller = new AbortController();
     abortControllerRef.current = controller;
