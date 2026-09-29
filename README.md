@@ -7,7 +7,7 @@
 <p align="center">A browser-based IDE for exploring and working with unfamiliar codebases, with an integrated AI assistant, architecture diagram generator, and live voice sessions.</p>
 
 <p align="center">
-<a href="https://youtu.be/tB9BLJ8Brzs">Full demo</a> · <a href="https://youtube.com/shorts/VeYM4Gd6_Pc?feature=share">Demo 1</a> · <a href="https://youtu.be/DFy1F0CQmN8">Demo 2</a> · <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 4</a> · <a href="https://youtu.be/DzGt5jQaSo8">Demo 5</a>
+<a href="https://youtu.be/jy0Sb1kLzgo">Full Demo Part 1</a> · <a href="https://youtu.be/oifjOz1BLVk">Full Demo Part 2</a> · <a href="https://youtube.com/shorts/VeYM4Gd6_Pc?feature=share">Demo 1</a> · <a href="https://youtu.be/DFy1F0CQmN8">Demo 2</a> · <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 4</a> · <a href="https://youtu.be/DzGt5jQaSo8">Demo 5</a>
 </p>
 
 <img width="1279" height="689" alt="Iodine screenshot" src="https://github.com/user-attachments/assets/7fbbe29e-9f30-4b1f-8ab4-6e204e36e84d" />
