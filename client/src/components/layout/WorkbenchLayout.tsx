@@ -21,6 +21,7 @@ import type { EditorTabs } from '../../hooks/geminiMessage';
 import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL } from '../../providers';
 import type { Provider } from '../../providers';
 import type { FileNode, SidebarView } from '../../types';
+import { useSetting } from '../../settings';
 
 const SIDEBAR_DEFAULT = 320;
 const RIGHT_PANEL_DEFAULT = 400;
@@ -280,9 +281,11 @@ export function WorkbenchLayout() {
     getActiveFilePath: () => activeFilePathRef.current,
   }), []); // stable — accessors read from refs at collection time
 
+  const [churnDetectionEnabled] = useSetting('proactive.churnDetection');
+
   const { status: proactiveStatus, startCooldown: startProactiveCooldown, setAssistantBusy } = useProactiveHelp({
     signals: [idleChurnSignal],
-    enabled: !!workspacePath,
+    enabled: !!workspacePath && churnDetectionEnabled,
     actionCountRef,
     onTrigger: async (message, collectContext) => {
       const rephrased = await rephraseProactiveMessage(message, provider.id, model);

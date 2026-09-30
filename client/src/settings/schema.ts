@@ -11,6 +11,7 @@
 export const SETTINGS_SECTIONS = [
   { id: 'editor', label: 'Editor' },
   { id: 'voice', label: 'Voice' },
+  { id: 'assistant', label: 'Assistant' },
   { id: 'privacy', label: 'Privacy' },
 ] as const;
 
@@ -66,6 +67,14 @@ export const SETTINGS = {
       { value: 'openai', label: 'OpenAI' },
     ],
     default: 'google',
+  },
+  'proactive.churnDetection': {
+    type: 'boolean',
+    section: 'assistant',
+    label: 'Proactive churn detection',
+    description:
+      'Automatically offer help when the assistant detects you have been active for a while without producing much output. When off, the progress watch (which reviews your actual git diff after an AI reply) still runs.',
+    default: false,
   },
   'privacy.redactSecrets': {
     type: 'boolean',
