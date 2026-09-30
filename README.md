@@ -2,9 +2,9 @@
   <img src="images/iodine_logo_2-preview.png" alt="Iodine" width="140" />
 </p>
 
-<h1 align="center">Iodine — Harness for Code Exploration</h1>
+<h1 align="center">Iodine, Harness for Code Exploration</h1>
 
-<p align="center">A harness built for exploring unfamiliar codebases — understanding the architecture, tracing how things connect, and finding your way through the deep jungles of someone else's code.</p>
+<p align="center">A harness built for exploring unfamiliar codebases. Understanding the architecture, tracing how things connect, and finding your way through the deep jungles of the code.</p>
 
 <p align="center">
 <a href="https://youtu.be/jy0Sb1kLzgo">Full Demo Part 1</a> · <a href="https://youtu.be/oifjOz1BLVk">Full Demo Part 2</a> · <a href="https://youtube.com/shorts/VeYM4Gd6_Pc?feature=share">Demo 1</a> · <a href="https://youtu.be/DFy1F0CQmN8">Demo 2</a> · <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 4</a> · <a href="https://youtu.be/DzGt5jQaSo8">Demo 5</a>
