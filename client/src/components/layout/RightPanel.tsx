@@ -5,6 +5,7 @@ import type { CodingAssistantHandle } from '../right/CodingAssistant';
 import { SystemView } from '../right/SystemView';
 import type { SystemViewHandle } from '../right/SystemView';
 import { BuildAssistant } from '../right/BuildAssistant';
+import { MeetingWhiteboard } from '../right/MeetingWhiteboard';
 import type { Provider } from '../../providers';
 import type { FileNode, UIBlock } from '../../types';
 import { useSystemGraph } from '../../hooks/useSystemGraph';
@@ -67,10 +68,14 @@ interface RightPanelProps {
   onMeetingStart?: (context?: string) => void;
   /** Error message from the live meeting hook, if any. */
   meetingError?: string | null;
+  /** Current shared whiteboard content (shown during live meetings). */
+  whiteboardContent?: string;
+  /** Append text to the shared whiteboard. */
+  onWhiteboardAppend?: (text: string) => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, commitDiffContext, onClearCommitDiffContext, meetingActive, onMeetingStart, meetingError }, ref) {
+function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, commitDiffContext, onClearCommitDiffContext, meetingActive, onMeetingStart, meetingError, whiteboardContent, onWhiteboardAppend }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const panelRef             = useRef<HTMLDivElement>(null);
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -272,6 +277,14 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
       </div>
 
       <div style={{ flex: 1, display: activeTab === 'assistant' ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Whiteboard fills the full content area during live meetings; chat stays mounted but hidden */}
+        {meetingActive && (
+          <MeetingWhiteboard
+            content={whiteboardContent ?? ''}
+            onAppend={onWhiteboardAppend ?? (() => {})}
+          />
+        )}
+        <div style={{ flex: 1, display: meetingActive ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <CodingAssistant ref={codingAssistantRef} workspacePath={workspacePath} activeFilePath={activeFilePath} onWorkspaceOpen={onWorkspaceOpen}
           provider={provider} model={model} setProvider={setProvider} setModel={setModel} getEditorContext={getEditorContext}
           contextNodes={contextNodes} onRemoveContextNode={onRemoveContextNode} onClearContextNodes={onClearContextNodes}
@@ -289,6 +302,7 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
           meetingActive={meetingActive}
           onMeetingStart={onMeetingStart}
           meetingError={meetingError} />
+        </div>
       </div>
     </div>
   );

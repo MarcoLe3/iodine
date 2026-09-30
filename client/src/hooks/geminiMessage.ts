@@ -323,6 +323,25 @@ export function handleGeminiMessage(
                     properties: {},
                   },
                 },
+                {
+                  name: 'write_whiteboard',
+                  description: 'Append text to the shared whiteboard visible to both you and the user. Use for ASCII diagrams, decision trees, bullet lists, data-flow sketches. Draw one piece, explain it, then continue. Never dump everything at once.',
+                  parameters: {
+                    type: 'OBJECT',
+                    properties: {
+                      text: { type: 'STRING', description: 'Text to append. May contain ASCII art, line drawings, or plain prose.' },
+                    },
+                    required: ['text'],
+                  },
+                },
+                {
+                  name: 'read_whiteboard',
+                  description: 'Read the current contents of the shared whiteboard. Use to recall what has been drawn so far before deciding what to add next.',
+                  parameters: {
+                    type: 'OBJECT',
+                    properties: {},
+                  },
+                },
               ],
             }],
           },

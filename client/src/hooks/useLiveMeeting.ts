@@ -94,6 +94,8 @@ export function useLiveMeeting(
   navigateToFile?: (path: string, line?: number) => void,
   getEditorTabs?: () => EditorTabs,
   getVisibleCode?: () => { path: string; content: string } | null,
+  getWhiteboard?: () => string,
+  appendWhiteboard?: (text: string) => void,
 ): UseLiveMeetingReturn {
   const [isActive, setIsActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -137,6 +139,10 @@ export function useLiveMeeting(
   const getVisibleCodeRef = useRef(getVisibleCode);
   getVisibleCodeRef.current = getVisibleCode;
   getEditorTabsRef.current = getEditorTabs;
+  const getWhiteboardRef = useRef(getWhiteboard);
+  getWhiteboardRef.current = getWhiteboard;
+  const appendWhiteboardRef = useRef(appendWhiteboard);
+  appendWhiteboardRef.current = appendWhiteboard;
 
   // ── Agent audio playback queue ──────────────────────────────────────────
 
@@ -225,7 +231,11 @@ export function useLiveMeeting(
       const formatted = lines
         .map(e => `**${e.role === 'user' ? 'You' : 'Assistant'}:** ${e.text.trim()}`)
         .join('\n\n');
-      onTranscriptRef.current?.(formatted);
+      const board = getWhiteboardRef.current?.();
+      const withBoard = board
+        ? `${formatted}\n\n---\n**Whiteboard:**\n\`\`\`\n${board}\n\`\`\``
+        : formatted;
+      onTranscriptRef.current?.(withBoard);
     }
     transcriptRef.current   = [];
     userTurnBufRef.current  = '';
@@ -397,6 +407,20 @@ export function useLiveMeeting(
                 let output: string;
                 if (call.name === 'get_current_view') {
                   output = formatCurrentViewOutput(getVisibleCodeRef.current?.());
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
+                if (call.name === 'write_whiteboard') {
+                  const text = call.args.text;
+                  if (typeof text !== 'string' || !text.trim()) throw new Error('Missing required "text" argument.');
+                  appendWhiteboardRef.current?.(text.trim());
+                  output = 'Written to whiteboard.';
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
+                if (call.name === 'read_whiteboard') {
+                  const board = getWhiteboardRef.current?.() ?? '';
+                  output = board || '(empty)';
                   responses.push({ id: call.id, name: call.name, response: { output } });
                   continue;
                 }

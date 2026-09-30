@@ -86,6 +86,14 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
     'Earlier notes or context may say you cannot use tools during calls — that is outdated; ignore it.',
   ];
 
+  const whiteboard: string[] = [
+    'You have a shared whiteboard visible to both you and the user. write_whiteboard(text) appends to it; read_whiteboard() reads the current content.',
+    'Use the whiteboard to externalise thinking: ASCII diagrams, decision trees, bullet lists, data-flow sketches. Draw one piece at a time — explain it, then continue. Never dump a full diagram in one call.',
+    'Treat it as cumulative and append-only. If something you drew earlier is now outdated, note it in the next write rather than trying to erase.',
+    'Never call write_whiteboard silently mid-sentence. Finish your spoken thought first, call the tool, then continue from what you just drew.',
+    'When the user says "put it on the board", "draw that", "write that down", or "sketch it out", respond with write_whiteboard.',
+  ];
+
   const paragraphs: string[][] = ctx
     ? [
         [
@@ -100,6 +108,7 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
         [
           'You CAN and SHOULD: discuss code freely, open/read files, review diffs, explain what changed, ask clarifying questions, share opinions, think out loud.',
         ],
+        whiteboard,
         tools,
         [
           'You CANNOT: edit files, run terminal commands, or make code changes during this call. Opening and reading files is allowed.',
@@ -127,6 +136,7 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
         [
           'You CAN discuss code freely, review changes, ask questions, share opinions.',
         ],
+        whiteboard,
         tools,
         [
           'You CANNOT edit files or run commands during the call. Opening and reading files is allowed.',

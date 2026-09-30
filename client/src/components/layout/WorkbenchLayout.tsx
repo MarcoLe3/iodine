@@ -146,6 +146,15 @@ export function WorkbenchLayout() {
   // Same pattern for open tabs: useOpenFiles is called below, so read through a ref.
   const meetingTabsRef = useRef<EditorTabs>({ root: null, paths: [], active: null });
 
+  const [whiteboardContent, setWhiteboardContent] = useState('');
+  const whiteboardRef = useRef('');
+  whiteboardRef.current = whiteboardContent;
+
+  const appendWhiteboard = useCallback((text: string) => {
+    setWhiteboardContent(prev => prev ? `${prev}\n${text}` : text);
+  }, []);
+  const getWhiteboard = useCallback(() => whiteboardRef.current, []);
+
   const liveMeeting = useLiveMeeting(provider.id, async (transcript) => {
     // Immediate feedback while the summary request runs; replaced in place below.
     const pendingId = rightPanelRef.current?.showPendingProactive('✍️ _Writing up meeting notes…_') ?? undefined;
@@ -182,7 +191,7 @@ export function WorkbenchLayout() {
       ? (abs.startsWith(root + '/') ? abs.slice(root.length + 1) : abs)
       : (abs ?? '');
     return path ? { path, content } : null;
-  });
+  }, getWhiteboard, appendWhiteboard);
 
   const pushNav = useCallback((path: string) => {
     setNav(prev => {
@@ -713,8 +722,10 @@ export function WorkbenchLayout() {
               commitDiffContext={commitDiffContext}
               onClearCommitDiffContext={() => setCommitDiffContext(null)}
               meetingActive={liveMeeting.isActive}
-              onMeetingStart={liveMeeting.start}
+              onMeetingStart={(ctx) => { setWhiteboardContent(''); liveMeeting.start(ctx); }}
               meetingError={liveMeeting.error}
+              whiteboardContent={whiteboardContent}
+              onWhiteboardAppend={appendWhiteboard}
             />
           </div>
         </div>
