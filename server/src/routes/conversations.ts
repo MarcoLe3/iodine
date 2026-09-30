@@ -171,6 +171,22 @@ export function createConversationsRouter(options: ConversationRouterOptions = {
     }
   });
 
+  router.delete('/conversations/:id', (req, res) => {
+    const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
+    if (!workspacePath) return res.status(400).json({ error: 'workspacePath is required' });
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'id is required' });
+
+    const file = path.join(conversationsDir(workspacePath), `${id}.json`);
+    try {
+      fs.unlinkSync(file);
+      return res.json({ ok: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return res.json({ ok: true });
+      return res.status(500).json({ error: errorMessage(error) });
+    }
+  });
+
   router.delete('/conversations', (req, res) => {
     const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
     if (!workspacePath) return res.status(400).json({ error: 'workspacePath is required' });

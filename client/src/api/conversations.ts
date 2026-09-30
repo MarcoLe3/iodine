@@ -25,6 +25,13 @@ export async function saveConversation(workspacePath: string, conv: Conversation
   if (!res.ok) throw new Error(`Failed to save conversation (HTTP ${res.status})`);
 }
 
+export async function deleteConversation(workspacePath: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/conversations/${encodeURIComponent(id)}?workspacePath=${encodeURIComponent(workspacePath)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Failed to delete conversation (HTTP ${res.status})`);
+}
+
 export async function clearConversations(workspacePath: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/conversations?workspacePath=${encodeURIComponent(workspacePath)}`, {
     method: 'DELETE',

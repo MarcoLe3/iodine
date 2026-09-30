@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useCodingAssistant } from '../../hooks/useCodingAssistant';
 import { openWorkspace, fetchOverallDiff } from '../../api/files';
-import { fetchConversations, clearConversations as apiClearConversations, type ConversationRecord } from '../../api/conversations';
+import { fetchConversations, clearConversations as apiClearConversations, deleteConversation as apiDeleteConversation, type ConversationRecord } from '../../api/conversations';
 import { UIMessage, UIBlock } from '../../types';
 import { PROVIDERS } from '../../providers';
 import type { Provider } from '../../providers';
@@ -290,6 +290,14 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
   useEffect(() => { if (meetingActive) setShowConversations(false); }, [meetingActive]);
   const handleSend = () => { const text = input.trim(); if (!text || isLoading || conversationsLoading || meetingActive) return; setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) { clearMessages(); } const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); const extraCtx = commitDiffContext?.content ?? undefined; onClearCommitDiffContext?.(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh, extraCtx); onMessageSent?.(); };
+  const handleDeleteConversation = async (id: string) => {
+    if (!workspacePath) return;
+    await apiDeleteConversation(workspacePath, id);
+    const updated = await fetchConversations(workspacePath);
+    setPastConversations(updated);
+    pastConversationsRef.current = updated;
+  };
+
   const handleClearAll = async () => {
     try {
       await clearAllConversations();
@@ -480,13 +488,22 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {pastConversations.map(conv => (
-                <button key={conv.id} onClick={() => handleLoadConversation(conv)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderTop: '1px solid var(--color-border)', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{conv.summary ?? formatConversationDate(conv.timestamp)}</div>
-                  <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.summary ? `${formatConversationDate(conv.timestamp)} · ` : ''}{`${conv.history.length} message${conv.history.length !== 1 ? 's' : ''}`}</div>
-                </button>
+                <div key={conv.id} style={{ position: 'relative', borderTop: '1px solid var(--color-border)' }}
+                  onMouseEnter={e => { (e.currentTarget.querySelector('.conv-delete') as HTMLElement | null)?.style.setProperty('opacity', '1'); }}
+                  onMouseLeave={e => { (e.currentTarget.querySelector('.conv-delete') as HTMLElement | null)?.style.setProperty('opacity', '0'); }}>
+                  <button onClick={() => handleLoadConversation(conv)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 36px 10px 12px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{conv.summary ?? formatConversationDate(conv.timestamp)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.summary ? `${formatConversationDate(conv.timestamp)} · ` : ''}{`${conv.history.length} message${conv.history.length !== 1 ? 's' : ''}`}</div>
+                  </button>
+                  <button className="conv-delete" onClick={e => { e.stopPropagation(); if (window.confirm('Delete this conversation?')) handleDeleteConversation(conv.id); }}
+                    title="Delete conversation"
+                    style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', padding: 4, opacity: 0, transition: 'opacity 0.15s' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  </button>
+                </div>
               ))}
             </div>
           </div>
