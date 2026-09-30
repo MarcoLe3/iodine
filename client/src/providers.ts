@@ -32,7 +32,9 @@ export const PROVIDERS: Provider[] = [
       '  ANTHROPIC_API_KEY=sk-ant-...\n\n' +
       'Copy .env.example to .env if you do not have one yet.\n\n' +
       'Also works: the file ~/.anthropic/api_key, where Claude Code already stores it, ' +
-      'or ANTHROPIC_API_KEY exported in your shell.',
+      'or ANTHROPIC_API_KEY exported in your shell (on Windows: %USERPROFILE%\\.anthropic\\api_key).\n\n' +
+      'Windows (PowerShell): set it permanently, then restart your terminal and the server:\n\n' +
+      '  [Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "<your-key>", "User")',
   },
   {
     id: 'openai',
@@ -52,7 +54,9 @@ export const PROVIDERS: Provider[] = [
       'Add your key to .env in the project root, then restart the server:\n\n' +
       '  OPENAI_TOKEN=sk-...\n\n' +
       'Copy .env.example to .env if you do not have one yet. ' +
-      'An OPENAI_TOKEN exported in your shell works too.',
+      'An OPENAI_TOKEN exported in your shell works too.\n\n' +
+      'Windows (PowerShell): set it permanently, then restart your terminal and the server:\n\n' +
+      '  [Environment]::SetEnvironmentVariable("OPENAI_TOKEN", "<your-key>", "User")',
   },
   {
     id: 'google',
@@ -67,7 +71,9 @@ export const PROVIDERS: Provider[] = [
       'Add your key to .env in the project root, then restart the server:\n\n' +
       '  GEMINI_API_KEY=AIza...\n\n' +
       'Copy .env.example to .env if you do not have one yet. ' +
-      'A GEMINI_API_KEY exported in your shell works too.',
+      'A GEMINI_API_KEY exported in your shell works too.\n\n' +
+      'Windows (PowerShell): set it permanently, then restart your terminal and the server:\n\n' +
+      '  [Environment]::SetEnvironmentVariable("GEMINI_API_KEY", "<your-key>", "User")',
   },
 ];
 

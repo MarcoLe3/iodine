@@ -21,10 +21,18 @@ npm install -g iodine-ide
 Requires Node.js 18+ and at least one AI provider API key (Anthropic, OpenAI, or Google).
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY / GOOGLE_API_KEY
+export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_TOKEN / GEMINI_API_KEY
 
 iodine
 ```
+
+On Windows (PowerShell), set the key permanently, then restart your terminal and run `iodine`:
+
+```powershell
+[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "<your-key>", "User")   # or OPENAI_TOKEN / GEMINI_API_KEY
+```
+
+Anthropic keys are also auto-detected from `~/.anthropic/api_key` (on Windows: `%USERPROFILE%\.anthropic\api_key`).
 
 Opens in your browser at http://localhost:3001. To use a different port: `PORT=4000 iodine`.
 
