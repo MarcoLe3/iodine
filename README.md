@@ -2,9 +2,9 @@
   <img src="images/iodine_logo_2-preview.png" alt="Iodine" width="140" />
 </p>
 
-<h1 align="center">Iodine</h1>
+<h1 align="center">Iodine — Harness for Code Exploration</h1>
 
-<p align="center">A browser-based IDE for exploring and working with unfamiliar codebases, with an integrated AI assistant, architecture diagram generator, and live voice sessions.</p>
+<p align="center">A harness built for exploring unfamiliar codebases — understanding the architecture, tracing how things connect, and finding your way through the deep jungles of someone else's code.</p>
 
 <p align="center">
 <a href="https://youtu.be/jy0Sb1kLzgo">Full Demo Part 1</a> · <a href="https://youtu.be/oifjOz1BLVk">Full Demo Part 2</a> · <a href="https://youtube.com/shorts/VeYM4Gd6_Pc?feature=share">Demo 1</a> · <a href="https://youtu.be/DFy1F0CQmN8">Demo 2</a> · <a href="https://www.youtube.com/watch?v=66pxz-CJ_sg">Demo 4</a> · <a href="https://youtu.be/DzGt5jQaSo8">Demo 5</a>
@@ -40,14 +40,10 @@ To update: `npm install -g iodine-ide@latest`.
 
 ## Features
 
-- **Monaco editor** with Git diff gutter, merge conflict resolver, and tab management
-- **Coding Assistant** — agentic file editing with `edit_file` / `write_file` tools, revert support, and conversation history
 - **Mentor mode** — guided walkthroughs that open files, highlight lines, and explain one block at a time without making changes
 - **Live voice sessions** — real-time conversation via Gemini Live that reads files, navigates code, and drops a full transcript back into the chat
-- **AI summaries** — cached per-file and per-directory summaries with a Markdown preview and table-of-contents sidebar
+- **Polished documentation** — cached per-file and per-directory summaries with a Markdown preview and table-of-contents sidebar
 - **System View** — interactive architecture graph generated from the codebase; nodes link back to source locations
-- **Build assistant** — generates and runs project-specific test, build, and run commands
-- **Integrated terminal** — full PTY sessions via xterm.js
 - Supports Anthropic Claude, OpenAI GPT, and Google Gemini
 
 ## Running from source
