@@ -10,6 +10,7 @@
 
 export const SETTINGS_SECTIONS = [
   { id: 'editor', label: 'Editor' },
+  { id: 'voice', label: 'Voice' },
   { id: 'privacy', label: 'Privacy' },
 ] as const;
 
@@ -53,6 +54,18 @@ export const SETTINGS = {
     description:
       'Enable Vim keybindings in all editor tabs by default. The per-tab "Enable/Disable Vim" button still overrides this for individual tabs.',
     default: false,
+  },
+  'voice.ttsProvider': {
+    type: 'select',
+    section: 'voice',
+    label: 'Voice Memo provider',
+    description:
+      'AI provider used for the Voice Memo feature (the speaker icon on assistant messages). This controls text-to-speech only — it does not affect the live meeting, which always uses Gemini Live.',
+    options: [
+      { value: 'google', label: 'Google (Gemini)' },
+      { value: 'openai', label: 'OpenAI' },
+    ],
+    default: 'google',
   },
   'privacy.redactSecrets': {
     type: 'boolean',
