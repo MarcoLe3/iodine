@@ -482,7 +482,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 8px', flexShrink: 0 }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent</span>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <button onClick={handleClearAll} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 11, padding: '2px 4px' }}>Clear all</button>
+                <button onClick={() => { if (window.confirm('Clear all conversations?')) handleClearAll(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 11, padding: '2px 4px' }}>Clear all</button>
                 {showConversations && uiMessages.length > 0 && <button onClick={() => setShowConversations(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 13, padding: '2px 4px', lineHeight: 1 }} title="Close">✕</button>}
               </div>
             </div>
