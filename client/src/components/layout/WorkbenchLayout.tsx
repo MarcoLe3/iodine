@@ -731,7 +731,7 @@ export function WorkbenchLayout() {
           <BottomTray ref={bottomTrayRef} height={trayHeight} workspacePath={workspacePath} />
         </div>
       </div>
-      {workspacePath && <StatusBar proactive={proactiveStatus} lastPingAt={lastPingAt} />}
+      {workspacePath && churnDetectionEnabled && <StatusBar proactive={proactiveStatus} lastPingAt={lastPingAt} />}
     </div>
   );
 }
