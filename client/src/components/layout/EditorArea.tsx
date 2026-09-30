@@ -107,14 +107,15 @@ function isPreviewable(path: string) {
 /* Markdown path and heading helpers live in editor/MarkdownUtils.ts. */
 
 const btnStyle: React.CSSProperties = {
-  padding: '0 8px',
-  height: 18,
+  padding: '0 10px',
+  height: '100%',
   fontSize: 11,
   fontWeight: 500,
   letterSpacing: '0.02em',
   color: '#fff',
   border: 'none',
-  borderRadius: 3,
+  borderRight: '1px solid rgba(255,255,255,0.07)',
+  borderRadius: 0,
   cursor: 'pointer',
   userSelect: 'none',
   whiteSpace: 'nowrap',
@@ -793,8 +794,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
           {activeFile && (showConflictsButton || showPreviewButton || showSummaryButton || showVimButton) && (
             <div style={{
-              display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4,
-              height: 24, flexShrink: 0, padding: '0 8px', boxSizing: 'border-box',
+              display: 'flex', justifyContent: 'flex-end', alignItems: 'stretch',
+              height: 24, flexShrink: 0,
               background: 'var(--color-bg-editor)', borderTop: '1px solid var(--color-border)',
             }}>
               {showConflictsButton && (
