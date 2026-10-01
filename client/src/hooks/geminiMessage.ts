@@ -347,6 +347,14 @@ export function handleGeminiMessage(
                     properties: {},
                   },
                 },
+                {
+                  name: 'clear_whiteboard',
+                  description: 'Erase the entire whiteboard so you can start a fresh diagram. Use this before redrawing an existing diagram — appending to an existing one creates duplicates and confusion.',
+                  parameters: {
+                    type: 'OBJECT',
+                    properties: {},
+                  },
+                },
               ],
             }],
           },

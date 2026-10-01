@@ -153,6 +153,7 @@ export function WorkbenchLayout() {
   const appendWhiteboard = useCallback((text: string) => {
     setWhiteboardContent(prev => prev ? `${prev}\n${text}` : text);
   }, []);
+  const clearWhiteboard = useCallback(() => setWhiteboardContent(''), []);
   const getWhiteboard = useCallback(() => whiteboardRef.current, []);
 
   const liveMeeting = useLiveMeeting(provider.id, async (transcript) => {
@@ -191,7 +192,7 @@ export function WorkbenchLayout() {
       ? (abs.startsWith(root + '/') ? abs.slice(root.length + 1) : abs)
       : (abs ?? '');
     return path ? { path, content } : null;
-  }, getWhiteboard, appendWhiteboard);
+  }, getWhiteboard, appendWhiteboard, clearWhiteboard);
 
   const pushNav = useCallback((path: string) => {
     setNav(prev => {
@@ -726,6 +727,7 @@ export function WorkbenchLayout() {
               meetingError={liveMeeting.error}
               whiteboardContent={whiteboardContent}
               onWhiteboardAppend={appendWhiteboard}
+              onWhiteboardClear={clearWhiteboard}
             />
           </div>
         </div>

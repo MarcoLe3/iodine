@@ -72,10 +72,12 @@ interface RightPanelProps {
   whiteboardContent?: string;
   /** Append text to the shared whiteboard. */
   onWhiteboardAppend?: (text: string) => void;
+  /** Clear the shared whiteboard. */
+  onWhiteboardClear?: () => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(
-function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, commitDiffContext, onClearCommitDiffContext, meetingActive, onMeetingStart, meetingError, whiteboardContent, onWhiteboardAppend }, ref) {
+function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, runCommandInTerminal, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenUrl, activeSystemNode, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, commitDiffContext, onClearCommitDiffContext, meetingActive, onMeetingStart, meetingError, whiteboardContent, onWhiteboardAppend, onWhiteboardClear }, ref) {
   const [activeTab, setActiveTab] = useState<RightTab>('assistant');
   const panelRef             = useRef<HTMLDivElement>(null);
   const pulseAutoStopRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -282,6 +284,7 @@ function RightPanel({ width, animated, workspacePath, activeFilePath, onWorkspac
           <MeetingWhiteboard
             content={whiteboardContent ?? ''}
             onAppend={onWhiteboardAppend ?? (() => {})}
+            onClear={onWhiteboardClear}
           />
         )}
         <div style={{ flex: 1, display: meetingActive ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden' }}>

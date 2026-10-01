@@ -143,9 +143,10 @@ function renderLine(line: string, key: number) {
 interface MeetingWhiteboardProps {
   content: string;
   onAppend: (text: string) => void;
+  onClear?: () => void;
 }
 
-export function MeetingWhiteboard({ content, onAppend }: MeetingWhiteboardProps) {
+export function MeetingWhiteboard({ content, onAppend, onClear }: MeetingWhiteboardProps) {
   const [input, setInput] = useState('');
   const preRef = useRef<HTMLPreElement>(null);
 
@@ -160,10 +161,17 @@ export function MeetingWhiteboard({ content, onAppend }: MeetingWhiteboardProps)
     setInput('');
   }
 
+  const displayed = erasedContent ?? content;
+
   return (
     <div style={{ width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', borderTop: '1px solid var(--color-border)' }}>
-      <div style={{ padding: '4px 10px 2px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', opacity: 0.7, flexShrink: 0 }}>
-        Whiteboard
+      <div style={{ padding: '4px 10px 2px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', opacity: 0.7, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>Whiteboard</span>
+        {onClear && content && (
+          <button type="button" onClick={onClear} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--color-text-secondary)', opacity: 0.6, padding: '0 2px' }} title="Clear whiteboard">
+            Clear
+          </button>
+        )}
       </div>
       <pre
         ref={preRef}

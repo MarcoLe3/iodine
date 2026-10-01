@@ -96,6 +96,7 @@ export function useLiveMeeting(
   getVisibleCode?: () => { path: string; content: string } | null,
   getWhiteboard?: () => string,
   appendWhiteboard?: (text: string) => void,
+  clearWhiteboard?: () => void,
 ): UseLiveMeetingReturn {
   const [isActive, setIsActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -143,6 +144,8 @@ export function useLiveMeeting(
   getWhiteboardRef.current = getWhiteboard;
   const appendWhiteboardRef = useRef(appendWhiteboard);
   appendWhiteboardRef.current = appendWhiteboard;
+  const clearWhiteboardRef = useRef(clearWhiteboard);
+  clearWhiteboardRef.current = clearWhiteboard;
   const whiteboardInstructionsFetchedRef = useRef(false);
 
   // ── Agent audio playback queue ──────────────────────────────────────────
@@ -468,6 +471,13 @@ Different levels stack vertically. Leave a blank line between each layer.
                 if (call.name === 'read_whiteboard') {
                   const board = getWhiteboardRef.current?.() ?? '';
                   output = board || '(empty)';
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
+                if (call.name === 'clear_whiteboard') {
+                  clearWhiteboardRef.current?.();
+                  whiteboardInstructionsFetchedRef.current = false;
+                  output = 'Whiteboard cleared. Call get_whiteboard_instructions() before drawing again.';
                   responses.push({ id: call.id, name: call.name, response: { output } });
                   continue;
                 }
