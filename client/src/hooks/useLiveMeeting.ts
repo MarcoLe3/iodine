@@ -428,6 +428,9 @@ Use this node style — square brackets, no box-drawing characters:
 Connect nodes with arrows. Same-level nodes go side by side on the same row.
 Different levels stack vertically. Leave a blank line between each layer.
 
+If the user asks for a different or updated diagram, call clear_whiteboard() FIRST.
+Never append a new diagram on top of an existing one — it creates confusion.
+
 ── EXAMPLE 1: linear pipeline ─────────────────────────────────────────────
 
   [ Browser ]  ──────────►  [ server.ts ]  ──────────►  [ Gemini API ]
@@ -497,26 +500,31 @@ Different levels stack vertically. Leave a blank line between each layer.
                 }
                 if (call.name === 'read_file') {
                   const content = await fetchFileContent(path);
-                  output = formatReadFileOutput(content, call.args.start_line, call.args.end_line);
+                  output = formatReadFileOutput(content, call.args.start_line, call.args.end_line) +
+                    '\n\n[If you found something worth showing — a key function, a relevant block, a surprising pattern — call open_file at that line so your partner can see it, then explain. Only skip open_file if you are still searching and about to call read_file again immediately.]';
                 } else if (call.name === 'open_file') {
                   const navigate = navigateToFileRef.current;
                   if (!navigate) throw new Error('Editor navigation is not available in this session.');
                   // Fail hard if the file can't be loaded — never report a fake success.
                   // Use the server-resolved absolute path so the editor and fetch agree.
-                  const { path: absPath, content } = await fetchFileWithPath(path);
                   const line = typeof call.args.line === 'number' ? call.args.line : undefined;
-                  let jump: DiffJump | undefined;
-                  if (line === undefined) {
-                    // No explicit line: jump to the main uncommitted change, skipping imports.
-                    // A diff failure (untracked file, not a git repo) must not fail the open.
-                    try {
-                      jump = pickDiffJump((await fetchFileDiff(absPath)).hunks, content);
-                    } catch { /* open at top */ }
+                  // Reject line 1 or missing line — force the model to read the file and
+                  // return a meaningful location rather than dumping the user at the top.
+                  if (line === undefined || line <= 1) {
+                    const { content: preview } = await fetchFileWithPath(path);
+                    throw new Error(
+                      `Line number required — do not open at line 1 or without a line. ` +
+                      `Call read_file("${path}") to find the specific function or block the user should see, then retry open_file with that line. ` +
+                      `File preview (first 10 lines):\n${preview.split('\n').slice(0, 10).join('\n')}`
+                    );
                   }
-                  navigate(absPath, line ?? jump?.line);
-                  output = jump
-                    ? formatDiffJumpOutput(jump)
-                    : `Opened${line ? ` at line ${line}` : ''}.`;
+                  const { path: absPath, content } = await fetchFileWithPath(path);
+                  let jump: DiffJump | undefined;
+                  try {
+                    jump = pickDiffJump((await fetchFileDiff(absPath)).hunks, content);
+                  } catch { /* open at given line */ }
+                  navigate(absPath, line);
+                  output = `Opened at line ${line}.${jump ? ' ' + formatDiffJumpOutput(jump) : ''} [If this section reveals something worth capturing — a flow, a key relationship, a decision point — add it to the whiteboard now.]`;
                 } else {
                   throw new Error(`Unknown tool: ${call.name}`);
                 }

@@ -35,17 +35,14 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
   // Repeated deliberately (top, inside tools, and last) — the voice model tends to
   // narrate code as if it were on screen without ever calling open_file.
   const showCode: string[] = [
-    'CRITICAL RULE — SHOW, DO NOT NARRATE: whenever the user asks to see, explain, walk through, or go over code, your FIRST action is to call open_file. Speak only after it succeeds.',
-    'Talking about code without calling open_file is a failure, even if your explanation is correct. The user cannot see anything you have not opened.',
+    'CRITICAL RULE — SHOW, DO NOT NARRATE: whenever the user asks to see, explain, walk through, or go over code, call open_file at the exact relevant line before you speak about it.',
+    'Talking about code without calling open_file is a failure. The user cannot see anything you have not opened.',
     'NEVER pretend code is on screen. Do not say "we\'re looking at", "here you can see", "this is where", or "as you can see" unless open_file succeeded for that exact section.',
-    'Every new function or block you explain needs its own open_file call with a line argument, before you describe it.',
-    'Show liberally: in a single turn you may, and usually should, open several places one after another (e.g. a function, then its caller, then the related change in another file), calling open_file right before describing each one. Do not stop after the first spot if the explanation naturally covers more.',
-    'When going over code or a diff, walk through the changed hunks of the current file in order, calling open_file at each hunk right before describing it. Do not stop or wait for the user between hunks within a batch.',
-    'Be reasonable about batch size: cover about three hunks per turn. Very small related hunks may count as one; skip import-only hunks unless asked. If the file has only a few hunks, finish the whole file in one turn.',
-    'At the end of each batch, explicitly ask out loud, then stop talking and wait. If hunks remain in this file, ask something like "Any questions so far, or should I keep going with the rest of this file?" After the last hunk of the file, ask something like "Any questions on this file, or should I move on to the next one?" Never just go quiet and wait for the user to prompt you.',
-    'If the user asks to go further, continue with the next batch in the same file, or move on to the next file in the diff once the current file is done, then check in again the same way.',
-    'If the user says they cannot see it, or asks to be shown again, STOP talking immediately and call open_file. Do not repeat or continue the explanation first.',
-    'EXCEPTION: high-level questions about the overall system, architecture, data flow, design decisions, or how pieces fit together do not require open_file — answer those conversationally. The rule applies once the discussion points at a specific file, function, or block of code, or the user asks to see it.',
+    'Always open at the specific line where the relevant function or block starts — not line 1. read_file first to find the right line if needed, then open_file with that line.',
+    'Move fluidly and proactively: as you speak, keep opening the next relevant section before you describe it. Do not finish explaining one thing and then stop to ask permission to continue — just keep moving. Pause naturally only when you genuinely need the user to make a decision.',
+    'When explaining with a diagram, interleave write_whiteboard and open_file: draw a node on the board, open the corresponding code section, explain it, draw the next node, open that section. Do both simultaneously, not sequentially.',
+    'If the user says they cannot see it, or asks to be shown again, STOP and call open_file immediately.',
+    'EXCEPTION: high-level architecture or data flow questions can be answered conversationally. The rule applies once the discussion points at a specific file, function, or block.',
   ];
 
   const showCodeReminder: string[] = [
@@ -87,12 +84,14 @@ export function buildLiveMeetingPrompt(ctx?: string | null): string {
   ];
 
   const whiteboard: string[] = [
-    'You have a shared whiteboard visible to both you and the user. write_whiteboard(text) appends to it; read_whiteboard() reads the current content.',
-    'IMPORTANT: call get_whiteboard_instructions() before your first write_whiteboard() — it will fail otherwise. Call it once per meeting, right before drawing.',
-    'Use [ Label ] style nodes with ──► arrows, NOT ┌─┐ box-drawing characters. Draw one section at a time, explain it, then continue.',
-    'Treat it as cumulative and append-only. If something you drew earlier is now outdated, note it in the next write rather than trying to erase.',
-    'Never call write_whiteboard silently mid-sentence. Finish your spoken thought first, call the tool, then continue from what you just drew.',
-    'When the user says "put it on the board", "draw that", "write that down", or "sketch it out", respond with write_whiteboard.',
+    'You have a shared whiteboard visible to both you and the user. write_whiteboard(text) appends to it; read_whiteboard() reads the current content; clear_whiteboard() erases it.',
+    'IMPORTANT: call get_whiteboard_instructions() before your first write_whiteboard() — it will fail otherwise. Call it once per meeting (or after each clear_whiteboard), right before drawing.',
+    'Use the whiteboard liberally and proactively — do not wait to be asked. Any time you explain how something works, sketch a diagram or jot bullet points on the board while you talk. The board and the editor should move together.',
+    'Bullet points on the board are just as valuable as diagrams. Key decisions, trade-offs, a numbered list of steps — write them as you speak, not after.',
+    'Work simultaneously: as you explain each part, draw it on the board AND open_file at the relevant line at the same time. Never finish speaking about a section before both the board and the editor have been updated.',
+    'When the user asks for a tutorial, walkthrough, or conceptual explanation — start with a diagram on the board, then open files as you walk through each part. Lead with the board, then the code.',
+    'When the user asks for a second or different diagram, call clear_whiteboard() first. A cluttered board is worse than starting fresh.',
+    'Never call write_whiteboard silently mid-sentence. Finish the spoken thought, call the tool, then continue from what you drew.',
   ];
 
   const paragraphs: string[][] = ctx
