@@ -324,8 +324,13 @@ export function handleGeminiMessage(
                   },
                 },
                 {
+                  name: 'get_whiteboard_instructions',
+                  description: 'Fetch the drawing style guide. You MUST call this before calling write_whiteboard — write_whiteboard will fail with an error if you have not called this first.',
+                  parameters: { type: 'OBJECT', properties: {} },
+                },
+                {
                   name: 'write_whiteboard',
-                  description: 'Append text to the shared whiteboard visible to both you and the user. Use for ASCII diagrams, decision trees, bullet lists, data-flow sketches. Draw one piece, explain it, then continue. Never dump everything at once.',
+                  description: 'Append text to the shared whiteboard. You MUST call get_whiteboard_instructions() before this — it will fail otherwise.',
                   parameters: {
                     type: 'OBJECT',
                     properties: {

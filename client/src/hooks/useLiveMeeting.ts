@@ -143,6 +143,7 @@ export function useLiveMeeting(
   getWhiteboardRef.current = getWhiteboard;
   const appendWhiteboardRef = useRef(appendWhiteboard);
   appendWhiteboardRef.current = appendWhiteboard;
+  const whiteboardInstructionsFetchedRef = useRef(false);
 
   // ── Agent audio playback queue ──────────────────────────────────────────
 
@@ -355,6 +356,7 @@ export function useLiveMeeting(
         }));
       };
 
+      whiteboardInstructionsFetchedRef.current = false;
       setIsActive(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -410,7 +412,52 @@ export function useLiveMeeting(
                   responses.push({ id: call.id, name: call.name, response: { output } });
                   continue;
                 }
+                if (call.name === 'get_whiteboard_instructions') {
+                  whiteboardInstructionsFetchedRef.current = true;
+                  output = `WHITEBOARD STYLE GUIDE
+
+Canvas is ~72 chars wide. USE THE FULL WIDTH.
+
+Use this node style — square brackets, no box-drawing characters:
+
+    [ Node Label ]
+
+Connect nodes with arrows. Same-level nodes go side by side on the same row.
+Different levels stack vertically. Leave a blank line between each layer.
+
+── EXAMPLE 1: linear pipeline ─────────────────────────────────────────────
+
+  [ Browser ]  ──────────►  [ server.ts ]  ──────────►  [ Gemini API ]
+
+── EXAMPLE 2: fan-out ──────────────────────────────────────────────────────
+
+                    [ useLiveMeeting ]
+                            │
+               ┌────────────┴────────────┐
+               │                         │
+               ▼                         ▼
+  [ write_whiteboard ]         [ read_whiteboard ]
+          │                         │
+          ▼                         ▼
+  [ appendWhiteboard() ]   [ getWhiteboardRef() ]
+
+── EXAMPLE 3: labeled data flow ────────────────────────────────────────────
+
+  [ Microphone ]  ──PCM──►  [ Processor ]  ──base64──►  [ WebSocket ]
+                                                               │
+                                                             relay
+                                                               │
+                                                               ▼
+                                                        [ Gemini Live ]`;
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
                 if (call.name === 'write_whiteboard') {
+                  if (!whiteboardInstructionsFetchedRef.current) {
+                    output = 'ERROR: You must call get_whiteboard_instructions() before write_whiteboard(). Call it now, then retry.';
+                    responses.push({ id: call.id, name: call.name, response: { error: output } });
+                    continue;
+                  }
                   const text = call.args.text;
                   if (typeof text !== 'string' || !text.trim()) throw new Error('Missing required "text" argument.');
                   appendWhiteboardRef.current?.(text.trim());
