@@ -161,7 +161,6 @@ export function MeetingWhiteboard({ content, onAppend, onClear }: MeetingWhitebo
     setInput('');
   }
 
-  const displayed = erasedContent ?? content;
 
   return (
     <div style={{ width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', borderTop: '1px solid var(--color-border)' }}>
