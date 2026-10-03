@@ -21,6 +21,8 @@ export interface OpenFile {
   url?: string;
   /** File opened from outside the current workspace via File > Open File… */
   isExternal?: boolean;
+  /** Built-in Settings page (path is SETTINGS_TAB_PATH). */
+  isSettings?: boolean;
 }
 
 export type SidebarView = 'explorer' | 'scm' | 'outline';

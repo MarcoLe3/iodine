@@ -212,3 +212,35 @@ describe('run_terminal_command', () => {
     expect(res.write).not.toHaveBeenCalled();
   });
 });
+
+describe('secret redaction', () => {
+  // Built from parts so this file's own source doesn't contain a raw key.
+  const KEY = 'sk-' + 'proj-' + 'abcdefghijklmnopqrstuvwx1234';
+  const FILE = `OPENAI_API_KEY=${KEY}\nconst x = 1;`;
+
+  it('masks secrets in tool results by default', async () => {
+    mocks.executeTool.mockResolvedValue({ content: FILE, preview: `line: ${KEY}`, error: false });
+    const { res } = makeRes();
+    const r = await executeAgentTool('read_file', { path: '.env' }, res, live(), 'c1');
+    expect(r.content).not.toContain(KEY);
+    expect(r.content).toMatch(/\[REDACTED:\*+\]/);
+    expect(r.content).toContain('const x = 1;');
+    expect(r.preview).not.toContain(KEY);
+    expect(r.error).toBe(false);
+  });
+
+  it('masks secrets in terminal output', async () => {
+    mocks.requestTerminalApproval.mockResolvedValue(true);
+    mocks.runTerminalCommand.mockResolvedValue({ content: `$ env\n${KEY}`, preview: 'env', error: false });
+    const { res } = makeRes();
+    const r = await executeAgentTool('run_terminal_command', { command: 'env', reason: 'r' }, res, live(), 't1', true);
+    expect(r.content).not.toContain(KEY);
+  });
+
+  it('leaves tool results untouched when redaction is off', async () => {
+    mocks.executeTool.mockResolvedValue({ content: FILE, preview: 'p', error: false });
+    const { res } = makeRes();
+    const r = await executeAgentTool('read_file', { path: '.env' }, res, live(), 'c1', false);
+    expect(r.content).toBe(FILE);
+  });
+});

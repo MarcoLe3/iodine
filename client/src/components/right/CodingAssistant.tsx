@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useCodingAssistant } from '../../hooks/useCodingAssistant';
 import { openWorkspace, fetchOverallDiff } from '../../api/files';
-import { fetchConversations, clearConversations as apiClearConversations, type ConversationRecord } from '../../api/conversations';
+import { fetchConversations, clearConversations as apiClearConversations, deleteConversation as apiDeleteConversation, type ConversationRecord } from '../../api/conversations';
 import { UIMessage, UIBlock } from '../../types';
 import { PROVIDERS } from '../../providers';
 import type { Provider } from '../../providers';
@@ -13,6 +13,7 @@ import { parseFilePath, resolveFromRoot } from '../../utils/filePath';
 import { RevertButton } from './RevertButton';
 import { InlineSystemGraph } from './InlineSystemGraph';
 import type { SystemGraph } from '../../api/files';
+import { useSetting } from '../../settings';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
@@ -20,7 +21,6 @@ const SPEECH_OPTIONS = [
   { id: 'google', label: 'Gemini', model: 'gemini-2.5-flash-preview-tts' },
   { id: 'openai', label: 'OpenAI', model: 'tts-1-hd' },
 ] as const;
-type SpeechProviderId = typeof SPEECH_OPTIONS[number]['id'];
 
 function pathArgument(input: unknown): string | null {
   if (!input || typeof input !== 'object') return null;
@@ -188,11 +188,11 @@ interface CodingAssistantProps { workspacePath: string | null; activeFilePath: s
 }
 
 export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistantProps>(function CodingAssistant({ workspacePath, activeFilePath, onWorkspaceOpen, provider, model, setProvider, setModel, getEditorContext, contextNodes, onRemoveContextNode, onClearContextNodes, onNavigateToLine, onOpenNode, activeSystemNode, graph, onOpenIogram, onUserTyping, onMessageSent, onAssistantBusyChange, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, commitDiffContext, onClearCommitDiffContext, meetingActive, onMeetingStart, meetingError }, ref) {
-  const [speechProviderId, setSpeechProviderId] = useState<SpeechProviderId>(() => (localStorage.getItem('iodine:speech-provider') as SpeechProviderId) ?? 'google');
-  useEffect(() => { localStorage.setItem('iodine:speech-provider', speechProviderId); }, [speechProviderId]);
-  const speechOption = SPEECH_OPTIONS.find(o => o.id === speechProviderId) ?? SPEECH_OPTIONS[0];
+  const [ttsProvider] = useSetting('voice.ttsProvider');
+  const speechOption = SPEECH_OPTIONS.find(o => o.id === ttsProvider) ?? SPEECH_OPTIONS[0];
 
-  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, enqueueEventContext, stopExecution, clearMessages, sendApproval, injectProactiveMessage, showPendingProactive, markAcknowledged, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest);
+  const [redactSecretsEnabled] = useSetting('privacy.redactSecrets');
+  const { uiMessages, isLoading, isWatching, conversationPersistenceError, canRetryConversationSave, conversationSaveRevision, sendMessage, enqueueEventContext, stopExecution, clearMessages, sendApproval, injectProactiveMessage, showPendingProactive, markAcknowledged, notifyEditorActivity, loadConversation, retryConversationSave, clearAllConversations } = useCodingAssistant(provider, model, workspacePath, onNavigateToLine, onWatchTrigger, onAssistantReply, onFileTreeRefresh, onSummaryRequest, redactSecretsEnabled);
   // Keep a ref to sendMessage so callbacks (like transcribeAndSend) never capture a stale closure.
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
@@ -290,6 +290,14 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
   useEffect(() => { if (!showConversations && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [uiMessages, showConversations]);
   useEffect(() => { if (meetingActive) setShowConversations(false); }, [meetingActive]);
   const handleSend = () => { const text = input.trim(); if (!text || isLoading || conversationsLoading || meetingActive) return; setInput(''); const isFresh = showConversations; setShowConversations(false); if (isFresh) { clearMessages(); } const editorContext = getEditorContext?.() ?? null; const ctxPaths = contextNodes.map(n => !workspacePath ? n.path : n.path.startsWith(workspacePath + '/') ? n.path.slice(workspacePath.length + 1) : n.path); onClearContextNodes(); const extraCtx = commitDiffContext?.content ?? undefined; onClearCommitDiffContext?.(); sendMessage(text, activeFilePath, editorContext, ctxPaths.length > 0 ? ctxPaths : undefined, isTutorMode, isFresh, extraCtx); onMessageSent?.(); };
+  const handleDeleteConversation = async (id: string) => {
+    if (!workspacePath) return;
+    await apiDeleteConversation(workspacePath, id);
+    const updated = await fetchConversations(workspacePath);
+    setPastConversations(updated);
+    pastConversationsRef.current = updated;
+  };
+
   const handleClearAll = async () => {
     try {
       await clearAllConversations();
@@ -474,19 +482,28 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 8px', flexShrink: 0 }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent</span>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <button onClick={handleClearAll} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 11, padding: '2px 4px' }}>Clear all</button>
+                <button onClick={() => { if (window.confirm('Clear all conversations?')) handleClearAll(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 11, padding: '2px 4px' }}>Clear all</button>
                 {showConversations && uiMessages.length > 0 && <button onClick={() => setShowConversations(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 13, padding: '2px 4px', lineHeight: 1 }} title="Close">✕</button>}
               </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {pastConversations.map(conv => (
-                <button key={conv.id} onClick={() => handleLoadConversation(conv)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderTop: '1px solid var(--color-border)', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{conv.summary ?? formatConversationDate(conv.timestamp)}</div>
-                  <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.summary ? `${formatConversationDate(conv.timestamp)} · ` : ''}{`${conv.history.length} message${conv.history.length !== 1 ? 's' : ''}`}</div>
-                </button>
+                <div key={conv.id} style={{ position: 'relative', borderTop: '1px solid var(--color-border)' }}
+                  onMouseEnter={e => { (e.currentTarget.querySelector('.conv-delete') as HTMLElement | null)?.style.setProperty('opacity', '1'); }}
+                  onMouseLeave={e => { (e.currentTarget.querySelector('.conv-delete') as HTMLElement | null)?.style.setProperty('opacity', '0'); }}>
+                  <button onClick={() => handleLoadConversation(conv)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 36px 10px 12px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 500 }}>{conv.summary ?? formatConversationDate(conv.timestamp)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{conv.summary ? `${formatConversationDate(conv.timestamp)} · ` : ''}{`${conv.history.length} message${conv.history.length !== 1 ? 's' : ''}`}</div>
+                  </button>
+                  <button className="conv-delete" onClick={e => { e.stopPropagation(); if (window.confirm('Delete this conversation?')) handleDeleteConversation(conv.id); }}
+                    title="Delete conversation"
+                    style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', padding: 4, opacity: 0, transition: 'opacity 0.15s' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -543,11 +560,7 @@ export const CodingAssistant = forwardRef<CodingAssistantHandle, CodingAssistant
         }} title="Start a live voice meeting" style={{ alignSelf: 'stretch', background: 'rgba(78,201,176,0.1)', border: '1px solid rgba(78,201,176,0.35)', borderRadius: 8, color: '#4ec9b0', cursor: 'pointer', fontSize: 12, padding: '7px 12px', fontWeight: 600, textAlign: 'center' }}>Start a meeting</button>}
         {meetingActive && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '7px 10px', border: '1px solid rgba(78,201,176,0.4)', borderRadius: 6, background: 'rgba(78,201,176,0.08)', color: '#4ec9b0' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f5a623', boxShadow: '0 0 6px #f5a62399', display: 'inline-block', flexShrink: 0, animation: 'meeting-dot-pulse 2s ease-in-out infinite' }} />Live meeting in progress — chat is paused</div>}
         <textarea ref={textareaRef} value={input} onChange={e => { setInput(e.target.value); onUserTyping?.(); }} onKeyDown={handleKeyDown} placeholder="Ask anything… (Enter to send, Shift+Enter for newline)" rows={3} disabled={isLoading || !!meetingActive} style={{ background: 'var(--color-bg-input)', border: '1px solid var(--color-border)', borderRadius: 10, color: 'var(--color-text-primary)', fontSize: 12, padding: '9px 11px', resize: 'none', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box', opacity: meetingActive ? 0.4 : 1 }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Speech</span>
-            <select value={speechProviderId} onChange={e => setSpeechProviderId(e.target.value as SpeechProviderId)} title="Speech model for Voice Memo" style={{ background: 'var(--color-bg-sidebar)', border: '1px solid var(--color-border)', borderRadius: 6, color: 'var(--color-text-secondary)', fontSize: 11, padding: '2px 6px', cursor: 'pointer' }}>{SPEECH_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><button role="switch" aria-checked={isTutorMode} onClick={() => setIsTutorMode(v => !v)} title={isTutorMode ? 'Mentor Mode on — AI will guide you step by step' : 'Enable Mentor Mode'} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '5px 4px', color: isTutorMode ? '#4ec9b0' : 'var(--color-text-secondary)', fontSize: 11, fontWeight: isTutorMode ? 600 : 400 }}><span style={{ position: 'relative', width: 26, height: 15, borderRadius: 999, background: isTutorMode ? '#4ec9b0' : 'var(--color-border)', transition: 'background .15s ease', flexShrink: 0 }}><span style={{ position: 'absolute', top: 2, left: isTutorMode ? 13 : 2, width: 11, height: 11, borderRadius: '50%', background: '#fff', transition: 'left .15s ease' }} /></span>Mentor</button>{isLoading && <button onClick={() => stopExecution()} style={{ background: '#f4877118', border: '1px solid #f4877160', borderRadius: 999, color: '#f48771', cursor: 'pointer', fontSize: 12, padding: '5px 14px', fontWeight: 600 }}>Stop</button>}<button onClick={isRecording ? stopRecording : startRecording} disabled={isTranscribing || !!meetingActive} title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing…' : 'Voice input'} style={{ background: isRecording ? '#f4877118' : 'none', border: `1px solid ${isRecording ? '#f48771' : 'var(--color-border)'}`, borderRadius: 999, color: isRecording ? '#f48771' : isTranscribing ? 'var(--color-text-secondary)' : 'var(--color-text-secondary)', cursor: isTranscribing || meetingActive ? 'default' : 'pointer', padding: '5px 8px', display: 'inline-flex', alignItems: 'center', transition: 'background 0.15s ease, border-color 0.15s ease', opacity: meetingActive ? 0.4 : 1 }}>{isTranscribing ? <span style={{ fontSize: 11 }}>…</span> : <MicIcon />}</button><button onClick={handleSend} disabled={isLoading || !input.trim() || !!meetingActive} style={{ background: isLoading || !input.trim() || meetingActive ? '#ffffff18' : '#0e639c', border: 'none', borderRadius: 999, color: isLoading || !input.trim() || meetingActive ? 'var(--color-text-secondary)' : '#fff', cursor: isLoading || !input.trim() || meetingActive ? 'default' : 'pointer', fontSize: 12, padding: '5px 15px', fontWeight: 600 }}>{isLoading ? 'Thinking…' : 'Send'}</button></div>
         </div>
       </div>

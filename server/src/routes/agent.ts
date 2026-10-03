@@ -68,13 +68,16 @@ router.post('/agent/revert', async (req, res) => {
 });
 
 router.post('/agent/chat', async (req, res) => {
-  const { messages, model, provider, activeFile, tutorMode } = req.body as {
+  const { messages, model, provider, activeFile, tutorMode, redactSecrets } = req.body as {
     messages?: { role: 'user' | 'assistant'; content: string }[];
     model?: string;
     provider?: string;
     activeFile?: string | null;
     tutorMode?: boolean;
+    redactSecrets?: boolean;
   };
+  // Firewall defaults on; only an explicit `false` from the client disables it.
+  const redact = redactSecrets !== false;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array is required' });
@@ -104,12 +107,12 @@ router.post('/agent/chat', async (req, res) => {
 
   try {
     if (selectedProvider === 'openai') {
-      await runOpenAIAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode);
+      await runOpenAIAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode, redact);
     } else if (selectedProvider === 'google') {
-      await runGeminiAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode);
+      await runGeminiAgentLoop(messages, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode, redact);
     } else {
       const history: Anthropic.MessageParam[] = messages.map(m => ({ role: m.role, content: m.content }));
-      await runAgentLoop(history, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode);
+      await runAgentLoop(history, selectedModel, res, abortSignal, activeFile ?? null, undefined, tutorMode, redact);
     }
   } catch (err: unknown) {
     if (!abortSignal.aborted) {

@@ -13,10 +13,38 @@ import {
   formatDiffJumpOutput,
   GEMINI_LIVE_MODEL,
   GEMINI_VOICE,
+  formatCurrentViewOutput,
   type TurnBuffers,
 } from './geminiMessage';
+import { buildLiveMeetingPrompt } from '../prompts/prompt';
 
 const empty: TurnBuffers = { userBuf: '', agentBuf: '' };
+
+describe('get_current_view', () => {
+  it('declares a no-arg tool with a description', () => {
+    const { actions } = handleGeminiMessage({ type: 'relay-ready' }, empty, { ctx: null, buildPrompt: () => '' });
+    const payload = (actions[0] as { payload: any }).payload;
+    const decl = payload.setup.tools[0].functionDeclarations
+      .find((d: { name: string }) => d.name === 'get_current_view');
+    expect(decl).toBeDefined();
+    expect(decl.parameters).toEqual({ type: 'OBJECT', properties: {} });
+    expect(decl.description).toMatch(/visible/);
+  });
+
+  it('formats path and visible content', () => {
+    expect(formatCurrentViewOutput({ path: 'src/a.ts', content: 'const x = 1;' }))
+      .toBe('Path: src/a.ts\n\nconst x = 1;');
+  });
+
+  it('reports no open file when the view is missing', () => {
+    expect(formatCurrentViewOutput(undefined)).toBe('No file is currently open in the editor.');
+    expect(formatCurrentViewOutput(null)).toBe('No file is currently open in the editor.');
+  });
+
+  it('is listed in the live meeting prompt', () => {
+    expect(buildLiveMeetingPrompt()).toContain('get_current_view()');
+  });
+});
 const deps = { ctx: 'some context', buildPrompt: (c?: string | null) => `PROMPT:${c}` };
 
 describe('handleGeminiMessage', () => {
@@ -55,6 +83,11 @@ describe('handleGeminiMessage', () => {
                 expect.objectContaining({ name: 'read_file' }),
                 expect.objectContaining({ name: 'open_file' }),
                 expect.objectContaining({ name: 'search_files' }),
+                expect.objectContaining({ name: 'get_current_view' }),
+                expect.objectContaining({ name: 'get_whiteboard_instructions' }),
+                expect.objectContaining({ name: 'write_whiteboard' }),
+                expect.objectContaining({ name: 'read_whiteboard' }),
+                expect.objectContaining({ name: 'clear_whiteboard' }),
               ],
             }],
           },
@@ -86,6 +119,14 @@ describe('handleGeminiMessage', () => {
     it('drops calls missing id or name, and emits nothing if none remain', () => {
       const msg = { toolCall: { functionCalls: [{ name: 'read_file' }, { id: 'x' }] } };
       expect(handleGeminiMessage(msg, empty, deps).actions).toEqual([]);
+    });
+
+    it('passes get_current_view through with empty args', () => {
+      const msg = { toolCall: { functionCalls: [{ id: 'v', name: 'get_current_view' }] } };
+      expect(handleGeminiMessage(msg, empty, deps).actions).toEqual([{
+        type: 'runTool',
+        calls: [{ id: 'v', name: 'get_current_view', args: {} }],
+      }]);
     });
 
     it('leaves buffers untouched', () => {

@@ -21,6 +21,7 @@ import type { EditorTabs } from '../../hooks/geminiMessage';
 import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL } from '../../providers';
 import type { Provider } from '../../providers';
 import type { FileNode, SidebarView } from '../../types';
+import { useSetting } from '../../settings';
 
 const SIDEBAR_DEFAULT = 320;
 const RIGHT_PANEL_DEFAULT = 400;
@@ -145,6 +146,16 @@ export function WorkbenchLayout() {
   // Same pattern for open tabs: useOpenFiles is called below, so read through a ref.
   const meetingTabsRef = useRef<EditorTabs>({ root: null, paths: [], active: null });
 
+  const [whiteboardContent, setWhiteboardContent] = useState('');
+  const whiteboardRef = useRef('');
+  whiteboardRef.current = whiteboardContent;
+
+  const appendWhiteboard = useCallback((text: string) => {
+    setWhiteboardContent(prev => prev ? `${prev}\n${text}` : text);
+  }, []);
+  const clearWhiteboard = useCallback(() => setWhiteboardContent(''), []);
+  const getWhiteboard = useCallback(() => whiteboardRef.current, []);
+
   const liveMeeting = useLiveMeeting(provider.id, async (transcript) => {
     // Immediate feedback while the summary request runs; replaced in place below.
     const pendingId = rightPanelRef.current?.showPendingProactive('✍️ _Writing up meeting notes…_') ?? undefined;
@@ -172,7 +183,16 @@ export function WorkbenchLayout() {
       { type: 'collapsible', title: 'Meeting transcript', content: transcript },
       { type: 'acknowledge', status: 'pending' },
     ], pendingId);
-  }, (path: string, line?: number) => meetingNavigateRef.current?.(path, line), () => meetingTabsRef.current);
+  }, (path: string, line?: number) => meetingNavigateRef.current?.(path, line), () => meetingTabsRef.current, () => {
+    const content = editorAreaRef.current?.getVisibleContext();
+    if (!content) return null;
+    const abs = activeFilePathRef.current;
+    const root = workspacePathRef.current;
+    const path = abs && root
+      ? (abs.startsWith(root + '/') ? abs.slice(root.length + 1) : abs)
+      : (abs ?? '');
+    return path ? { path, content } : null;
+  }, getWhiteboard, appendWhiteboard, clearWhiteboard);
 
   const pushNav = useCallback((path: string) => {
     setNav(prev => {
@@ -219,11 +239,12 @@ export function WorkbenchLayout() {
     reorderFiles,
     refreshFile,
     setSortedFiles,
+    openSettings,
   } = useOpenFiles();
 
   meetingTabsRef.current = {
     root: workspacePath ?? null,
-    paths: openFiles.filter(f => !f.path.startsWith('http')).map(f => f.path),
+    paths: openFiles.filter(f => !f.path.startsWith('http') && !f.isSettings).map(f => f.path),
     active: activeFilePath ?? null,
   };
 
@@ -270,9 +291,11 @@ export function WorkbenchLayout() {
     getActiveFilePath: () => activeFilePathRef.current,
   }), []); // stable — accessors read from refs at collection time
 
+  const [churnDetectionEnabled] = useSetting('proactive.churnDetection');
+
   const { status: proactiveStatus, startCooldown: startProactiveCooldown, setAssistantBusy } = useProactiveHelp({
     signals: [idleChurnSignal],
-    enabled: !!workspacePath,
+    enabled: !!workspacePath && churnDetectionEnabled,
     actionCountRef,
     onTrigger: async (message, collectContext) => {
       const rephrased = await rephraseProactiveMessage(message, provider.id, model);
@@ -562,6 +585,7 @@ export function WorkbenchLayout() {
         onToggleBottomTray={() => setShowBottomTray(v => !v)}
         updateInfo={updateInfo}
         onSnoozeUpdate={snoozeUpdate}
+        onOpenSettings={openSettings}
       />
 
       {/* Padding here + the 6px ResizeDividers form the gutters between panel cards */}
@@ -699,8 +723,11 @@ export function WorkbenchLayout() {
               commitDiffContext={commitDiffContext}
               onClearCommitDiffContext={() => setCommitDiffContext(null)}
               meetingActive={liveMeeting.isActive}
-              onMeetingStart={liveMeeting.start}
+              onMeetingStart={(ctx) => { setWhiteboardContent(''); liveMeeting.start(ctx); }}
               meetingError={liveMeeting.error}
+              whiteboardContent={whiteboardContent}
+              onWhiteboardAppend={appendWhiteboard}
+              onWhiteboardClear={clearWhiteboard}
             />
           </div>
         </div>
@@ -717,7 +744,7 @@ export function WorkbenchLayout() {
           <BottomTray ref={bottomTrayRef} height={trayHeight} workspacePath={workspacePath} />
         </div>
       </div>
-      {workspacePath && <StatusBar proactive={proactiveStatus} lastPingAt={lastPingAt} />}
+      {workspacePath && churnDetectionEnabled && <StatusBar proactive={proactiveStatus} lastPingAt={lastPingAt} />}
     </div>
   );
 }

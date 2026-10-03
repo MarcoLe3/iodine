@@ -54,6 +54,7 @@ async function runResponsesAgentLoop(
   res: Response,
   abortSignal: { aborted: boolean },
   systemPrompt: string,
+  redact: boolean = true,
 ) {
   const input: OpenAI.Responses.ResponseInputItem[] = messages.map(m => ({ role: m.role, content: m.content }));
 
@@ -108,7 +109,7 @@ async function runResponsesAgentLoop(
       let parsed: Record<string, unknown> = {};
       try { parsed = JSON.parse(tc.args); } catch { /* malformed args */ }
       writeSSE(res, 'tool_call', { id: tc.callId, name: tc.name, input: parsed, approval_id: tc.name === 'run_terminal_command' ? tc.callId : undefined });
-      const result = await executeAgentTool(tc.name, parsed, res, abortSignal, tc.callId);
+      const result = await executeAgentTool(tc.name, parsed, res, abortSignal, tc.callId, redact);
       writeSSE(res, 'tool_result', { tool_use_id: tc.callId, name: tc.name, preview: result.preview, error: result.error });
 
       input.push({ type: 'function_call_output', call_id: tc.callId, output: result.content });
@@ -124,13 +125,14 @@ export async function runOpenAIAgentLoop(
   activeFile: string | null = null,
   customSystemPrompt?: string,
   tutorMode?: boolean,
+  redact: boolean = true,
 ) {
   const apiKey = await loadOpenAIKey();
   const client = new OpenAI({ apiKey });
   const systemPrompt = customSystemPrompt ?? buildSystemPrompt(activeFile, tutorMode);
 
   if (requiresResponsesAPI(model)) {
-    return runResponsesAgentLoop(client, messages, model, res, abortSignal, systemPrompt);
+    return runResponsesAgentLoop(client, messages, model, res, abortSignal, systemPrompt, redact);
   }
 
   const history: OpenAI.ChatCompletionMessageParam[] = [
@@ -190,7 +192,7 @@ export async function runOpenAIAgentLoop(
       let input: Record<string, unknown> = {};
       try { input = JSON.parse(tc.args); } catch { /* malformed args */ }
       writeSSE(res, 'tool_call', { id: tc.id, name: tc.name, input, approval_id: tc.name === 'run_terminal_command' ? tc.id : undefined });
-      const result = await executeAgentTool(tc.name, input, res, abortSignal, tc.id);
+      const result = await executeAgentTool(tc.name, input, res, abortSignal, tc.id, redact);
       writeSSE(res, 'tool_result', { tool_use_id: tc.id, name: tc.name, preview: result.preview, error: result.error });
       history.push({ role: 'tool', tool_call_id: tc.id, content: result.content });
     }

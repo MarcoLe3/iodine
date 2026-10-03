@@ -12,6 +12,8 @@ import MergeConflictView from '../editor/MergeConflictView';
 import { CommitDiffView } from '../editor/CommitDiffView';
 import { LiveMeetingCard } from '../editor/LiveMeetingCard';
 import { FilePathLink } from '../editor/FilePathLink';
+import { SettingsPage } from '../settings/SettingsPage';
+import { useSetting } from '../../settings';
 import { useFileDiff } from '../../hooks/useFileDiff';
 import { hasConflictMarkers } from '../../utils/mergeConflict';
 import { looksLikePath } from '../../utils/filePath';
@@ -105,14 +107,15 @@ function isPreviewable(path: string) {
 /* Markdown path and heading helpers live in editor/MarkdownUtils.ts. */
 
 const btnStyle: React.CSSProperties = {
-  padding: '0 8px',
-  height: 18,
+  padding: '0 10px',
+  height: '100%',
   fontSize: 11,
   fontWeight: 500,
   letterSpacing: '0.02em',
-  color: '#fff',
+  color: 'var(--editor-btn-neutral-color, #fff)',
   border: 'none',
-  borderRadius: 3,
+  borderRight: '1px solid var(--color-border)',
+  borderRadius: 0,
   cursor: 'pointer',
   userSelect: 'none',
   whiteSpace: 'nowrap',
@@ -122,7 +125,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
   function EditorArea({ openFiles, activeFilePath, onTabClick, onTabClose, onTabReorder, onContentChange, workspacePath, provider, model, summaryRequestPath, onSummaryHandled, onActivity, onEditorViewChange, onSummaryContentChange, onActiveHeadingChange, onOpenFile, onPreviewRequest, previewRequestPath, onPreviewHandled, onSummaryRequest, onSummaryOpen, canGoBack, canGoForward, onGoBack, onGoForward, activeCommitHash, onCommitDiffClose, onCommitCheckout, onCommitDiffAddToContext, activeMeeting, onMeetingClose, meetingAnalyserNode, meetingMicAnalyserNode, meetingSpeaking, meetingMuted, onMeetingMuteToggle, joinedRight }, ref) {
     const activeFile = openFiles.find(f => f.path === activeFilePath) ?? null;
     const { diff: diffData, refreshDiff } = useFileDiff(
-      (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal) ? null : (activeFile?.path ?? null),
+      (activeFile?.isImage || activeFile?.isUrl || activeFile?.isExternal || activeFile?.isSettings) ? null : (activeFile?.path ?? null),
       activeFile?.content ?? '',
     );
     const containerRef = useRef<HTMLDivElement>(null);
@@ -134,9 +137,11 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
     // Suppresses scroll-based heading tracking briefly after a programmatic scrollToHeading
     // so the outline doesn't jerk through intermediate positions during smooth scroll.
     const suppressTrackingUntilRef = useRef(0);
-    // Per-tab Vim mode (keyed by file path). In-memory only until a settings page exists.
+    // Vim mode: the global `editor.vimMode` setting is the default; a per-tab
+    // override (keyed by file path, in-memory) wins when present.
+    const [globalVim] = useSetting('editor.vimMode');
     const [vimByPath, setVimByPath] = useState<Record<string, boolean>>({});
-    const vimEnabled = !!activeFile && !!vimByPath[activeFile.path];
+    const vimEnabled = !!activeFile && (vimByPath[activeFile.path] ?? globalVim);
 
     const [editorView, setEditorView] = useState<EditorView>('source');
     const [isFolded, setIsFolded] = useState(false);
@@ -393,11 +398,13 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
       },
     }), [applyNavigation, activeFilePath, activeFile, editorView, summaryContent]);
 
-    const showPreviewButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
-    const showSummaryButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && (!!workspacePath || !!activeFile.isExternal) && !activeFile.path.endsWith('.md');
-    const showConflictsButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && !activeFile.isExternal && hasConflictMarkers(activeFile.content ?? '');
-    const showVimButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source' && !activeCommitHash;
-    const showFoldButton = !!activeFile && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source' && !activeCommitHash;
+    // Built-in pages (e.g. Settings) get no file toolbar buttons.
+    const isFileTab = !!activeFile && !activeFile.isSettings;
+    const showPreviewButton = isFileTab && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && isPreviewable(activeFile.path);
+    const showSummaryButton = isFileTab && !activeFile.isImage && !activeFile.isPdf && !activeFile.isDirectory && !activeFile.isUrl && (!!workspacePath || !!activeFile.isExternal) && !activeFile.path.endsWith('.md');
+    const showConflictsButton = isFileTab && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && !activeFile.isExternal && hasConflictMarkers(activeFile.content ?? '');
+    const showVimButton = isFileTab && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source' && !activeCommitHash;
+    const showFoldButton = isFileTab && !activeFile.isImage && !activeFile.isPdf && !activeFile.isUrl && !activeFile.isDirectory && editorView === 'source' && !activeCommitHash;
 
     /** Convert an absolute file path to a workspace-relative path. */
     const toRelPath = (abs: string) => {
@@ -505,6 +512,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
           let segments: string[];
           if (activeFile.isUrl) {
             segments = [activeFile.url ?? activeFile.name];
+          } else if (activeFile.isSettings) {
+            segments = [activeFile.name];
           } else {
             const displayPath = workspacePath && activeFile.path.startsWith(workspacePath + '/')
               ? activeFile.path.slice(workspacePath.length + 1)
@@ -594,7 +603,10 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
           {/* ── Content area ── */}
           {activeFile ? (
-            activeFile.isImage ? (
+            activeFile.isSettings ? (
+              <SettingsPage />
+
+            ) : activeFile.isImage ? (
               <ImageViewer path={activeFile.path} name={activeFile.name} />
 
             ) : activeFile.isPdf ? (
@@ -782,8 +794,8 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
 
           {activeFile && (showConflictsButton || showPreviewButton || showSummaryButton || showVimButton) && (
             <div style={{
-              display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4,
-              height: 24, flexShrink: 0, padding: '0 8px', boxSizing: 'border-box',
+              display: 'flex', justifyContent: 'flex-end', alignItems: 'stretch',
+              height: 24, flexShrink: 0,
               background: 'var(--color-bg-editor)', borderTop: '1px solid var(--color-border)',
             }}>
               {showConflictsButton && (
@@ -820,7 +832,7 @@ export const EditorArea = forwardRef<EditorAreaHandle, EditorAreaProps>(
               )}
               {showVimButton && (
                 <button
-                  onClick={() => setVimByPath(prev => ({ ...prev, [activeFile.path]: !prev[activeFile.path] }))}
+                  onClick={() => setVimByPath(prev => ({ ...prev, [activeFile.path]: !vimEnabled }))}
                   title={vimEnabled ? 'Disable Vim keybindings for this tab' : 'Enable Vim keybindings for this tab'}
                   style={{ ...btnStyle, background: vimEnabled ? 'var(--editor-btn-active-bg, #007acc)' : 'var(--editor-btn-neutral-bg, #3a3d41)' }}
                 >

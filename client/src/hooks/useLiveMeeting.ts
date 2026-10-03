@@ -9,6 +9,7 @@ import {
   pickDiffJump,
   formatDiffJumpOutput,
   formatOpenTabs,
+  formatCurrentViewOutput,
   type DiffJump,
   type EditorTabs,
 } from './geminiMessage';
@@ -92,6 +93,10 @@ export function useLiveMeeting(
   onTranscriptReady?: (transcript: string) => void,
   navigateToFile?: (path: string, line?: number) => void,
   getEditorTabs?: () => EditorTabs,
+  getVisibleCode?: () => { path: string; content: string } | null,
+  getWhiteboard?: () => string,
+  appendWhiteboard?: (text: string) => void,
+  clearWhiteboard?: () => void,
 ): UseLiveMeetingReturn {
   const [isActive, setIsActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -132,7 +137,16 @@ export function useLiveMeeting(
   const navigateToFileRef = useRef(navigateToFile);
   navigateToFileRef.current = navigateToFile;
   const getEditorTabsRef = useRef(getEditorTabs);
+  const getVisibleCodeRef = useRef(getVisibleCode);
+  getVisibleCodeRef.current = getVisibleCode;
   getEditorTabsRef.current = getEditorTabs;
+  const getWhiteboardRef = useRef(getWhiteboard);
+  getWhiteboardRef.current = getWhiteboard;
+  const appendWhiteboardRef = useRef(appendWhiteboard);
+  appendWhiteboardRef.current = appendWhiteboard;
+  const clearWhiteboardRef = useRef(clearWhiteboard);
+  clearWhiteboardRef.current = clearWhiteboard;
+  const whiteboardInstructionsFetchedRef = useRef(false);
 
   // ── Agent audio playback queue ──────────────────────────────────────────
 
@@ -221,7 +235,11 @@ export function useLiveMeeting(
       const formatted = lines
         .map(e => `**${e.role === 'user' ? 'You' : 'Assistant'}:** ${e.text.trim()}`)
         .join('\n\n');
-      onTranscriptRef.current?.(formatted);
+      const board = getWhiteboardRef.current?.();
+      const withBoard = board
+        ? `${formatted}\n\n---\n**Whiteboard:**\n\`\`\`\n${board}\n\`\`\``
+        : formatted;
+      onTranscriptRef.current?.(withBoard);
     }
     transcriptRef.current   = [];
     userTurnBufRef.current  = '';
@@ -341,6 +359,7 @@ export function useLiveMeeting(
         }));
       };
 
+      whiteboardInstructionsFetchedRef.current = false;
       setIsActive(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -391,6 +410,80 @@ export function useLiveMeeting(
             for (const call of calls) {
               try {
                 let output: string;
+                if (call.name === 'get_current_view') {
+                  output = formatCurrentViewOutput(getVisibleCodeRef.current?.());
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
+                if (call.name === 'get_whiteboard_instructions') {
+                  whiteboardInstructionsFetchedRef.current = true;
+                  output = `WHITEBOARD STYLE GUIDE
+
+Canvas is ~72 chars wide. USE THE FULL WIDTH.
+
+Use this node style — square brackets, no box-drawing characters:
+
+    [ Node Label ]
+
+Connect nodes with arrows. Same-level nodes go side by side on the same row.
+Different levels stack vertically. Leave a blank line between each layer.
+
+If the user asks for a different or updated diagram, call clear_whiteboard() FIRST.
+Never append a new diagram on top of an existing one — it creates confusion.
+
+── EXAMPLE 1: linear pipeline ─────────────────────────────────────────────
+
+  [ Browser ]  ──────────►  [ server.ts ]  ──────────►  [ Gemini API ]
+
+── EXAMPLE 2: fan-out ──────────────────────────────────────────────────────
+
+                    [ useLiveMeeting ]
+                            │
+               ┌────────────┴────────────┐
+               │                         │
+               ▼                         ▼
+  [ write_whiteboard ]         [ read_whiteboard ]
+          │                         │
+          ▼                         ▼
+  [ appendWhiteboard() ]   [ getWhiteboardRef() ]
+
+── EXAMPLE 3: labeled data flow ────────────────────────────────────────────
+
+  [ Microphone ]  ──PCM──►  [ Processor ]  ──base64──►  [ WebSocket ]
+                                                               │
+                                                             relay
+                                                               │
+                                                               ▼
+                                                        [ Gemini Live ]`;
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
+                if (call.name === 'write_whiteboard') {
+                  if (!whiteboardInstructionsFetchedRef.current) {
+                    output = 'ERROR: You must call get_whiteboard_instructions() before write_whiteboard(). Call it now, then retry.';
+                    responses.push({ id: call.id, name: call.name, response: { error: output } });
+                    continue;
+                  }
+                  const text = call.args.text;
+                  if (typeof text !== 'string' || !text.trim()) throw new Error('Missing required "text" argument.');
+                  appendWhiteboardRef.current?.(text.trim());
+                  output = 'Written to whiteboard.';
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
+                if (call.name === 'read_whiteboard') {
+                  const board = getWhiteboardRef.current?.() ?? '';
+                  output = board || '(empty)';
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
+                if (call.name === 'clear_whiteboard') {
+                  clearWhiteboardRef.current?.();
+                  whiteboardInstructionsFetchedRef.current = false;
+                  output = 'Whiteboard cleared. Call get_whiteboard_instructions() before drawing again.';
+                  responses.push({ id: call.id, name: call.name, response: { output } });
+                  continue;
+                }
                 if (call.name === 'search_files') {
                   const query = call.args.query;
                   if (typeof query !== 'string' || !query.trim()) {
@@ -407,26 +500,31 @@ export function useLiveMeeting(
                 }
                 if (call.name === 'read_file') {
                   const content = await fetchFileContent(path);
-                  output = formatReadFileOutput(content, call.args.start_line, call.args.end_line);
+                  output = formatReadFileOutput(content, call.args.start_line, call.args.end_line) +
+                    '\n\n[If you found something worth showing — a key function, a relevant block, a surprising pattern — call open_file at that line so your partner can see it, then explain. Only skip open_file if you are still searching and about to call read_file again immediately.]';
                 } else if (call.name === 'open_file') {
                   const navigate = navigateToFileRef.current;
                   if (!navigate) throw new Error('Editor navigation is not available in this session.');
                   // Fail hard if the file can't be loaded — never report a fake success.
                   // Use the server-resolved absolute path so the editor and fetch agree.
-                  const { path: absPath, content } = await fetchFileWithPath(path);
                   const line = typeof call.args.line === 'number' ? call.args.line : undefined;
-                  let jump: DiffJump | undefined;
-                  if (line === undefined) {
-                    // No explicit line: jump to the main uncommitted change, skipping imports.
-                    // A diff failure (untracked file, not a git repo) must not fail the open.
-                    try {
-                      jump = pickDiffJump((await fetchFileDiff(absPath)).hunks, content);
-                    } catch { /* open at top */ }
+                  // Reject line 1 or missing line — force the model to read the file and
+                  // return a meaningful location rather than dumping the user at the top.
+                  if (line === undefined || line <= 1) {
+                    const { content: preview } = await fetchFileWithPath(path);
+                    throw new Error(
+                      `Line number required — do not open at line 1 or without a line. ` +
+                      `Call read_file("${path}") to find the specific function or block the user should see, then retry open_file with that line. ` +
+                      `File preview (first 10 lines):\n${preview.split('\n').slice(0, 10).join('\n')}`
+                    );
                   }
-                  navigate(absPath, line ?? jump?.line);
-                  output = jump
-                    ? formatDiffJumpOutput(jump)
-                    : `Opened${line ? ` at line ${line}` : ''}.`;
+                  const { path: absPath, content } = await fetchFileWithPath(path);
+                  let jump: DiffJump | undefined;
+                  try {
+                    jump = pickDiffJump((await fetchFileDiff(absPath)).hunks, content);
+                  } catch { /* open at given line */ }
+                  navigate(absPath, line);
+                  output = `Opened at line ${line}.${jump ? ' ' + formatDiffJumpOutput(jump) : ''} [If this section reveals something worth capturing — a flow, a key relationship, a decision point — add it to the whiteboard now.]`;
                 } else {
                   throw new Error(`Unknown tool: ${call.name}`);
                 }
