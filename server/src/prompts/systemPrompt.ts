@@ -1,6 +1,6 @@
 import { rootPath } from '../state';
 import { TUTOR_SYSTEM_ADDENDUM } from '../prompts/tutorSystem';
-import { ENTER_PLANNING_MODE, DRAFT_PLAN, EXIT_PLANNING_MODE} from "../prompts/planningSystem";
+import { PLANNING_AVAILABLE_ADDENDUM, PLANNING_ACTIVE_ADDENDUM } from "../prompts/planningSystem";
 
 export function buildSystemPrompt(activeFile: string | null, tutorMode?: boolean, planningMode?: boolean): string {
   const workspaceInfo = rootPath ? `Workspace: ${rootPath}` : 'No workspace is currently open.';
@@ -31,11 +31,6 @@ If you feel that the user is progressively struggling or not making progress, be
 `;
   if (tutorMode) {
     return base + TUTOR_SYSTEM_ADDENDUM;
-  } else if (planningMode) {
-    return base + ENTER_PLANNING_MODE + DRAFT_PLAN + EXIT_PLANNING_MODE
-  } else {
-    return base
-  }
+  } 
+  return base + (planningMode ? PLANNING_ACTIVE_ADDENDUM : PLANNING_AVAILABLE_ADDENDUM);
 }
-
-export { TUTOR_SYSTEM_ADDENDUM } from '../prompts/tutorSystem';
